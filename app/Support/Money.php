@@ -67,8 +67,8 @@ final readonly class Money implements \JsonSerializable, \Stringable
     /**
      * Split into parts proportional to weights, remainder spread by largest remainder.
      *
-     * @param  array<int, int>  $weights
-     * @return array<int, int> same keys as weights
+     * @param  array<int|string, int>  $weights
+     * @return array<int|string, int> same keys as weights
      */
     public function allocate(array $weights): array
     {

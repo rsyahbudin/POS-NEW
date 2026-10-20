@@ -24,7 +24,11 @@ class CarveBillAction
 {
     public function __construct(private BillService $bills) {}
 
-    /** Server-side price of the selection (tax, service, discount, rounding), nothing is saved. */
+    /**
+     * Server-side price of the selection (tax, service, discount, rounding), nothing is saved.
+     *
+     * @param  array<int, int>  $itemQty
+     */
     public function preview(Order $order, array $itemQty): PriceResult
     {
         $clean = $this->validate($order, $itemQty);

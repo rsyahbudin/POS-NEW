@@ -162,7 +162,7 @@ class SplitBillAction
     /**
      * @param  array<int, int>  $grands  grand total per bill
      * @param  array<int, string|null>  $labels
-     * @param  callable(int): array<int, int>  $divide  splits an amount into one share per bill
+     * @param  callable(int): array<int|string, int>  $divide  splits an amount into one share per bill
      * @return array<int, Bill>
      */
     private function writeWeighted(Order $order, PriceResult $result, string $mode, array $grands, array $labels, callable $divide): array

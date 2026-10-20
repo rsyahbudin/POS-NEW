@@ -18,6 +18,7 @@ use App\Domain\Ordering\Models\OrderItem;
 use App\Domain\Ordering\Models\OrderRound;
 use App\Domain\Payment\Actions\AllocateItemsAction;
 use App\Domain\Payment\Actions\CancelSplitAction;
+use App\Domain\Payment\Actions\CarveBillAction;
 use App\Domain\Payment\Actions\CloseZeroOrderAction;
 use App\Domain\Payment\Actions\RecordPaymentAction;
 use App\Domain\Payment\Actions\RefundPaymentAction;
@@ -136,6 +137,39 @@ class OrderController extends Controller
         $action->handle($order, $data['mode'], $data, $this->actor($request));
 
         return $this->respond($order);
+    }
+
+    public function carve(Order $order, Request $request, CarveBillAction $action): JsonResponse
+    {
+        abort_unless($this->actor($request)->can('receive-payment'), 403);
+        $data = $this->validateCarve($request);
+        $bill = $action->handle($order, $data['qty'], $this->actor($request), $data['label']);
+
+        return response()->json(['order' => OrderPresenter::full($order->refresh()), 'bill_id' => $bill->id]);
+    }
+
+    public function carvePreview(Order $order, Request $request, CarveBillAction $action): JsonResponse
+    {
+        abort_unless($this->actor($request)->can('receive-payment'), 403);
+        $r = $action->preview($order, $this->validateCarve($request)['qty']);
+
+        return response()->json([
+            'subtotal' => $r->subtotal, 'discount_total' => $r->discountTotal(), 'charge_total' => $r->chargeTotal,
+            'rounding' => $r->rounding, 'grand_total' => $r->grandTotal,
+            'charges' => array_map(fn (array $c) => ['name' => $c['name'], 'amount' => $c['amount'], 'is_inclusive' => $c['is_inclusive']], $r->charges),
+        ]);
+    }
+
+    /** @return array{qty: array<int, int>, label: string|null} */
+    private function validateCarve(Request $request): array
+    {
+        $data = $request->validate(['items' => 'required|array|min:1', 'items.*.order_item_id' => 'required|integer', 'items.*.qty' => 'required|integer|min:1', 'label' => 'nullable|string|max:40']);
+        $qty = [];
+        foreach ($data['items'] as $row) {
+            $qty[(int) $row['order_item_id']] = ($qty[(int) $row['order_item_id']] ?? 0) + (int) $row['qty'];
+        }
+
+        return ['qty' => $qty, 'label' => $data['label'] ?? null];
     }
 
     public function cancelSplit(Order $order, Request $request, CancelSplitAction $action): JsonResponse

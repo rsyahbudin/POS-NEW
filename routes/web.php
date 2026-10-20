@@ -66,6 +66,8 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::post('orders/{order}/discounts', [OrderController::class, 'discount'])->name('orders.discount');
         Route::delete('discounts/{discount}', [OrderController::class, 'removeDiscount'])->name('discounts.destroy');
         Route::post('orders/{order}/split', [OrderController::class, 'split'])->name('orders.split');
+        Route::post('orders/{order}/carve', [OrderController::class, 'carve'])->name('orders.carve');
+        Route::post('orders/{order}/carve/preview', [OrderController::class, 'carvePreview'])->name('orders.carve.preview');
         Route::delete('orders/{order}/split', [OrderController::class, 'cancelSplit'])->name('orders.split.cancel');
         Route::post('orders/{order}/allocate', [OrderController::class, 'allocate'])->name('orders.allocate');
         Route::post('orders/{order}/move-table', [OrderController::class, 'moveTable'])->name('orders.move-table');

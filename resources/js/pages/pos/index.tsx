@@ -16,7 +16,7 @@ import { ModifierSheet } from '@/components/pos/modifier-sheet';
 import { Modal } from '@/components/pos/modal';
 import { MoveDialog } from '@/components/pos/move-dialog';
 import { OrderPanel } from '@/components/pos/order-panel';
-import type { PanelActions } from '@/components/pos/order-panel';
+import type { PanelActions, PickState } from '@/components/pos/order-panel';
 import { PaymentDialog } from '@/components/pos/payment-dialog';
 import { usePinGate } from '@/components/pos/pin-gate';
 import { ProductGrid } from '@/components/pos/product-grid';
@@ -320,9 +320,9 @@ export default function PosPage(props: Props) {
                 : [...c, line];
         });
 
-    const send = async () => {
+    const send = async (): Promise<Order | null> => {
         if (!ctx || cart.length === 0 || sending) {
-            return;
+            return null;
         }
 
         setSending(true);
@@ -350,14 +350,30 @@ export default function PosPage(props: Props) {
             );
             setSheet(false);
             void refresh();
+
+            return res.order;
         } catch (e) {
             toast.error(
                 e instanceof ApiError
                     ? e.message
                     : t('Gagal mengirim pesanan.'),
             );
+
+            return null;
         } finally {
             setSending(false);
+        }
+    };
+
+    /** Walk-in at the counter: order goes to the kitchen and the payment screen opens at once. */
+    const sendAndPay = async () => {
+        const placed = await send();
+        const bill = placed?.bills.find(
+            (b) => b.status === 'unpaid' && !b.is_unallocated,
+        );
+
+        if (placed && bill) {
+            setDialog({ kind: 'pay', bill });
         }
     };
 
@@ -404,7 +420,8 @@ export default function PosPage(props: Props) {
     };
 
     const actions: PanelActions = {
-        send,
+        send: () => void send(),
+        sendAndPay: () => void sendAndPay(),
         sending,
         setQty: (key, d) =>
             setCart((c) =>
@@ -503,8 +520,120 @@ export default function PosPage(props: Props) {
     const cartCount = cart.reduce((s, l) => s + l.qty, 0);
     const cartTotal = cart.reduce((s, l) => s + l.unitPrice * l.qty, 0);
 
+    // --- "Bayar per item": pick items + qty, see the server-priced total, pay only those.
+    const [pickOn, setPickOn] = useState(false);
+    const [pickQty, setPickQty] = useState<Record<number, number>>({});
+    const [pickPreview, setPickPreview] = useState<PickState['preview']>(null);
+    const [pickBusy, setPickBusy] = useState(false);
+    const orderId = order?.id ?? null;
+
+    // On phones the order lives in a bottom sheet; close it when a dialog (payment, receipt...) opens.
+    useEffect(() => {
+        if (dialog) {
+            setSheet(false);
+        }
+    }, [dialog]);
+
+    useEffect(() => {
+        setPickOn(false);
+        setPickQty({});
+        setPickPreview(null);
+    }, [orderId]);
+
+    useEffect(() => {
+        const items = Object.entries(pickQty)
+            .filter(([, q]) => q > 0)
+            .map(([id, qty]) => ({ order_item_id: Number(id), qty }));
+
+        if (!pickOn || !orderId || items.length === 0) {
+            setPickPreview(null);
+
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            api<NonNullable<PickState['preview']>>(
+                'POST',
+                `/pos/orders/${orderId}/carve/preview`,
+                { items },
+            )
+                .then(setPickPreview)
+                .catch((e) => {
+                    setPickPreview(null);
+                    toast.error(
+                        e instanceof ApiError
+                            ? e.message
+                            : t('Gagal menghitung.'),
+                    );
+                });
+        }, 250);
+
+        return () => window.clearTimeout(timer);
+    }, [pickOn, pickQty, orderId]);
+
+    const payPick: PickState = {
+        active: pickOn,
+        qty: pickQty,
+        supported:
+            !!order &&
+            order.is_editable &&
+            order.grand_total > 0 &&
+            order.bills.every((b) => !b.mode || b.mode === 'item') &&
+            order.rounds.every((r) => r.status !== 'pending'),
+        available: (item) =>
+            item.qty -
+            (order?.bills
+                .filter((b) => b.paid_total > 0 || b.status === 'paid')
+                .flatMap((b) => b.items)
+                .filter((x) => x.order_item_id === item.id)
+                .reduce((a, x) => a + x.qty, 0) ?? 0),
+        set: (id, qty) => setPickQty((q) => ({ ...q, [id]: qty })),
+        toggle: () => {
+            setPickOn((on) => !on);
+            setPickQty({});
+        },
+        busy: pickBusy,
+        preview: pickPreview,
+        submit: async () => {
+            if (!order || pickBusy) {
+                return;
+            }
+
+            setPickBusy(true);
+
+            try {
+                const res = await api<{ order: Order; bill_id: number }>(
+                    'POST',
+                    `/pos/orders/${order.id}/carve`,
+                    {
+                        items: Object.entries(pickQty)
+                            .filter(([, q]) => q > 0)
+                            .map(([id, qty]) => ({
+                                order_item_id: Number(id),
+                                qty,
+                            })),
+                    },
+                );
+                const bill = res.order.bills.find((b) => b.id === res.bill_id);
+                apply(res.order);
+                setPickOn(false);
+                setPickQty({});
+                setPickPreview(null);
+
+                if (bill) {
+                    setDialog({ kind: 'pay', bill });
+                }
+            } catch (e) {
+                toast.error(e instanceof ApiError ? e.message : t('Gagal.'));
+            } finally {
+                setPickBusy(false);
+            }
+        },
+    };
+
     const panel = (
         <OrderPanel
+            pick={payPick}
             title={title}
             subtitle={order?.number}
             order={order}

@@ -124,6 +124,42 @@ export default function QrMenu({
                 : [...c, line];
         });
 
+    /** Quick +/- on a menu card for products without options. */
+    const bump = (p: Product, delta: 1 | -1) =>
+        setCart((c) => {
+            const idx = c.findIndex((l) => l.product.id === p.id);
+
+            if (delta === 1) {
+                return idx >= 0
+                    ? c.map((l, i) =>
+                          i === idx
+                              ? { ...l, qty: Math.min(20, l.qty + 1) }
+                              : l,
+                      )
+                    : [
+                          ...c,
+                          {
+                              key: crypto.randomUUID(),
+                              product: p,
+                              variantId: null,
+                              modifierIds: [],
+                              qty: 1,
+                              note: '',
+                              unit: p.price,
+                              label: p.name,
+                          },
+                      ];
+            }
+
+            if (idx < 0) {
+                return c;
+            }
+
+            return c[idx].qty <= 1
+                ? c.filter((_, i) => i !== idx)
+                : c.map((l, i) => (i === idx ? { ...l, qty: l.qty - 1 } : l));
+        });
+
     const submit = async () => {
         if (submitting.current || cart.length === 0 || name.trim() === '') {
             return;
@@ -240,52 +276,94 @@ export default function QrMenu({
                 </nav>
 
                 <main className="grid gap-3 px-4">
-                    {products.map((p) => (
-                        <button
-                            key={p.id}
-                            onClick={() =>
-                                p.variants.length || p.modifier_groups.length
-                                    ? setPicking(p)
-                                    : add({
-                                          key: crypto.randomUUID(),
-                                          product: p,
-                                          variantId: null,
-                                          modifierIds: [],
-                                          qty: 1,
-                                          note: '',
-                                          unit: p.price,
-                                          label: p.name,
-                                      })
-                            }
-                            className="flex min-h-[72px] items-center gap-3 rounded-2xl border bg-card p-3 text-left transition hover:border-primary/60 active:scale-[0.99]"
-                        >
-                            {p.image && (
-                                <img
-                                    src={p.image}
-                                    alt=""
-                                    width={64}
-                                    height={64}
-                                    loading="lazy"
-                                    className="size-16 shrink-0 rounded-lg object-cover"
-                                />
-                            )}
-                            <span className="min-w-0 flex-1">
-                                <span className="block font-medium">
-                                    {p.name}
-                                </span>
-                                {p.description && (
-                                    <span className="line-clamp-2 block text-xs text-muted-foreground">
-                                        {p.description}
-                                    </span>
+                    {products.map((p) => {
+                        const hasOptions =
+                            p.variants.length > 0 ||
+                            p.modifier_groups.length > 0;
+                        const inCart = cart
+                            .filter((l) => l.product.id === p.id)
+                            .reduce((a, l) => a + l.qty, 0);
+
+                        return (
+                            <div
+                                key={p.id}
+                                className="flex min-h-[72px] items-center gap-3 rounded-2xl border bg-card p-3"
+                            >
+                                {p.image && (
+                                    <img
+                                        src={p.image}
+                                        alt=""
+                                        width={64}
+                                        height={64}
+                                        loading="lazy"
+                                        className="size-16 shrink-0 rounded-xl object-cover"
+                                    />
                                 )}
-                            </span>
-                            <span className="text-sm font-bold text-primary tabular-nums">
-                                {p.variants.length > 1
-                                    ? `dari ${rp(Math.min(...p.variants.map((v) => v.price)))}`
-                                    : rp(p.price)}
-                            </span>
-                        </button>
-                    ))}
+                                <div className="min-w-0 flex-1">
+                                    <span className="block font-medium">
+                                        {p.name}
+                                    </span>
+                                    {p.description && (
+                                        <span className="line-clamp-2 block text-xs text-muted-foreground">
+                                            {p.description}
+                                        </span>
+                                    )}
+                                    <span className="mt-0.5 block text-sm font-bold text-primary tabular-nums">
+                                        {p.variants.length > 1
+                                            ? `dari ${rp(Math.min(...p.variants.map((v) => v.price)))}`
+                                            : rp(p.price)}
+                                    </span>
+                                </div>
+                                {hasOptions ? (
+                                    <div className="flex flex-col items-center gap-1">
+                                        <button
+                                            onClick={() => setPicking(p)}
+                                            aria-label={`Pilih ${p.name}`}
+                                            className="h-11 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground active:scale-95"
+                                        >
+                                            {inCart > 0 ? 'Tambah' : 'Pilih'}
+                                        </button>
+                                        {inCart > 0 && (
+                                            <span className="text-xs font-medium text-primary">
+                                                {inCart} di keranjang
+                                            </span>
+                                        )}
+                                    </div>
+                                ) : inCart === 0 ? (
+                                    <button
+                                        onClick={() => bump(p, 1)}
+                                        aria-label={`Tambah ${p.name}`}
+                                        className="size-11 rounded-full bg-primary text-2xl leading-none font-bold text-primary-foreground active:scale-95"
+                                    >
+                                        +
+                                    </button>
+                                ) : (
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            onClick={() => bump(p, -1)}
+                                            aria-label={`Kurangi ${p.name}`}
+                                            className="size-11 rounded-full border text-xl leading-none font-bold active:scale-95"
+                                        >
+                                            −
+                                        </button>
+                                        <span
+                                            className="w-7 text-center font-bold tabular-nums"
+                                            aria-live="polite"
+                                        >
+                                            {inCart}
+                                        </span>
+                                        <button
+                                            onClick={() => bump(p, 1)}
+                                            aria-label={`Tambah ${p.name}`}
+                                            className="size-11 rounded-full bg-primary text-xl leading-none font-bold text-primary-foreground active:scale-95"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                     {products.length === 0 && (
                         <p className="py-10 text-center text-sm text-muted-foreground">
                             Menu belum tersedia.

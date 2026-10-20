@@ -19,6 +19,7 @@ const ITEM_STATUS: Record<string, { label: string; cls: string }> = {
 
 export type PanelActions = {
     send: () => void;
+    sendAndPay: () => void;
     sending: boolean;
     setQty: (key: string, delta: number) => void;
     remove: (key: string) => void;
@@ -39,6 +40,25 @@ export type PanelActions = {
     clear: () => void;
 };
 
+/** "Bayar per item": cashier ticks items/qty, sees the server-priced total, then pays just those. */
+export type PickState = {
+    active: boolean;
+    qty: Record<number, number>;
+    available: (item: OrderItem) => number;
+    set: (id: number, qty: number) => void;
+    toggle: () => void;
+    busy: boolean;
+    preview: {
+        subtotal: number;
+        discount_total: number;
+        rounding: number;
+        grand_total: number;
+        charges: { name: string; amount: number; is_inclusive: boolean }[];
+    } | null;
+    supported: boolean;
+    submit: () => void;
+};
+
 export function OrderPanel({
     title,
     subtitle,
@@ -46,6 +66,7 @@ export function OrderPanel({
     cart,
     can,
     actions,
+    pick,
 }: {
     title: string;
     subtitle?: string;
@@ -53,6 +74,7 @@ export function OrderPanel({
     cart: CartLine[];
     can: { pay: boolean; void: boolean; refund: boolean; discount: boolean };
     actions: PanelActions;
+    pick?: PickState;
 }) {
     const cartTotal = cart.reduce((s, l) => s + l.unitPrice * l.qty, 0);
     const editable = !order || order.is_editable;
@@ -181,7 +203,17 @@ export function OrderPanel({
                                                 </span>
                                             </div>
                                         </div>
+                                        {pick?.active &&
+                                            [
+                                                'new',
+                                                'preparing',
+                                                'ready',
+                                            ].includes(i.status) &&
+                                            !i.comp_type && (
+                                                <PickRow item={i} pick={pick} />
+                                            )}
                                         {editable &&
+                                            !pick?.active &&
                                             [
                                                 'new',
                                                 'preparing',
@@ -504,6 +536,17 @@ export function OrderPanel({
                                   ? t('Tambah ronde ke dapur')
                                   : t('Kirim ke dapur')}
                         </Button>
+                        {can.pay && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-12 border-primary text-primary"
+                                disabled={actions.sending}
+                                onClick={actions.sendAndPay}
+                            >
+                                {t('Kirim & bayar langsung')}
+                            </Button>
+                        )}
                         <Button
                             type="button"
                             variant="ghost"
@@ -515,9 +558,12 @@ export function OrderPanel({
                     </>
                 )}
 
+                {pick?.active && order && <PickSummary pick={pick} />}
+
                 {order &&
                     order.is_editable &&
                     cart.length === 0 &&
+                    !pick?.active &&
                     liveItems.some((i) =>
                         ['new', 'preparing', 'ready'].includes(i.status),
                     ) && (
@@ -564,6 +610,16 @@ export function OrderPanel({
                                         onClick={() => actions.discount(null)}
                                     >
                                         {t('Diskon')}
+                                    </Button>
+                                )}
+                                {can.pay && pick?.supported && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="h-11 border-primary text-primary"
+                                        onClick={pick.toggle}
+                                    >
+                                        {t('Bayar per item')}
                                     </Button>
                                 )}
                                 {can.pay && (
@@ -643,6 +699,149 @@ function Row({ label, value }: { label: string; value: string }) {
         <div className="flex justify-between">
             <dt className="text-muted-foreground">{label}</dt>
             <dd className="tabular-nums">{value}</dd>
+        </div>
+    );
+}
+
+function PickRow({ item, pick }: { item: OrderItem; pick: PickState }) {
+    const avail = pick.available(item);
+    const n = pick.qty[item.id] ?? 0;
+
+    if (avail <= 0) {
+        return (
+            <p className="mt-1 text-xs font-medium text-emerald-700">
+                {t('Sudah dibayar')}
+            </p>
+        );
+    }
+
+    return (
+        <div
+            className="mt-2 flex items-center gap-1.5"
+            role="group"
+            aria-label={`${t('Bayar')} ${item.name}`}
+        >
+            <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-11"
+                aria-label={t('Kurangi')}
+                onClick={() => pick.set(item.id, Math.max(0, n - 1))}
+            >
+                <Minus />
+            </Button>
+            <span
+                className="min-w-14 text-center text-sm font-bold tabular-nums"
+                aria-live="polite"
+            >
+                {n} / {avail}
+            </span>
+            <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-11"
+                aria-label={t('Tambah')}
+                onClick={() => pick.set(item.id, Math.min(avail, n + 1))}
+            >
+                <Plus />
+            </Button>
+            <Button
+                type="button"
+                variant={n === avail ? 'default' : 'outline'}
+                size="sm"
+                className="ml-auto h-11"
+                onClick={() => pick.set(item.id, n === avail ? 0 : avail)}
+            >
+                {n === avail ? t('Batal pilih') : t('Semua')}
+            </Button>
+        </div>
+    );
+}
+
+function PickSummary({ pick }: { pick: PickState }) {
+    const count = Object.values(pick.qty).reduce((a, b) => a + b, 0);
+    const p = pick.preview;
+
+    return (
+        <div
+            className="grid gap-2 rounded-xl border-2 border-primary/40 bg-primary/5 p-3"
+            aria-live="polite"
+        >
+            <p className="text-sm font-semibold">{t('Bayar per item')}</p>
+            {count === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                    {t('Pilih item dan jumlahnya di daftar pesanan.')}
+                </p>
+            ) : (
+                <dl className="grid gap-0.5 text-sm">
+                    <div className="flex justify-between">
+                        <dt className="text-muted-foreground">
+                            {count} {t('item dipilih')}
+                        </dt>
+                        <dd className="tabular-nums">
+                            {p ? rupiah(p.subtotal) : '…'}
+                        </dd>
+                    </div>
+                    {p && p.discount_total > 0 && (
+                        <div className="flex justify-between text-emerald-700">
+                            <dt>{t('Diskon')}</dt>
+                            <dd className="tabular-nums">
+                                -{rupiah(p.discount_total)}
+                            </dd>
+                        </div>
+                    )}
+                    {p?.charges
+                        .filter((c) => c.amount > 0)
+                        .map((c) => (
+                            <div key={c.name} className="flex justify-between">
+                                <dt className="text-muted-foreground">
+                                    {c.is_inclusive
+                                        ? `${c.name} (${t('termasuk')})`
+                                        : c.name}
+                                </dt>
+                                <dd className="tabular-nums">
+                                    {rupiah(c.amount)}
+                                </dd>
+                            </div>
+                        ))}
+                    {p && p.rounding !== 0 && (
+                        <div className="flex justify-between">
+                            <dt className="text-muted-foreground">
+                                {t('Pembulatan')}
+                            </dt>
+                            <dd className="tabular-nums">
+                                {rupiah(p.rounding)}
+                            </dd>
+                        </div>
+                    )}
+                    <div className="mt-1 flex justify-between border-t pt-1 text-lg font-bold">
+                        <dt>{t('Total dibayar')}</dt>
+                        <dd className="tabular-nums">
+                            {p ? rupiah(p.grand_total) : '…'}
+                        </dd>
+                    </div>
+                </dl>
+            )}
+            <Button
+                type="button"
+                className="h-14 text-base"
+                disabled={count === 0 || pick.busy || !p}
+                onClick={pick.submit}
+            >
+                {p && count > 0
+                    ? `${t('Bayar')} ${rupiah(p.grand_total)}`
+                    : t('Bayar yang dipilih')}
+            </Button>
+            <Button
+                type="button"
+                variant="ghost"
+                className="h-11"
+                onClick={pick.toggle}
+            >
+                {t('Batal')}
+            </Button>
         </div>
     );
 }

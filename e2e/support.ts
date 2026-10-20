@@ -15,6 +15,8 @@ function artisan(args: string[]): string {
 /** Fresh seeded database; returns the QR token of table I-1. */
 export function resetDatabase(): { token: string } {
     artisan(['migrate:fresh', '--seed', '--force', '--no-interaction']);
+    // Login is rate limited (5/min per user): clear it so many logins in one run don't lock the tests out.
+    artisan(['cache:clear']);
     const token = artisan([
         'tinker',
         '--execute=echo App\\Domain\\Floor\\Models\\Table::where("name","I-1")->value("qr_token");',
@@ -41,4 +43,12 @@ export async function expectNoHorizontalScroll(page: Page): Promise<void> {
             `Horizontal scroll: ${overflow}px wider than viewport on ${page.url()}`,
         );
     }
+}
+
+/** Opens a shift for the seeded cashier and creates a dine-in order on table I-1: 2 Americano + 1 Nasi Goreng. */
+export function seedCashierOrder(): void {
+    artisan([
+        'tinker',
+        '--execute=$u=App\\Models\\User::where("email","kasir@pos.test")->first();app(App\\Domain\\Shift\\Actions\\OpenShiftAction::class)->handle($u,0);app(App\\Domain\\Ordering\\Actions\\PlaceOrderAction::class)->handle($u,["type"=>"dine_in","table_id"=>App\\Domain\\Floor\\Models\\Table::where("name","I-1")->value("id"),"items"=>[["product_id"=>App\\Domain\\Catalog\\Models\\Product::where("name","Americano")->value("id"),"qty"=>2],["product_id"=>App\\Domain\\Catalog\\Models\\Product::where("name","Nasi Goreng")->value("id"),"qty"=>1]]]);',
+    ]);
 }

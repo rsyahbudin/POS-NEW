@@ -9,8 +9,6 @@ import { api, ApiError } from '@/lib/api';
 import { rupiah, uuid } from '@/lib/format';
 import type { Bill, Order, PaymentMethod } from '@/types/pos';
 
-const QUICK = [50000, 100000, 150000, 200000];
-
 type PayResult = {
     order: Order;
     payment_id: number;
@@ -27,12 +25,14 @@ export function PaymentDialog({
     order,
     bill,
     methods,
+    quickCash,
     onClose,
     onPaid,
 }: {
     order: Order;
     bill: Bill | null;
     methods: PaymentMethod[];
+    quickCash: number[];
     onClose: () => void;
     onPaid: (r: PayResult, bill: Bill) => void;
 }) {
@@ -150,7 +150,7 @@ export function PaymentDialog({
                     >
                         {t('Uang pas')}
                     </Button>
-                    {QUICK.map((q) => (
+                    {quickCash.map((q) => (
                         <Button
                             key={q}
                             type="button"

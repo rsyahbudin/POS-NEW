@@ -29,6 +29,7 @@ class SubmitQrOrderAction
         private ItemBuilder $items,
         private DailyCounter $counter,
         private SettingsRepository $settings,
+        private ConfirmRoundAction $confirm,
     ) {}
 
     /** @param  array<string, mixed>  $data */
@@ -39,7 +40,7 @@ class SubmitQrOrderAction
             throw new OrderException('Nama panggilan wajib diisi.');
         }
 
-        return DB::transaction(function () use ($token, $data, $name) {
+        $round = DB::transaction(function () use ($token, $data, $name) {
             $table = Table::query()->where('qr_token', $token)->lockForUpdate()->first();
             if (! $table || ! $table->qr_enabled) {
                 throw new OrderException('QR meja ini tidak aktif.');
@@ -87,9 +88,24 @@ class SubmitQrOrderAction
                 $round->items()->create($row + ['order_id' => $order->id, 'status' => 'pending']);
             }
 
-            Realtime::dispatch(new QrOrderSubmitted($table->outlet_id, $order->id, $round->id, $name, $table->name));
-
             return $round;
         });
+
+        // Optional: skip the cashier. If anything blocks it (e.g. portion stock ran out),
+        // the round simply stays pending for the cashier to handle.
+        $auto = false;
+        if ((bool) $this->settings->get('qr.auto_confirm', false)) {
+            try {
+                $this->confirm->handle($round, null);
+                $auto = true;
+            } catch (OrderException) {
+                $auto = false;
+            }
+        }
+
+        $order = $round->order;
+        Realtime::dispatch(new QrOrderSubmitted($order->outlet_id, $order->id, $round->id, $name, $order->table?->name, $auto));
+
+        return $round->refresh();
     }
 }

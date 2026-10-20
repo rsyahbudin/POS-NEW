@@ -44,6 +44,7 @@ class PosController extends Controller
             'settings' => [
                 'discount_limit_percent' => (int) $this->settings->get('discount.cashier_limit_percent', 10),
                 'qr_alert_seconds' => (int) $this->settings->get('qr.confirm_alert_seconds', 180),
+                'quick_cash' => array_values(array_filter(array_map('intval', explode(',', (string) $this->settings->get('pos.quick_cash', '50000,100000,150000,200000'))))),
                 'outlet_id' => $outletId,
             ],
             'state' => $this->state(),
@@ -63,7 +64,7 @@ class PosController extends Controller
                 'order_id' => $r->order_id, 'table' => $r->order->table?->name, 'table_id' => $r->order->table_id,
             ])->all();
 
-        $ready = OrderItem::query()->where('status', 'ready')->where('ready_at', '>=', now()->subMinutes(15))
+        $ready = OrderItem::query()->where('status', 'ready')->where('ready_at', '>=', now()->subMinutes((int) $this->settings->get('pos.ready_alert_minutes', 15)))
             ->whereHas('order', fn ($q) => $q->where('outlet_id', $outletId)->whereIn('status', ['open', 'partially_paid']))
             ->with('order.table')->get()
             ->map(fn (OrderItem $i) => ['id' => $i->id, 'name' => $i->name_snapshot, 'qty' => $i->qty, 'table' => $i->order->table->name ?? $i->order->call_number ?? $i->order->number, 'order_id' => $i->order_id])->all();

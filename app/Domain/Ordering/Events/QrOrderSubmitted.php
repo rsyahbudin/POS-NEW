@@ -11,7 +11,7 @@ class QrOrderSubmitted implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets;
 
-    public function __construct(public int $outletId, public int $orderId, public int $roundId, public string $customerName, public ?string $tableName) {}
+    public function __construct(public int $outletId, public int $orderId, public int $roundId, public string $customerName, public ?string $tableName, public bool $autoConfirmed = false) {}
 
     public function broadcastOn(): array
     {

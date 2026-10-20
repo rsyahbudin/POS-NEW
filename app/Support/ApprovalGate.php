@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Domain\Ordering\Exceptions\OrderException;
+use App\Domain\Settings\SettingsRepository;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 
@@ -13,10 +14,6 @@ use Illuminate\Support\Facades\Hash;
  */
 class ApprovalGate
 {
-    public const MAX_ATTEMPTS = 5;
-
-    public const LOCK_MINUTES = 15;
-
     /**
      * @return User the user accountable for the action (actor itself if permitted)
      */
@@ -58,10 +55,13 @@ class ApprovalGate
 
     private function registerFailure(User $actor): void
     {
+        $settings = app(SettingsRepository::class);
+        $max = max(1, (int) $settings->get('security.pin_max_attempts', 5));
+        $lock = max(1, (int) $settings->get('security.pin_lock_minutes', 15));
         $attempts = $actor->pin_attempts + 1;
         $actor->forceFill([
-            'pin_attempts' => $attempts >= self::MAX_ATTEMPTS ? 0 : $attempts,
-            'pin_locked_until' => $attempts >= self::MAX_ATTEMPTS ? now()->addMinutes(self::LOCK_MINUTES) : $actor->pin_locked_until,
+            'pin_attempts' => $attempts >= $max ? 0 : $attempts,
+            'pin_locked_until' => $attempts >= $max ? now()->addMinutes($lock) : $actor->pin_locked_until,
         ])->save();
         Audit::log('pin.failed', $actor, ['attempts' => $attempts], $actor);
     }

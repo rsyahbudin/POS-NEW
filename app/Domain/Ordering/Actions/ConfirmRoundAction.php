@@ -28,7 +28,7 @@ class ConfirmRoundAction
     /**
      * @param  array<int, int>  $qtyChanges  order_item_id => new qty (0 removes the item)
      */
-    public function handle(OrderRound $round, User $cashier, array $qtyChanges = []): OrderRound
+    public function handle(OrderRound $round, ?User $cashier, array $qtyChanges = []): OrderRound
     {
         return DB::transaction(function () use ($round, $cashier, $qtyChanges) {
             $order = Order::query()->lockForUpdate()->findOrFail($round->order_id);
@@ -62,12 +62,12 @@ class ConfirmRoundAction
                 $item->update(['status' => 'new']);
             }
 
-            $round->update(['status' => RoundStatus::Confirmed, 'confirmed_by' => $cashier->id, 'confirmed_at' => now()]);
+            $round->update(['status' => RoundStatus::Confirmed, 'confirmed_by' => $cashier?->id, 'confirmed_at' => now()]);
 
             $this->promotions->handle($order);
             $this->recalculate->handle($order);
             $this->syncTable->handle($order->table_id);
-            Audit::log('qr.confirmed', $round, ['order' => $order->number], $cashier);
+            Audit::log('qr.confirmed', $round, ['order' => $order->number, 'auto' => $cashier === null], $cashier);
 
             Realtime::dispatch(new OrderRoundConfirmed(
                 $order->outlet_id, $order->id, $round->id,

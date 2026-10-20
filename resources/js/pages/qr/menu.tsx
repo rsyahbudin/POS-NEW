@@ -38,6 +38,7 @@ type Props = {
     outlet: string | null;
     menu: Category[];
     outletId: number;
+    autoConfirm: boolean;
     status: Status;
 };
 
@@ -55,6 +56,7 @@ export default function QrMenu({
     outlet,
     menu: initialMenu,
     status: initialStatus,
+    autoConfirm,
 }: Props) {
     const [menu, setMenu] = useState(initialMenu);
     const [cart, setCart] = useState<Line[]>([]);
@@ -427,7 +429,9 @@ export default function QrMenu({
                             />
                         </label>
                         <p className="mt-2 text-xs text-slate-600">
-                            Pesanan dikonfirmasi kasir dulu sebelum dibuat.
+                            {autoConfirm
+                                ? 'Pesanan langsung diteruskan ke dapur.'
+                                : 'Pesanan dikonfirmasi kasir dulu sebelum dibuat.'}{' '}
                             Pembayaran di kasir.
                         </p>
                         {error && (
@@ -465,7 +469,9 @@ export default function QrMenu({
                                 role="status"
                                 className="mb-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900"
                             >
-                                Pesanan terkirim. Menunggu konfirmasi kasir.
+                                {autoConfirm
+                                    ? 'Pesanan terkirim dan sedang diproses dapur.'
+                                    : 'Pesanan terkirim. Menunggu konfirmasi kasir.'}
                             </p>
                         )}
                         <ul className="grid gap-3">

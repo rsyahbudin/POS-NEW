@@ -8,6 +8,7 @@ use App\Domain\Pricing\Models\Promotion;
 use App\Domain\Pricing\Models\TaxRule;
 use App\Domain\Settings\Models\Outlet;
 use App\Domain\Settings\OutletContext;
+use App\Domain\Settings\SettingsCatalog;
 use App\Domain\Settings\SettingsRepository;
 use App\Http\Controllers\Controller;
 use App\Support\Audit;
@@ -15,7 +16,9 @@ use App\Support\ImageOptimizer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -33,6 +36,7 @@ class SettingsController extends Controller
         return Inertia::render('admin/settings', [
             'outlet' => Outlet::find($id)?->only(['name', 'address', 'npwp']) + ['logo' => Outlet::find($id)?->logo_path ? \Storage::url(Outlet::find($id)->logo_path) : null],
             'settings' => $values,
+            'catalog' => SettingsCatalog::tabs(),
             'paymentMethods' => PaymentMethod::query()->where('outlet_id', $id)->orderBy('sort')->get(['id', 'name', 'type', 'account_id', 'is_active']),
             'cashAccounts' => Account::query()->where('outlet_id', $id)->where('type', 'asset')->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
             'taxRules' => TaxRule::query()->where('outlet_id', $id)->orderBy('sequence')->get(['id', 'name', 'kind', 'rate_bp', 'sequence', 'base', 'is_inclusive', 'is_active']),
@@ -54,31 +58,47 @@ class SettingsController extends Controller
         return back()->with('success', 'Profil outlet disimpan.');
     }
 
+    /**
+     * Setting keys contain dots ("qr.auto_confirm"), which Laravel's validator would read as
+     * nested paths. They are therefore sent inside `values` and validated one by one.
+     */
     public function updateSettings(Request $request): RedirectResponse
     {
-        $data = $request->validate([
-            'operations.business_day_start' => ['nullable', 'regex:/^([01]\d|2[0-3]):[0-5]\d$/'],
-            'pricing.rounding' => 'nullable|in:0,100,500',
-            'pricing.price_mode' => 'nullable|in:inclusive,exclusive',
-            'discount.cashier_limit_percent' => 'nullable|integer|min:0|max:100',
-            'qr.confirm_alert_seconds' => 'nullable|integer|min:30|max:3600',
-            'qr.max_submits_per_window' => 'nullable|integer|min:1|max:50',
-            'kitchen.warn_minutes' => 'nullable|integer|min:1|max:240',
-            'kitchen.danger_minutes' => 'nullable|integer|min:1|max:240',
-            'receipt.footer' => 'nullable|string|max:200',
-            'telegram.bot_token' => 'nullable|string|max:200',
-            'telegram.chat_id' => 'nullable|string|max:60',
-        ]);
+        $input = $request->input('values');
+        if (! is_array($input)) {
+            throw ValidationException::withMessages(['values' => 'Data pengaturan tidak valid.']);
+        }
 
-        foreach ($data as $key => $value) {
+        $rules = SettingsCatalog::rules();
+        $fields = SettingsCatalog::fields();
+        $clean = [];
+        $errors = [];
+        foreach ($input as $key => $value) {
+            if (! is_string($key) || ! isset($rules[$key])) {
+                continue; // unknown keys are ignored, never stored
+            }
+            $validator = Validator::make(['value' => $value], ['value' => $rules[$key]], [], ['value' => $fields[$key]['label']]);
+            if ($validator->fails()) {
+                $errors['values'] = $validator->errors()->first();
+
+                break;
+            }
+            $clean[$key] = $value;
+        }
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        foreach ($clean as $key => $value) {
             if ($key === 'telegram.bot_token' && $value === '••••••••') {
-                continue;
+                continue; // masked placeholder: keep the stored token
             }
             $old = $this->settings->get($key);
-            $new = in_array($key, ['pricing.rounding', 'discount.cashier_limit_percent', 'qr.confirm_alert_seconds', 'qr.max_submits_per_window', 'kitchen.warn_minutes', 'kitchen.danger_minutes'], true) && $value !== null ? (int) $value : $value;
+            $new = SettingsCatalog::cast($key, $value);
             if ($old !== $new) {
                 $this->settings->set($key, $new);
-                Audit::log('settings.changed', null, ['key' => $key, 'from' => str_contains($key, 'token') ? '***' : $old, 'to' => str_contains($key, 'token') ? '***' : $new]);
+                $secret = str_contains($key, 'token');
+                Audit::log('settings.changed', null, ['key' => $key, 'from' => $secret ? '***' : $old, 'to' => $secret ? '***' : $new]);
             }
         }
 

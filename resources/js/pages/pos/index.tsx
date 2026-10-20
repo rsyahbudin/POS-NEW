@@ -77,6 +77,7 @@ type Props = {
     settings: {
         discount_limit_percent: number;
         qr_alert_seconds: number;
+        quick_cash: number[];
         outlet_id: number;
     };
     state: PosState;
@@ -170,6 +171,7 @@ export default function PosPage(props: Props) {
                 tableName?: string;
                 label?: string;
                 status?: string;
+                autoConfirmed?: boolean;
             };
             void refresh();
 
@@ -180,10 +182,14 @@ export default function PosPage(props: Props) {
             if (event === 'QrOrderSubmitted') {
                 sound.beep('order');
                 toast(
-                    `${t('Pesanan QR baru')}: ${p.tableName ?? ''} · ${p.customerName ?? ''}`,
+                    `${p.autoConfirmed ? t('Pesanan QR masuk dapur') : t('Pesanan QR baru')}: ${p.tableName ?? ''} · ${p.customerName ?? ''}`,
                     { duration: 8000 },
                 );
-                setInbox(true);
+
+                // Auto-confirmed orders need no action, so the inbox stays closed.
+                if (!p.autoConfirmed) {
+                    setInbox(true);
+                }
             }
 
             if (event === 'OrderItemStatusChanged' && p.status === 'ready') {
@@ -791,6 +797,7 @@ export default function PosPage(props: Props) {
 
             {order && dialog?.kind === 'pay' && (
                 <PaymentDialog
+                    quickCash={settings.quick_cash}
                     order={order}
                     bill={
                         order.bills.find((b) => b.id === dialog.bill.id) ?? null

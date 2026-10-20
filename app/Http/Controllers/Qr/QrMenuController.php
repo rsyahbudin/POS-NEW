@@ -6,6 +6,7 @@ use App\Domain\Floor\Models\Table;
 use App\Domain\Ordering\Actions\SubmitQrOrderAction;
 use App\Domain\Ordering\Models\Order;
 use App\Domain\Settings\Models\Outlet;
+use App\Domain\Settings\SettingsRepository;
 use App\Http\Controllers\Controller;
 use App\Http\Presenters\MenuPresenter;
 use Illuminate\Http\JsonResponse;
@@ -32,6 +33,7 @@ class QrMenuController extends Controller
             'menu' => MenuPresenter::categories($table->outlet_id, onlyAvailable: true),
             'outletId' => $table->outlet_id,
             'status' => $this->status($table),
+            'autoConfirm' => (bool) app(SettingsRepository::class)->get('qr.auto_confirm', false),
         ]);
     }
 

@@ -38,6 +38,20 @@ type Promo = {
     days: number[] | null;
     is_active: boolean;
 };
+type Field_ = {
+    key: string;
+    type: 'bool' | 'int' | 'text' | 'time' | 'select' | 'secret' | 'list';
+    label: string;
+    hint: string;
+    options?: [string, string][];
+    min?: number;
+    max?: number;
+};
+type CatalogTab = {
+    key: string;
+    label: string;
+    groups: { title: string; fields: Field_[] }[];
+};
 type Props = {
     outlet: {
         name: string;
@@ -45,7 +59,8 @@ type Props = {
         npwp: string | null;
         logo: string | null;
     };
-    settings: Record<string, string | number | null>;
+    settings: Record<string, string | number | boolean | null>;
+    catalog: CatalogTab[];
     paymentMethods: PM[];
     cashAccounts: Acc[];
     taxRules: Tax[];
@@ -55,15 +70,15 @@ type Props = {
 export default function SettingsPage({
     outlet,
     settings,
+    catalog,
     paymentMethods,
     cashAccounts,
     taxRules,
     promotions,
 }: Props) {
-    const [tab, setTab] = useState<
-        'outlet' | 'ops' | 'pay' | 'tax' | 'promo' | 'notif'
-    >('outlet');
+    const [tab, setTab] = useState<string>('outlet');
     const errors = usePage().props.errors as Record<string, string>;
+    const active = catalog.find((c) => c.key === tab);
 
     return (
         <>
@@ -71,18 +86,17 @@ export default function SettingsPage({
             <div className="grid gap-4 p-4">
                 <PageHeader
                     title="Pengaturan"
-                    subtitle="Perubahan tercatat di audit log."
+                    subtitle="Semua pengaturan operasional diubah di sini, tanpa perlu ubah kode. Perubahan tercatat di audit log."
                 />
                 <Tabs
                     value={tab}
                     onChange={setTab}
                     tabs={[
                         { id: 'outlet', label: 'Outlet' },
-                        { id: 'ops', label: 'Operasional' },
+                        ...catalog.map((c) => ({ id: c.key, label: c.label })),
                         { id: 'pay', label: 'Metode bayar' },
                         { id: 'tax', label: 'Pajak & biaya' },
                         { id: 'promo', label: 'Promo' },
-                        { id: 'notif', label: 'Notifikasi' },
                     ]}
                 />
                 {Object.values(errors ?? {})[0] && (
@@ -91,65 +105,11 @@ export default function SettingsPage({
                     </p>
                 )}
                 {tab === 'outlet' && <OutletForm outlet={outlet} />}
-                {tab === 'ops' && (
-                    <SettingsForm
+                {active && (
+                    <CatalogForm
+                        key={active.key}
+                        tab={active}
                         settings={settings}
-                        fields={[
-                            [
-                                'operations.business_day_start',
-                                'Jam mulai hari bisnis',
-                                'time',
-                            ],
-                            [
-                                'pricing.rounding',
-                                'Pembulatan grand total',
-                                'rounding',
-                            ],
-                            ['pricing.price_mode', 'Mode harga menu', 'mode'],
-                            [
-                                'discount.cashier_limit_percent',
-                                'Batas diskon kasir tanpa PIN (%)',
-                                'number',
-                            ],
-                            [
-                                'qr.confirm_alert_seconds',
-                                'Alarm QR belum dikonfirmasi (detik)',
-                                'number',
-                            ],
-                            [
-                                'qr.max_submits_per_window',
-                                'Maks kiriman QR per meja / 10 menit',
-                                'number',
-                            ],
-                            [
-                                'kitchen.warn_minutes',
-                                'KDS: kuning setelah (menit)',
-                                'number',
-                            ],
-                            [
-                                'kitchen.danger_minutes',
-                                'KDS: merah setelah (menit)',
-                                'number',
-                            ],
-                            ['receipt.footer', 'Catatan kaki struk', 'text'],
-                        ]}
-                    />
-                )}
-                {tab === 'notif' && (
-                    <SettingsForm
-                        settings={settings}
-                        fields={[
-                            [
-                                'telegram.bot_token',
-                                'Telegram bot token (Z-report)',
-                                'password',
-                            ],
-                            [
-                                'telegram.chat_id',
-                                'Telegram chat ID owner',
-                                'text',
-                            ],
-                        ]}
                     />
                 )}
                 {tab === 'pay' && (
@@ -218,88 +178,126 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
     );
 }
 
-function SettingsForm({
+function CatalogForm({
+    tab,
     settings,
-    fields,
 }: {
+    tab: CatalogTab;
     settings: Props['settings'];
-    fields: [string, string, string][];
 }) {
-    const [v, setV] = useState<Record<string, string | number | null>>(
-        Object.fromEntries(fields.map(([k]) => [k, settings[k] ?? ''])),
+    const fields = tab.groups.flatMap((g) => g.fields);
+    const [v, setV] = useState<
+        Record<string, string | number | boolean | null>
+    >(
+        Object.fromEntries(
+            fields.map((f) => [
+                f.key,
+                settings[f.key] ?? (f.type === 'bool' ? false : ''),
+            ]),
+        ),
     );
 
     return (
-        <section className="grid max-w-xl gap-3 rounded-xl border bg-card p-4">
-            {fields.map(([key, label, kind]) => (
-                <Field key={key} label={label}>
-                    {kind === 'rounding' ? (
-                        <Select
-                            value={String(v[key])}
-                            onChange={(e) =>
-                                setV({ ...v, [key]: e.target.value })
-                            }
-                        >
-                            <option value="0">Tanpa pembulatan</option>
-                            <option value="100">Ke Rp100</option>
-                            <option value="500">Ke Rp500</option>
-                        </Select>
-                    ) : kind === 'mode' ? (
-                        <Select
-                            value={String(v[key])}
-                            onChange={(e) =>
-                                setV({ ...v, [key]: e.target.value })
-                            }
-                        >
-                            <option value="exclusive">
-                                Belum termasuk pajak
-                            </option>
-                            <option value="inclusive">
-                                Sudah termasuk pajak
-                            </option>
-                        </Select>
-                    ) : (
-                        <Input
-                            className="h-11"
-                            type={
-                                kind === 'time'
-                                    ? 'time'
-                                    : kind === 'number'
-                                      ? 'number'
-                                      : kind === 'password'
-                                        ? 'password'
-                                        : 'text'
-                            }
-                            value={v[key] ?? ''}
-                            onChange={(e) =>
-                                setV({ ...v, [key]: e.target.value })
-                            }
-                        />
+        <div className="grid max-w-2xl gap-4">
+            {tab.groups.map((g) => (
+                <section
+                    key={g.title}
+                    className="grid gap-4 rounded-xl border bg-card p-4"
+                >
+                    <h2 className="font-semibold">{g.title}</h2>
+                    {g.fields.map((f) =>
+                        f.type === 'bool' ? (
+                            <label
+                                key={f.key}
+                                className="flex cursor-pointer items-start gap-3 rounded-lg border p-3"
+                            >
+                                <input
+                                    type="checkbox"
+                                    role="switch"
+                                    className="mt-0.5 size-6 shrink-0"
+                                    checked={v[f.key] === true}
+                                    onChange={(e) =>
+                                        setV({
+                                            ...v,
+                                            [f.key]: e.target.checked,
+                                        })
+                                    }
+                                />
+                                <span>
+                                    <span className="block font-medium">
+                                        {f.label}
+                                    </span>
+                                    <span className="block text-xs text-muted-foreground">
+                                        {f.hint}
+                                    </span>
+                                </span>
+                            </label>
+                        ) : (
+                            <Field key={f.key} label={f.label} hint={f.hint}>
+                                {f.type === 'select' ? (
+                                    <Select
+                                        value={String(v[f.key] ?? '')}
+                                        onChange={(e) =>
+                                            setV({
+                                                ...v,
+                                                [f.key]: e.target.value,
+                                            })
+                                        }
+                                    >
+                                        {f.options?.map(([val, label]) => (
+                                            <option key={val} value={val}>
+                                                {label}
+                                            </option>
+                                        ))}
+                                    </Select>
+                                ) : (
+                                    <Input
+                                        className="h-11"
+                                        type={
+                                            f.type === 'time'
+                                                ? 'time'
+                                                : f.type === 'int'
+                                                  ? 'number'
+                                                  : f.type === 'secret'
+                                                    ? 'password'
+                                                    : 'text'
+                                        }
+                                        min={f.min}
+                                        max={f.max}
+                                        value={String(v[f.key] ?? '')}
+                                        onChange={(e) =>
+                                            setV({
+                                                ...v,
+                                                [f.key]: e.target.value,
+                                            })
+                                        }
+                                    />
+                                )}
+                            </Field>
+                        ),
                     )}
-                </Field>
+                </section>
             ))}
-            <p className="text-xs text-muted-foreground">
-                Mode harga & tarif pajak berlaku untuk order baru; order lama
-                tidak berubah.
-            </p>
             <Button
                 className="h-12"
                 onClick={() =>
                     router.post(
                         '/admin/settings',
-                        Object.fromEntries(
-                            Object.entries(v).map(([k, x]) => [
-                                k,
-                                x === '' ? null : x,
-                            ]),
-                        ),
+                        {
+                            values: Object.fromEntries(
+                                Object.entries(v).map(([k, x]) => [
+                                    k,
+                                    x === '' ? null : x,
+                                ]),
+                            ),
+                        },
                         { preserveScroll: true },
                     )
                 }
             >
-                Simpan
+                Simpan pengaturan
             </Button>
-        </section>
+        </div>
     );
 }
 

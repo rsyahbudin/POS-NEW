@@ -63,8 +63,8 @@ class KdsController extends Controller
             ->whereHas('round', fn ($q) => $q->where('status', 'confirmed'))
             ->where(function ($q) {
                 $q->whereIn('status', ['new', 'preparing'])
-                    ->orWhere(fn ($q) => $q->where('status', 'ready')->where('ready_at', '>=', now()->subMinutes(5)))
-                    ->orWhere(fn ($q) => $q->where('status', 'voided')->where('voided_at', '>=', now()->subMinutes(10)));
+                    ->orWhere(fn ($q) => $q->where('status', 'ready')->where('ready_at', '>=', now()->subMinutes((int) $this->settings->get('kitchen.ready_visible_minutes', 5))))
+                    ->orWhere(fn ($q) => $q->where('status', 'voided')->where('voided_at', '>=', now()->subMinutes((int) $this->settings->get('kitchen.void_visible_minutes', 10))));
             })
             ->with(['round', 'order.table'])
             ->orderBy('order_round_id')->orderBy('id')

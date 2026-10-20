@@ -1,135 +1,91 @@
-![Screenshot](https://raw.githubusercontent.com/tomatophp/filament-pos/master/arts/3x1io-tomato-pos.jpg)
+# POS Restoran
 
-# Filament POS
+POS web untuk satu outlet kafe/restoran, dibangun dari [PRD](<PRD — POS System Restaurant.md>):
+kasir, self-order QR meja, layar dapur (KDS), shift kasir, split bill, dan akuntansi double-entry ringan.
 
-[![Latest Stable Version](https://poser.pugx.org/tomatophp/filament-pos/version.svg)](https://packagist.org/packages/tomatophp/filament-pos)
-[![License](https://poser.pugx.org/tomatophp/filament-pos/license.svg)](https://packagist.org/packages/tomatophp/filament-pos)
-[![Downloads](https://poser.pugx.org/tomatophp/filament-pos/d/total.svg)](https://packagist.org/packages/tomatophp/filament-pos)
+**Stack:** Laravel 13 · PHP 8.4 · React 19 + Inertia (starter kit) · TypeScript · Tailwind 4 + shadcn/ui ·
+PostgreSQL 17 · Redis + Horizon · Reverb (WebSocket) · Pest.
 
+## Menjalankan di lokal
 
-POS System for FilamentPHP with a lot of features and integration with Ecommerce Builder
-
-
-## Screenshots 
-
-![POS](https://raw.githubusercontent.com/tomatophp/filament-pos/master/arts/pos-light.png)
-![POS Dark](https://raw.githubusercontent.com/tomatophp/filament-pos/master/arts/pos-dark.png)
-
-## Compatibility
-
-| Filament POS | Filament | Laravel | PHP |
-|--------------|----------|---------|-----|
-| 5.x          | 5.x      | 12 / 13 | 8.2+ |
-| 1.x ([v3 branch](https://github.com/tomatophp/filament-pos/tree/v3)) | 3.x | 10 / 11 | 8.1+ |
-
-## Installation
+Prasyarat: Laravel Herd, DBngin (PostgreSQL 17 + Redis).
 
 ```bash
-composer require tomatophp/filament-pos
+createdb -h 127.0.0.1 -U postgres pos          # database aplikasi
+createdb -h 127.0.0.1 -U postgres pos_testing  # database test (PostgreSQL asli, bukan SQLite)
+cp .env.example .env && php artisan key:generate
+composer install && npm install
+php artisan migrate --seed
+composer run dev                               # server, queue/Horizon, Reverb, Vite, log
 ```
 
-The POS page ships its own stylesheet, so publish the Filament assets after installing or updating the package
+Akun demo (password `password`; PIN manager 6 digit untuk void/diskon di atas batas):
+
+| Peran   | Email            | PIN    |
+| ------- | ---------------- | ------ |
+| Owner   | owner@pos.test   | 111111 |
+| Manager | manager@pos.test | 222222 |
+| Kasir   | kasir@pos.test   | 333333 |
+| Waiter  | waiter@pos.test  | —      |
+| Dapur   | dapur@pos.test   | —      |
+
+Setelah login: `/pos` (kasir), `/kds` (dapur), `/shift`, `/dashboard`, `/admin/*` (back office).
+QR meja: `/m/{token}` (token dicetak lewat Admin › Meja & QR › PDF).
+Ganti password demo sebelum produksi. `POS_REQUIRE_OWNER_2FA=true` (default di `.env.example`) mewajibkan 2FA owner.
+
+## Test & kualitas
 
 ```bash
-php artisan filament:assets
+composer test        # Pint, Larastan level 8, lalu Pest (PostgreSQL)
+npm run check        # ESLint + Prettier (vite-plus)
+npm run types:check  # TypeScript
+npm run e2e          # Playwright: QR -> KDS -> bayar -> struk di 360/768/1280 px
+vendor/bin/pest --testsuite=Concurrency   # dua proses PHP nyata berebut bayar bill yang sama
 ```
 
-we need the Media Library plugin to be installed and migrated you can use this command to publish the migration
+Test mencakup invarian akuntansi PRD bagian 10: debit = kredit di setiap jurnal (Action **dan** constraint
+trigger PostgreSQL), saldo Kas Laci per shift, dan pendapatan Laba Rugi = grand total − pajak − refund.
 
-```bash
-php artisan vendor:publish --provider="Spatie\MediaLibrary\MediaLibraryServiceProvider" --tag="medialibrary-migrations"
-```
+## Struktur kode
 
-now you need to install the settings hub use these commands
+`app/Domain/{Catalog,Floor,Ordering,Kitchen,Payment,Shift,Accounting,Expense,Pricing,Reporting,Settings}` —
+tiap domain punya `Models/ Actions/ Enums/ Events/ Exceptions/`. Satu Action = satu use case dengan satu
+`handle()`; uang dibungkus `DB::transaction()` + `lockForUpdate()`; jurnal dibuat sinkron di transaksi yang sama
+dengan pembayaran. Semua nominal `bigint` rupiah lewat value object `App\Support\Money`. Controller tipis
+(validasi → Action → respons). `PriceCalculator` adalah satu-satunya tempat total dihitung.
+Domain `Kitchen` belum punya folder sendiri: tiket dapur = ronde order per stasiun (`stations`, `order_rounds`).
 
-```bash
-php artisan vendor:publish --provider="Spatie\LaravelSettings\LaravelSettingsServiceProvider" --tag="migrations"
-php artisan filament-settings-hub:install
-```
+## Cakupan terhadap PRD (modul 4.1–4.15)
 
-after install your package please run this command
+Semua modul punya Action, endpoint, halaman, dan test, dengan catatan di bawah.
 
-```bash
-php artisan filament-pos:install
-```
+## Belum selesai / berbeda dari PRD (jujur)
 
-finally register the plugin on `/app/Providers/Filament/AdminPanelProvider.php`
+- **Larastan level 8 bersih**, Pint dan ESLint bersih, 144 test lulus — tetapi **coverage belum diukur**
+  (PHP lokal tanpa pcov/xdebug); gate `--min=70` di CI belum pernah dijalankan.
+- **Playwright e2e** (`e2e/`) memakai Google Chrome terpasang dan database `pos_testing` di port 8123; Reverb
+  dimatikan sehingga layar memuat ulang state (target realtime ≤ 3 s tidak diuji di sini).
+  **Uji konkurensi** (`tests/Concurrency`) menjalankan dua proses PHP nyata dengan dua koneksi PostgreSQL; terbukti
+  gagal bila `lockForUpdate` dicabut. Keduanya perlu `npm run build` dan database `pos_testing`.
+- **Lighthouse (Performance ≥ 85 / Accessibility ≥ 90), FCP QR ≤ 1,8 s, p95 ≤ 300 ms, update realtime ≤ 3 s
+  belum diukur.** Terukur: bundle JS halaman QR ≈ 112 KB gzip (batas 150 KB). UI diperiksa manual di browser
+  (kasir, KDS, QR 375 px); belum diuji di tablet/HP fisik, Safari iOS, atau printer thermal.
+- **QZ Tray**: kode cetak + penandatanganan server ada (`php artisan pos:qz-keys`), belum diuji dengan QZ Tray
+  dan printer nyata. Jika gagal, otomatis fallback ke cetak browser.
+- **`spatie/laravel-data` + typescript-transformer tidak dipakai**: tipe TypeScript untuk respons server ditulis
+  tangan di `resources/js/types/pos.ts`. Wayfinder terpasang (bawaan starter), tetapi endpoint JSON POS memakai URL biasa.
+- Starter kit membawa **Inertia 3** dan toolchain `vite-plus`, bukan Inertia 2 seperti tertulis di PRD.
+- **Sentry dan Laravel Pulse belum dipasang.** Backup `spatie/laravel-backup` + R2 sudah dikonfigurasi,
+  restore belum pernah diuji.
+- Terjemahan: semua teks UI lewat `t()` (`resources/js/lang`, kunci = teks Indonesia); kamus Inggris baru
+  berisi contoh. Pesan error dari server masih Indonesia saja.
+- Split bill: setelah ada tagihan lunas, item baru hanya bisa masuk ke tagihan "Belum dialokasikan" pada split
+  **per item**; split bagi rata / nominal tidak bisa ditambah item setelah ada yang dibayar. Diskon order nominal
+  tetap dibagi proporsional, tetapi tagihan yang dialokasikan ulang setelah split menghitung ulang diskon nominal order.
+- Pengeluaran bersumber Kas Laci dari menu Pengeluaran **tidak** mengurangi "kas seharusnya" shift; catat kas
+  keluar dari halaman Shift agar masuk hitungan laci. Shift pertama tanpa shift sebelumnya tidak membuat jurnal
+  modal awal; isi saldo awal lewat Akuntansi › Jurnal manual (jurnal pembuka terhadap Modal Pemilik).
+- Registrasi publik dan verifikasi email bawaan starter dinonaktifkan (staf dibuat owner).
+- Env lokal memakai `POS_REQUIRE_OWNER_2FA=false` agar mudah dicoba; set `true` untuk staging/produksi.
 
-```php
-->plugin(\TomatoPHP\FilamentPos\FilamentPOSPlugin::make())
-```
-
-The POS plugin registers `FilamentEcommercePlugin` and `FilamentAccountsPlugin` for you. If your panel already registers them (for example to enable coupons with `FilamentEcommercePlugin::make()->useCoupon()`), your configuration is kept.
-
-The POS page is available at `/admin/pos` and uses the ordering settings of the Ecommerce package (company, direct branch and order code).
-
-## Use Filament Shield
-
-you can use the shield to protect your resource and allow user roles by install it first
-
-```bash
-composer require bezhansalleh/filament-shield
-```
-
-Add the Spatie\Permission\Traits\HasRoles trait to your User model(s):
-
-```php
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Spatie\Permission\Traits\HasRoles;
-
-class User extends Authenticatable
-{
-    use HasRoles;
-
-    // ...
-}
-```
-Publish the config file then setup your configuration:
-
-```php
-->plugin(\BezhanSalleh\FilamentShield\FilamentShieldPlugin::make())
-```
-
-Now run the following command to install shield:
-
-```bash
-php artisan shield:install
-```
-
-Now we can [publish the package assets]([https://github.com/bezhanSalleh/filament-shield](https://github.com/tomatophp/filament-users?tab=readme-ov-file#publish-assets)).
-
-```bash
-php artisan vendor:publish --tag="filament-users-config"
-```
-
-now you need to allow it on the plugin options
-
-```php
-->plugin(\TomatoPHP\FilamentPos\FilamentPOSPlugin::make()->allowShield())
-```
-
-for more information check the [Filament Shield](https://github.com/bezhanSalleh/filament-shield)
-
-## Publish Assets
-
-you can publish config file by use this command
-
-```bash
-php artisan vendor:publish --tag="filament-pos-config"
-```
-
-you can publish views file by use this command
-
-```bash
-php artisan vendor:publish --tag="filament-pos-views"
-```
-
-you can publish languages file by use this command
-
-```bash
-php artisan vendor:publish --tag="filament-pos-lang"
-```
-
-## Other Filament Packages
-
-Checkout our [Awesome TomatoPHP](https://github.com/tomatophp/awesome)
+Deploy: lihat [docs/deploy](docs/deploy/README.md).

@@ -1,71 +1,126 @@
-name: "Tests"
+name: ci
 
 on:
-  workflow_dispatch:
   push:
     branches:
-      - master
-    paths:
-      - '**.php'
-      - '.github/workflows/tests.yml'
-      - 'phpunit.xml'
-      - 'phpunit.xml.dist'
-      - 'composer.json'
+      - main
   pull_request:
-    types:
-      - opened
-      - synchronize
-    branches:
-      - master
-    paths:
-      - '**.php'
-      - '.github/workflows/tests.yml'
-      - 'phpunit.xml'
-      - 'phpunit.xml.dist'
-      - 'composer.json'
+
+permissions:
+  contents: read
 
 jobs:
-  test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: true
-      matrix:
-        os: [ubuntu-latest]
-        php: [8.4, 8.3]
-        laravel: [13.*, 12.*]
-        stability: [prefer-stable]
-        include:
-          - laravel: 13.*
-            testbench: 11.*
-          - laravel: 12.*
-            testbench: 10.*
-    name: P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.stability }} - ${{ matrix.os }}
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v7
+  ci:
+    runs-on: ubuntu-latest
 
-      - name: Cache Dependencies
-        uses: actions/cache@v5
+    # PRD 9: CI uses PostgreSQL 17 and Redis service containers (not SQLite).
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pos_testing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: pos_testing
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      REDIS_HOST: 127.0.0.1
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          path: ~/.composer/cache/files
-          key: dependencies-laravel-${{ matrix.laravel }}-php-${{ matrix.php }}-composer-${{ hashFiles('composer.json') }}
+          persist-credentials: false
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
-          php-version: ${{ matrix.php }}
-          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick, fileinfo
-          coverage: none
+          php-version: '8.4'
+          extensions: pdo_pgsql, redis, gd, intl, zip
+          tools: composer:v2
+          coverage: pcov
 
-      - name: Setup Problem Matchers
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
         run: |
-          echo "::add-matcher::${{ runner.tool_cache }}/php.json"
-          echo "::add-matcher::${{ runner.tool_cache }}/phpunit.json"
+          composer install --no-interaction --prefer-dist
+          cp .env.example .env
+          php artisan key:generate
+          npm ci
 
-      - name: Install Dependencies
+      - name: Pint
+        run: vendor/bin/pint --test
+
+      - name: Larastan (level 8)
+        run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+
+      - name: ESLint, Prettier, TypeScript
         run: |
-          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
-          composer update --${{ matrix.stability }} --prefer-dist --no-interaction
+          npm run check
+          npm run types:check
 
-      - name: Execute Tests
-        run: composer test
+      - name: Build frontend
+        run: npm run build
+
+      - name: Playwright e2e (Chrome, 360/768/1280 px)
+        run: npm run e2e
+
+      - name: Pest (PostgreSQL)
+        run: vendor/bin/pest --coverage --min=70
+
+      - name: Upload build for deploy
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: public/build
+
+  deploy:
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: '8.4'
+          tools: composer:v2
+      - uses: actions/download-artifact@v4
+        with:
+          name: build
+          path: public/build
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Deploy via Deployer (SSH)
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_REPOSITORY: ${{ github.server_url }}/${{ github.repository }}.git
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          vendor/bin/dep deploy production

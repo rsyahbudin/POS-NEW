@@ -1,26 +1,54 @@
 <?php
 
-use TomatoPHP\FilamentPos\Tests\TestCase;
-use TomatoPHP\FilamentTypes\Models\Type;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
-uses(TestCase::class)->in(__DIR__);
+/*
+|--------------------------------------------------------------------------
+| Test Case
+|--------------------------------------------------------------------------
+|
+| The closure you provide to your test functions is always bound to a specific PHPUnit test
+| case class. By default, that class is "PHPUnit\Framework\TestCase". Of course, you may
+| need to change it using the "pest()" function to bind different classes or traits.
+|
+*/
 
-/**
- * Seed the order status / payment method / source types the order screens read.
- */
-function seedOrderTypes(): void
+pest()->extend(TestCase::class)
+    ->use(RefreshDatabase::class)
+    ->in('Feature');
+
+/*
+|--------------------------------------------------------------------------
+| Expectations
+|--------------------------------------------------------------------------
+|
+| When you're writing tests, you often need to check that values meet certain conditions. The
+| "expect()" function gives you access to a set of "expectations" methods that you can use
+| to assert different things. Of course, you may extend the Expectation API at any time.
+|
+*/
+
+expect()->extend('toBeOne', function () {
+    return $this->toBe(1);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Functions
+|--------------------------------------------------------------------------
+|
+| While Pest is very powerful out-of-the-box, you may have some testing code specific to your
+| project that you don't want to repeat in every file. Here you can also expose helpers as
+| global functions to help you to reduce the number of lines of code in your test files.
+|
+*/
+
+function something()
 {
-    $types = [
-        ['type' => 'status', 'key' => 'pending', 'name' => 'Pending', 'color' => '#f59e0b', 'icon' => 'heroicon-o-clock'],
-        ['type' => 'status', 'key' => 'paid', 'name' => 'Paid', 'color' => '#10b981', 'icon' => 'heroicon-o-banknotes'],
-        ['type' => 'payment_methods', 'key' => 'cash', 'name' => 'Cash', 'color' => '#22c55e', 'icon' => 'heroicon-o-banknotes'],
-        ['type' => 'source', 'key' => 'pos', 'name' => 'POS', 'color' => '#6366f1', 'icon' => 'heroicon-o-building-storefront'],
-    ];
-
-    foreach ($types as $type) {
-        Type::query()->firstOrCreate(
-            ['for' => 'orders', 'type' => $type['type'], 'key' => $type['key']],
-            ['name' => ['en' => $type['name']], 'color' => $type['color'], 'icon' => $type['icon']],
-        );
-    }
+    // ..
 }
+
+pest()->beforeEach(fn () => $this->seed())->in('Feature/Pos');
+
+require_once __DIR__.'/Helpers.php';

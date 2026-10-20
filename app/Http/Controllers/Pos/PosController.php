@@ -1,0 +1,88 @@
+<?php
+
+namespace App\Http\Controllers\Pos;
+
+use App\Domain\Catalog\Models\Product;
+use App\Domain\Ordering\Models\Order;
+use App\Domain\Ordering\Models\OrderItem;
+use App\Domain\Ordering\Models\OrderRound;
+use App\Domain\Payment\Models\PaymentMethod;
+use App\Domain\Settings\OutletContext;
+use App\Domain\Settings\SettingsRepository;
+use App\Domain\Shift\Actions\OpenShiftAction;
+use App\Domain\Shift\Models\Shift;
+use App\Http\Controllers\Controller;
+use App\Http\Presenters\MenuPresenter;
+use App\Http\Presenters\OrderPresenter;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class PosController extends Controller
+{
+    public function __construct(private OutletContext $outlet, private SettingsRepository $settings) {}
+
+    public function index(Request $request): Response
+    {
+        $user = $this->actor($request);
+        $outletId = $this->outlet->id();
+        $shift = Shift::query()->where('user_id', $user->id)->whereNull('closed_at')->first();
+
+        return Inertia::render('pos/index', [
+            'menu' => MenuPresenter::categories($outletId),
+            'paymentMethods' => PaymentMethod::query()->where('outlet_id', $outletId)->where('is_active', true)->orderBy('sort')->get(['id', 'name', 'type']),
+            'shift' => $shift ? ['id' => $shift->id, 'opened_at' => $shift->opened_at->toIso8601String()] : null,
+            'suggestedOpening' => app(OpenShiftAction::class)->suggestedOpeningCash(),
+            'can' => [
+                'pay' => $user->can('receive-payment'),
+                'void' => $user->can('void'),
+                'refund' => $user->can('refund'),
+                'discount' => $user->can('discount-within-limit'),
+                'confirm_qr' => $user->can('receive-payment'),
+            ],
+            'settings' => [
+                'discount_limit_percent' => (int) $this->settings->get('discount.cashier_limit_percent', 10),
+                'qr_alert_seconds' => (int) $this->settings->get('qr.confirm_alert_seconds', 180),
+                'outlet_id' => $outletId,
+            ],
+            'state' => $this->state(),
+        ]);
+    }
+
+    /** Polled by the screen (and refreshed on websocket events) to stay in sync. */
+    /** @return array<string, mixed> */
+    public function state(): array
+    {
+        $outletId = $this->outlet->id();
+
+        $pending = OrderRound::query()->where('status', 'pending')->where('source', 'qr')
+            ->whereHas('order', fn ($q) => $q->where('outlet_id', $outletId))
+            ->with(['items', 'order.table'])->oldest()->get()
+            ->map(fn (OrderRound $r) => OrderPresenter::round($r) + [
+                'order_id' => $r->order_id, 'table' => $r->order->table?->name, 'table_id' => $r->order->table_id,
+            ])->all();
+
+        $ready = OrderItem::query()->where('status', 'ready')->where('ready_at', '>=', now()->subMinutes(15))
+            ->whereHas('order', fn ($q) => $q->where('outlet_id', $outletId)->whereIn('status', ['open', 'partially_paid']))
+            ->with('order.table')->get()
+            ->map(fn (OrderItem $i) => ['id' => $i->id, 'name' => $i->name_snapshot, 'qty' => $i->qty, 'table' => $i->order->table->name ?? $i->order->call_number ?? $i->order->number, 'order_id' => $i->order_id])->all();
+
+        $orders = Order::query()->where('outlet_id', $outletId)->whereIn('status', ['open', 'partially_paid'])
+            ->whereNull('table_id')->latest('id')->limit(30)->get()
+            ->map(fn ($o) => ['id' => $o->id, 'number' => $o->number, 'type' => $o->type->value, 'call_number' => $o->call_number, 'platform' => $o->platform, 'grand_total' => $o->grand_total, 'status' => $o->status->value])->all();
+
+        return [
+            'floor' => MenuPresenter::floor($outletId),
+            'pending_qr' => $pending,
+            'ready_items' => $ready,
+            'takeaway_orders' => $orders,
+            'sold_out' => Product::query()->where('outlet_id', $outletId)->where('is_available', false)->pluck('id')->all(),
+        ];
+    }
+
+    public function stateJson(): JsonResponse
+    {
+        return response()->json($this->state());
+    }
+}

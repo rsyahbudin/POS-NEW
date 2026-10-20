@@ -795,7 +795,7 @@ export default function PosPage(props: Props) {
                 {!sound.unlocked && !sound.prefs.muted && (
                     <div
                         role="status"
-                        className="flex items-center justify-between gap-2 bg-sky-100 px-3 py-2 text-sm text-sky-950"
+                        className="fixed inset-x-3 bottom-3 z-50 flex items-center justify-between gap-2 rounded-xl bg-sky-100 px-3 py-2 text-sm text-sky-950 shadow-lg"
                     >
                         <span>
                             {t(

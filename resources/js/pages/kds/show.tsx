@@ -236,7 +236,7 @@ export default function KdsPage({
                 {!sound.unlocked && !sound.prefs.muted && (
                     <div
                         role="status"
-                        className="flex items-center justify-between gap-2 bg-sky-900 px-3 py-2 text-sm text-sky-50"
+                        className="fixed inset-x-3 bottom-3 z-50 flex items-center justify-between gap-2 rounded-xl bg-sky-900 px-3 py-2 text-sm text-sky-50 shadow-lg"
                     >
                         <span>
                             {t(

@@ -1,4 +1,3 @@
-import { useId } from 'react';
 import { rupiah } from '@/lib/format';
 
 export type Datum = { label: string; value: number };
@@ -186,8 +185,6 @@ export function LineChart({
     color?: string;
     height?: number;
 }) {
-    const gid = useId();
-
     if (data.length === 0) {
         return <Empty title={title} />;
     }
@@ -218,16 +215,6 @@ export function LineChart({
                 role="img"
                 aria-label={title}
             >
-                <defs>
-                    <linearGradient id={gid} x1="0" x2="0" y1="0" y2="1">
-                        <stop
-                            offset="0%"
-                            stopColor={color}
-                            stopOpacity={0.25}
-                        />
-                        <stop offset="100%" stopColor={color} stopOpacity={0} />
-                    </linearGradient>
-                </defs>
                 {[0, 0.5, 1].map((f) => (
                     <g key={f}>
                         <line
@@ -250,7 +237,7 @@ export function LineChart({
                         </text>
                     </g>
                 ))}
-                <path d={area} fill={`url(#${gid})`} />
+                <path d={area} fill={color} fillOpacity={0.12} />
                 <path
                     d={path}
                     fill="none"

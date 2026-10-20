@@ -6,15 +6,15 @@ import type { Floor, FloorTable } from '@/types/pos';
 const STATUS: Record<FloorTable['status'], { label: string; cls: string }> = {
     empty: {
         label: 'Kosong',
-        cls: 'border-emerald-600/40 bg-emerald-50 dark:bg-emerald-950/30',
+        cls: 'border-emerald-600/30 bg-emerald-50 hover:border-emerald-600/60 dark:bg-emerald-950/30',
     },
     occupied: {
         label: 'Terisi',
-        cls: 'border-amber-600/50 bg-amber-50 dark:bg-amber-950/30',
+        cls: 'border-amber-600/40 bg-amber-50 dark:bg-amber-950/30',
     },
     awaiting_payment: {
         label: 'Menunggu Bayar',
-        cls: 'border-rose-600/50 bg-rose-50 dark:bg-rose-950/30',
+        cls: 'border-rose-600/40 bg-rose-50 dark:bg-rose-950/30',
     },
 };
 
@@ -41,7 +41,7 @@ export function TableMap({
                                 onClick={() => onSelect(tb)}
                                 aria-pressed={selectedId === tb.id}
                                 className={cn(
-                                    'min-h-24 rounded-xl border-2 p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                    'min-h-24 rounded-2xl border-2 p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring',
                                     STATUS[tb.status].cls,
                                     selectedId === tb.id &&
                                         'ring-2 ring-primary',

@@ -63,10 +63,10 @@ export function ProductGrid({
                             aria-selected={cat === c.id}
                             onClick={() => setCat(c.id)}
                             className={cn(
-                                'h-11 shrink-0 rounded-full border px-4 text-sm font-medium',
+                                'h-11 shrink-0 rounded-full border px-4 text-sm font-semibold transition-colors',
                                 cat === c.id
                                     ? 'border-primary bg-primary text-primary-foreground'
-                                    : 'bg-background',
+                                    : 'bg-card hover:bg-muted',
                             )}
                         >
                             {c.name}
@@ -85,7 +85,7 @@ export function ProductGrid({
                             disabled={out && !markMode}
                             onClick={() => onPick(p)}
                             className={cn(
-                                'relative flex min-h-24 flex-col justify-between rounded-xl border bg-card p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]',
+                                'relative flex min-h-24 flex-col justify-between rounded-2xl border bg-card p-3 text-left transition outline-none hover:border-primary/60 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]',
                                 out && 'opacity-60',
                                 markMode && 'ring-2 ring-amber-500',
                             )}
@@ -97,14 +97,14 @@ export function ProductGrid({
                                     width={96}
                                     height={64}
                                     loading="lazy"
-                                    className="mb-2 h-16 w-full rounded-lg object-cover"
+                                    className="mb-2 h-16 w-full rounded-xl object-cover"
                                 />
                             )}
                             <span className="line-clamp-2 text-sm leading-tight font-medium">
                                 {p.name}
                             </span>
                             <span className="mt-2 flex items-end justify-between gap-1">
-                                <span className="text-sm font-semibold tabular-nums">
+                                <span className="text-sm font-bold text-primary tabular-nums">
                                     {p.variants.length > 1
                                         ? `${t('dari')} ${rupiah(Math.min(...p.variants.map((v) => v.price)))}`
                                         : rupiah(p.price)}
@@ -116,7 +116,7 @@ export function ProductGrid({
                                 )}
                             </span>
                             {out && (
-                                <span className="absolute top-2 right-2 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                <span className="absolute top-2 right-2 rounded-md bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
                                     {t('HABIS')}
                                 </span>
                             )}

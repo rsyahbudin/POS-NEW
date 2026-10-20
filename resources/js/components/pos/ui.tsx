@@ -8,7 +8,7 @@ export function Select({ className, ...props }: ComponentProps<'select'>) {
         <select
             {...props}
             className={cn(
-                'h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50',
+                'h-11 w-full rounded-xl border border-input bg-card px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50',
                 className,
             )}
         />
@@ -41,7 +41,7 @@ export function TextArea({ className, ...props }: ComponentProps<'textarea'>) {
         <textarea
             {...props}
             className={cn(
-                'min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                'min-h-20 w-full rounded-xl border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
                 className,
             )}
         />
@@ -64,7 +64,7 @@ export function MoneyInput({
             inputMode="numeric"
             onFocus={(e) => e.target.select()}
             className={cn(
-                'h-11 w-full rounded-md border border-input bg-background px-3 text-right text-base tabular-nums outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                'h-11 w-full rounded-xl border border-input bg-card px-3 text-right text-base tabular-nums outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
                 className,
             )}
             value={value === '' ? '' : value.toLocaleString('id-ID')}
@@ -88,7 +88,7 @@ export function PageHeader({
     return (
         <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-                <h1 className="text-xl font-semibold">{title}</h1>
+                <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
                 {subtitle && (
                     <p className="text-sm text-muted-foreground">{subtitle}</p>
                 )}
@@ -108,9 +108,11 @@ export function Stat({
     hint?: ReactNode;
 }) {
     return (
-        <div className="rounded-xl border bg-card p-4">
-            <p className="text-xs text-muted-foreground">{label}</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+        <div className="rounded-2xl border bg-card p-4">
+            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+            <p className="mt-1.5 text-2xl font-bold tracking-tight tabular-nums">
+                {value}
+            </p>
             {hint && (
                 <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
             )}
@@ -134,7 +136,7 @@ export function ResponsiveTable({
 }) {
     if (rows.length === 0) {
         return (
-            <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+            <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
                 {empty}
             </p>
         );
@@ -142,9 +144,9 @@ export function ResponsiveTable({
 
     return (
         <>
-            <div className="hidden overflow-x-auto rounded-lg border md:block">
+            <div className="hidden overflow-x-auto rounded-2xl border bg-card md:block">
                 <table className="w-full text-sm">
-                    <thead className="bg-muted/50">
+                    <thead className="bg-muted/60">
                         <tr>
                             {headers.map((h, i) => (
                                 <th
@@ -181,7 +183,7 @@ export function ResponsiveTable({
             </div>
             <div className="grid gap-2 md:hidden">
                 {rows.map((row, r) => (
-                    <div key={r} className="rounded-lg border bg-card p-3">
+                    <div key={r} className="rounded-2xl border bg-card p-3">
                         <p className="font-medium">{row[0]}</p>
                         <dl className="mt-1 grid gap-0.5 text-sm">
                             {row.slice(1).map((cell, i) => (
@@ -217,7 +219,7 @@ export function Tabs<T extends string>({
     return (
         <div
             role="tablist"
-            className="flex gap-1 overflow-x-auto rounded-lg border p-1"
+            className="flex gap-1 overflow-x-auto rounded-xl bg-muted p-1"
         >
             {tabs.map((tb) => (
                 <button
@@ -226,10 +228,10 @@ export function Tabs<T extends string>({
                     aria-selected={value === tb.id}
                     onClick={() => onChange(tb.id)}
                     className={cn(
-                        'h-10 shrink-0 rounded-md px-3 text-sm font-medium',
+                        'h-10 shrink-0 rounded-lg px-3.5 text-sm font-semibold transition-colors',
                         value === tb.id
-                            ? 'bg-primary text-primary-foreground'
-                            : 'hover:bg-muted',
+                            ? 'bg-card text-primary shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground',
                     )}
                 >
                     {tb.label}

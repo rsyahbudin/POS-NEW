@@ -521,7 +521,7 @@ export default function PosPage(props: Props) {
                 className="flex h-dvh flex-col bg-background"
                 onPointerDown={sound.unlock}
             >
-                <header className="flex items-center gap-2 border-b px-3 py-2">
+                <header className="flex items-center gap-2 border-b bg-card px-3 py-2">
                     <Link href="/" className="text-base font-semibold">
                         POS
                     </Link>

@@ -69,7 +69,7 @@ export function OrderPanel({
     return (
         <section
             aria-label={t('Pesanan')}
-            className="flex h-full min-h-0 flex-col rounded-xl border bg-card"
+            className="flex h-full min-h-0 flex-col rounded-2xl border bg-card"
         >
             <header className="flex items-start justify-between gap-2 border-b p-3">
                 <div>

@@ -210,11 +210,13 @@ export default function QrMenu({
     return (
         <>
             <Head title={`Menu · ${table.name}`} />
-            <div className="min-h-dvh bg-white pb-28 text-slate-900">
-                <header className="sticky top-0 z-10 border-b bg-white/95 px-4 py-3 backdrop-blur">
-                    <p className="text-xs text-slate-600">{outlet}</p>
-                    <h1 className="text-lg font-bold">Meja {table.name}</h1>
-                    <p className="text-xs text-slate-600">
+            <div className="min-h-dvh bg-background pb-28 text-foreground">
+                <header className="sticky top-0 z-10 bg-primary px-4 py-4 text-primary-foreground">
+                    <p className="text-xs font-medium text-primary-foreground/80">
+                        {outlet}
+                    </p>
+                    <h1 className="text-xl font-bold">Meja {table.name}</h1>
+                    <p className="text-xs text-primary-foreground/80">
                         Pembayaran di kasir.
                     </p>
                 </header>
@@ -229,7 +231,7 @@ export default function QrMenu({
                                 key={c.id}
                                 onClick={() => setCat(c.id)}
                                 aria-pressed={cat === c.id}
-                                className={`h-11 shrink-0 rounded-full border px-4 text-sm font-medium ${cat === c.id ? 'border-slate-900 bg-slate-900 text-white' : 'bg-white'}`}
+                                className={`h-11 shrink-0 rounded-full border px-4 text-sm font-medium ${cat === c.id ? 'border-primary bg-primary text-primary-foreground' : 'bg-card'}`}
                             >
                                 {c.name}
                             </button>
@@ -255,7 +257,7 @@ export default function QrMenu({
                                           label: p.name,
                                       })
                             }
-                            className="flex min-h-[72px] items-center gap-3 rounded-xl border p-3 text-left active:bg-slate-50"
+                            className="flex min-h-[72px] items-center gap-3 rounded-2xl border bg-card p-3 text-left transition hover:border-primary/60 active:scale-[0.99]"
                         >
                             {p.image && (
                                 <img
@@ -272,12 +274,12 @@ export default function QrMenu({
                                     {p.name}
                                 </span>
                                 {p.description && (
-                                    <span className="line-clamp-2 block text-xs text-slate-600">
+                                    <span className="line-clamp-2 block text-xs text-muted-foreground">
                                         {p.description}
                                     </span>
                                 )}
                             </span>
-                            <span className="text-sm font-semibold tabular-nums">
+                            <span className="text-sm font-bold text-primary tabular-nums">
                                 {p.variants.length > 1
                                     ? `dari ${rp(Math.min(...p.variants.map((v) => v.price)))}`
                                     : rp(p.price)}
@@ -285,13 +287,13 @@ export default function QrMenu({
                         </button>
                     ))}
                     {products.length === 0 && (
-                        <p className="py-10 text-center text-sm text-slate-600">
+                        <p className="py-10 text-center text-sm text-muted-foreground">
                             Menu belum tersedia.
                         </p>
                     )}
                 </main>
 
-                <div className="fixed inset-x-0 bottom-0 z-20 grid gap-2 border-t bg-white p-3">
+                <div className="fixed inset-x-0 bottom-0 z-20 grid gap-2 border-t bg-card p-3">
                     {status.rounds.length > 0 && (
                         <button
                             onClick={() => setOpen('status')}
@@ -304,7 +306,7 @@ export default function QrMenu({
                     {count > 0 && (
                         <button
                             onClick={() => setOpen('cart')}
-                            className="flex h-14 items-center justify-between rounded-xl bg-slate-900 px-4 text-base font-semibold text-white"
+                            className="flex h-14 items-center justify-between rounded-xl bg-primary px-4 text-base font-bold text-primary-foreground"
                         >
                             <span>{count} item</span>
                             <span className="tabular-nums">
@@ -428,7 +430,7 @@ export default function QrMenu({
                                 required
                             />
                         </label>
-                        <p className="mt-2 text-xs text-slate-600">
+                        <p className="mt-2 text-xs text-muted-foreground">
                             {autoConfirm
                                 ? 'Pesanan langsung diteruskan ke dapur.'
                                 : 'Pesanan dikonfirmasi kasir dulu sebelum dibuat.'}{' '}
@@ -447,7 +449,7 @@ export default function QrMenu({
                                 busy || name.trim() === '' || cart.length === 0
                             }
                             onClick={submit}
-                            className="mt-3 h-14 w-full rounded-xl bg-slate-900 text-base font-semibold text-white disabled:opacity-50"
+                            className="mt-3 h-14 w-full rounded-xl bg-primary text-base font-bold text-primary-foreground disabled:opacity-50"
                         >
                             {busy
                                 ? 'Mengirim…'
@@ -481,7 +483,7 @@ export default function QrMenu({
                                     className="rounded-xl border p-3"
                                 >
                                     <p
-                                        className={`mb-1 inline-block rounded px-2 py-0.5 text-xs font-bold ${r.status === 'Ditolak' ? 'bg-red-100 text-red-900' : r.status === 'Siap' ? 'bg-emerald-100 text-emerald-900' : r.status === 'Menunggu Konfirmasi' ? 'bg-slate-200 text-slate-900' : 'bg-amber-100 text-amber-900'}`}
+                                        className={`mb-1 inline-block rounded-md px-2 py-0.5 text-xs font-bold ${r.status === 'Ditolak' ? 'bg-red-100 text-red-900' : r.status === 'Siap' ? 'bg-emerald-100 text-emerald-900' : r.status === 'Menunggu Konfirmasi' ? 'bg-muted text-foreground' : 'bg-amber-100 text-amber-900'}`}
                                     >
                                         {r.status}
                                     </p>
@@ -513,7 +515,7 @@ export default function QrMenu({
                         <p className="mt-3 text-right font-semibold">
                             Total sementara {rp(status.total)}
                         </p>
-                        <p className="mt-1 text-center text-sm text-slate-600">
+                        <p className="mt-1 text-center text-sm text-muted-foreground">
                             Pembayaran di kasir
                         </p>
                     </Sheet>
@@ -541,7 +543,7 @@ function Sheet({
             onClick={onClose}
         >
             <div
-                className="max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-4"
+                className="max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl bg-card p-4"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="mb-3 flex items-center justify-between">
@@ -618,7 +620,7 @@ function Picker({
                                 key={v.id}
                                 aria-pressed={variantId === v.id}
                                 onClick={() => setVariantId(v.id)}
-                                className={`h-12 rounded-lg border px-2 text-sm ${variantId === v.id ? 'border-slate-900 bg-slate-900 text-white' : ''}`}
+                                className={`h-12 rounded-xl border bg-card px-2 text-sm ${variantId === v.id ? 'border-primary bg-primary text-primary-foreground' : ''}`}
                             >
                                 {v.name} · {rp(v.price)}
                             </button>
@@ -630,7 +632,7 @@ function Picker({
                 <fieldset key={g.id} className="mb-3">
                     <legend className="mb-1 text-sm font-medium">
                         {g.name}{' '}
-                        <span className="font-normal text-slate-600">
+                        <span className="font-normal text-muted-foreground">
                             · {g.required ? 'wajib' : 'opsional'}
                         </span>
                     </legend>
@@ -642,7 +644,7 @@ function Picker({
                                     key={m.id}
                                     aria-pressed={on}
                                     onClick={() => toggle(g.id, m.id, g.max)}
-                                    className={`h-12 rounded-lg border px-2 text-sm ${on ? 'border-slate-900 bg-slate-900 text-white' : ''}`}
+                                    className={`h-12 rounded-xl border bg-card px-2 text-sm ${on ? 'border-primary bg-primary text-primary-foreground' : ''}`}
                                 >
                                     {m.name}
                                     {m.price_delta
@@ -707,7 +709,7 @@ function Picker({
                                 .join(' '),
                         });
                     }}
-                    className="h-12 flex-1 rounded-xl bg-slate-900 font-semibold text-white disabled:opacity-50"
+                    className="h-12 flex-1 rounded-xl bg-primary font-bold text-primary-foreground disabled:opacity-50"
                 >
                     Tambah · {rp(unit * qty)}
                 </button>

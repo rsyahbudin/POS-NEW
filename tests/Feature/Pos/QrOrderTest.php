@@ -105,3 +105,24 @@ it('reserves portion stock only when confirmed', function () {
     app(ConfirmRoundAction::class)->handle($round, userWithRole('cashier'));
     expect($croissant->fresh()->stock_qty)->toBe(15);
 });
+
+it('puts a second guest at the same table into the same order and bill', function () {
+    $table = Table::query()->first();
+    $a = qr($table, [['product_id' => product('Americano')->id, 'qty' => 1]], 'Andi');
+    app(ConfirmRoundAction::class)->handle($a, userWithRole('cashier'));
+
+    $b = qr($table, [['product_id' => product('Nasi Goreng')->id, 'qty' => 1]], 'Budi'); // friend scans later
+    app(ConfirmRoundAction::class)->handle($b, userWithRole('cashier'));
+
+    $order = $a->order->fresh();
+    expect($b->order_id)->toBe($a->order_id)
+        ->and($order->rounds()->count())->toBe(2)
+        ->and($order->subtotal)->toBe(22000 + 38000)
+        ->and($order->bills()->count())->toBe(1)
+        ->and($order->bills()->first()->grand_total)->toBe(60000);
+
+    // after it is paid, the next scan opens a fresh order
+    openShiftFor(userWithRole('cashier'), 0);
+    pay($order);
+    expect(qr($table)->order_id)->not->toBe($a->order_id);
+});

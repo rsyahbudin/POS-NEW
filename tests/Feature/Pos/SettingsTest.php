@@ -49,6 +49,7 @@ it('tells the QR page whether the cashier must confirm', function () {
 it('exposes every setting in the UI catalog with validation and defaults', function () {
     $this->actingAs(userWithRole('owner'))->get('/admin/settings')->assertInertia(fn ($p) => $p->has('catalog', 6));
 
+    setting('kitchen.enabled', false); // test bootstrap turns KDS on; catalog default is off
     foreach (SettingsCatalog::fields() as $key => $field) {
         expect($field)->toHaveKeys(['label', 'hint', 'type', 'default']);
         expect(app(SettingsRepository::class)->get($key))->toBe($field['default']);

@@ -65,7 +65,12 @@ import type {
 type Props = {
     menu: Category[];
     paymentMethods: PaymentMethod[];
-    shift: { id: number; opened_at: string } | null;
+    shift: {
+        id: number;
+        opened_at: string;
+        mine: boolean;
+        owner: string | null;
+    } | null;
     suggestedOpening: number;
     can: {
         pay: boolean;
@@ -78,6 +83,7 @@ type Props = {
         discount_limit_percent: number;
         qr_alert_seconds: number;
         quick_cash: number[];
+        kds_enabled: boolean;
         outlet_id: number;
     };
     state: PosState;
@@ -122,6 +128,39 @@ export default function PosPage(props: Props) {
     const sound = useSound();
     const alerted = useRef<Record<number, number>>({});
     const pendingCount = state.pending_qr.length;
+
+    // One notification per QR round, whichever arrives first: WebSocket event or the polled state.
+    const seenQr = useRef(
+        new Set<number>([
+            ...props.state.pending_qr.map((r) => r.id),
+            ...props.state.recent_qr.map((r) => r.id),
+        ]),
+    );
+    const notifyQr = useCallback(
+        (
+            roundId: number,
+            table: string | null,
+            who: string | null,
+            auto: boolean,
+        ) => {
+            if (seenQr.current.has(roundId)) {
+                return;
+            }
+
+            seenQr.current.add(roundId);
+            sound.beep('order');
+            toast(
+                `${auto ? t('Pesanan QR masuk dapur') : t('Pesanan QR baru')}: ${table ?? ''} · ${who ?? ''}`,
+                { duration: 10000 },
+            );
+
+            // Auto-confirmed orders need no action, so the inbox stays closed.
+            if (!auto) {
+                setInbox(true);
+            }
+        },
+        [sound],
+    );
 
     const refresh = useCallback(async () => {
         try {
@@ -172,6 +211,7 @@ export default function PosPage(props: Props) {
                 label?: string;
                 status?: string;
                 autoConfirmed?: boolean;
+                roundId?: number;
             };
             void refresh();
 
@@ -179,17 +219,13 @@ export default function PosPage(props: Props) {
                 void reloadOrder(p.orderId);
             }
 
-            if (event === 'QrOrderSubmitted') {
-                sound.beep('order');
-                toast(
-                    `${p.autoConfirmed ? t('Pesanan QR masuk dapur') : t('Pesanan QR baru')}: ${p.tableName ?? ''} · ${p.customerName ?? ''}`,
-                    { duration: 8000 },
+            if (event === 'QrOrderSubmitted' && p.roundId) {
+                notifyQr(
+                    p.roundId,
+                    p.tableName ?? null,
+                    p.customerName ?? null,
+                    !!p.autoConfirmed,
                 );
-
-                // Auto-confirmed orders need no action, so the inbox stays closed.
-                if (!p.autoConfirmed) {
-                    setInbox(true);
-                }
             }
 
             if (event === 'OrderItemStatusChanged' && p.status === 'ready') {
@@ -199,6 +235,16 @@ export default function PosPage(props: Props) {
         },
         refresh,
     );
+
+    // Fallback when the WebSocket is down: new rounds show up in the polled state.
+    useEffect(() => {
+        state.pending_qr.forEach((r) =>
+            notifyQr(r.id, r.table, r.customer_name, false),
+        );
+        state.recent_qr.forEach((r) =>
+            notifyQr(r.id, r.table, r.customer_name, true),
+        );
+    }, [state.pending_qr, state.recent_qr, notifyQr]);
 
     // Re-alert (sound + toast) for QR orders left unconfirmed longer than the configured time.
     useEffect(() => {
@@ -634,6 +680,7 @@ export default function PosPage(props: Props) {
     const panel = (
         <OrderPanel
             pick={payPick}
+            showKitchenStatus={settings.kds_enabled}
             title={title}
             subtitle={order?.number}
             order={order}
@@ -646,10 +693,7 @@ export default function PosPage(props: Props) {
     return (
         <>
             <Head title="Kasir" />
-            <div
-                className="flex h-dvh flex-col bg-background"
-                onPointerDown={sound.unlock}
-            >
+            <div className="flex h-dvh flex-col bg-background">
                 <header className="flex items-center gap-2 border-b bg-card px-3 py-2">
                     <Link href="/" className="text-base font-semibold">
                         POS
@@ -663,7 +707,9 @@ export default function PosPage(props: Props) {
                         )}
                     >
                         {props.shift
-                            ? t('Shift terbuka')
+                            ? props.shift.mine || !props.shift.owner
+                                ? t('Shift terbuka')
+                                : `${t('Shift terbuka')} · ${props.shift.owner}`
                             : t('Shift belum dibuka')}
                     </span>
                     {!online && (
@@ -745,6 +791,30 @@ export default function PosPage(props: Props) {
                         </Button>
                     </div>
                 </header>
+
+                {!sound.unlocked && !sound.prefs.muted && (
+                    <div
+                        role="status"
+                        className="flex items-center justify-between gap-2 bg-sky-100 px-3 py-2 text-sm text-sky-950"
+                    >
+                        <span>
+                            {t(
+                                'Bunyi notifikasi belum aktif. Ketuk di mana saja atau tombol ini.',
+                            )}
+                        </span>
+                        <Button
+                            type="button"
+                            size="sm"
+                            className="h-10"
+                            onClick={() => {
+                                sound.unlock();
+                                sound.beep('order');
+                            }}
+                        >
+                            {t('Aktifkan bunyi')}
+                        </Button>
+                    </div>
+                )}
 
                 {!props.shift && (
                     <div

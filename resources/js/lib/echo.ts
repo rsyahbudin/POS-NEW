@@ -8,30 +8,40 @@ declare global {
     }
 }
 
+/** Shared by the server on every authenticated page (App\Support\RealtimeConfig). */
+export type RealtimeConfig = {
+    key: string;
+    host: string;
+    port: number;
+    scheme: string;
+};
+
 let echo: Echo<'reverb'> | null | undefined;
+let usedKey = '';
 
-/** Lazily created Reverb connection. Returns null when WebSocket is not configured. */
-export function getEcho(): Echo<'reverb'> | null {
-    if (echo !== undefined) {
+/** Lazily created Reverb connection. Returns null when the server has no WebSocket configured. */
+export function getEcho(
+    cfg: RealtimeConfig | null | undefined,
+): Echo<'reverb'> | null {
+    if (!cfg) {
+        return null;
+    }
+
+    const signature = `${cfg.key}|${cfg.host}|${cfg.port}|${cfg.scheme}`;
+
+    if (echo && usedKey === signature) {
         return echo;
     }
 
-    const key = import.meta.env.VITE_REVERB_APP_KEY;
-
-    if (!key) {
-        echo = null;
-
-        return echo;
-    }
-
+    echo?.disconnect();
     window.Pusher = Pusher;
     echo = new Echo({
         broadcaster: 'reverb',
-        key,
-        wsHost: import.meta.env.VITE_REVERB_HOST ?? window.location.hostname,
-        wsPort: Number(import.meta.env.VITE_REVERB_PORT ?? 8080),
-        wssPort: Number(import.meta.env.VITE_REVERB_PORT ?? 443),
-        forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'http') === 'https',
+        key: cfg.key,
+        wsHost: cfg.host,
+        wsPort: cfg.port,
+        wssPort: cfg.port,
+        forceTLS: cfg.scheme === 'https',
         enabledTransports: ['ws', 'wss'],
         authEndpoint: '/broadcasting/auth',
         auth: {
@@ -42,6 +52,7 @@ export function getEcho(): Echo<'reverb'> | null {
             },
         },
     });
+    usedKey = signature;
     window.__echo = echo;
 
     return echo;

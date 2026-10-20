@@ -233,6 +233,30 @@ export default function KdsPage({
                     </div>
                 </header>
 
+                {!sound.unlocked && !sound.prefs.muted && (
+                    <div
+                        role="status"
+                        className="flex items-center justify-between gap-2 bg-sky-900 px-3 py-2 text-sm text-sky-50"
+                    >
+                        <span>
+                            {t(
+                                'Bunyi notifikasi belum aktif. Ketuk di mana saja atau tombol ini.',
+                            )}
+                        </span>
+                        <Button
+                            type="button"
+                            size="sm"
+                            className="h-10"
+                            onClick={() => {
+                                sound.unlock();
+                                sound.beep('order');
+                            }}
+                        >
+                            {t('Aktifkan bunyi')}
+                        </Button>
+                    </div>
+                )}
+
                 <main className="grid flex-1 content-start gap-3 p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {tickets.length === 0 && (
                         <p className="col-span-full py-16 text-center text-lg text-muted-foreground">

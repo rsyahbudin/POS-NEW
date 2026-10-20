@@ -15,6 +15,7 @@ use App\Domain\Payment\Models\Bill;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Payment\Models\PaymentMethod;
 use App\Domain\Shift\Models\Shift;
+use App\Domain\Shift\ShiftResolver;
 use App\Models\User;
 use App\Support\BusinessDate;
 use App\Support\Realtime;
@@ -30,6 +31,7 @@ class RecordPaymentAction
         private PostJournalAction $journal,
         private BillJournal $billJournal,
         private SyncTableStatusAction $syncTable,
+        private ShiftResolver $shifts,
     ) {}
 
     /**
@@ -54,7 +56,8 @@ class RecordPaymentAction
             }
 
             $bill = Bill::query()->lockForUpdate()->findOrFail($bill->id);
-            $shift = Shift::query()->where('user_id', $user->id)->whereNull('closed_at')->lockForUpdate()->first()
+            $resolved = $this->shifts->forUser($user);
+            $shift = ($resolved ? Shift::query()->lockForUpdate()->find($resolved->id) : null)
                 ?? throw new OrderException('Buka shift dulu sebelum menerima pembayaran.');
 
             if (! $order->status->isEditable()) {

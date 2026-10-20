@@ -10,6 +10,7 @@ import {
     QrCode,
     Receipt,
     Settings,
+    Timer,
     ShieldCheck,
     ShoppingBasket,
     Users,
@@ -29,7 +30,7 @@ import {
 } from '@/components/ui/sidebar';
 import type { NavItem } from '@/types';
 
-type Item = NavItem & { permission?: string | string[] };
+type Item = NavItem & { permission?: string | string[]; feature?: 'kds' };
 
 const items: Item[] = [
     {
@@ -55,6 +56,7 @@ const items: Item[] = [
         href: '/kds',
         icon: ChefHat,
         permission: 'update-kitchen-status',
+        feature: 'kds',
     },
     {
         title: 'Menu',
@@ -79,6 +81,13 @@ const items: Item[] = [
         href: '/admin/reports/sales',
         icon: FileBarChart,
         permission: 'view-sales-reports',
+    },
+    {
+        title: 'Kinerja Dapur',
+        href: '/admin/reports/kitchen',
+        icon: Timer,
+        permission: 'view-sales-reports',
+        feature: 'kds',
     },
     {
         title: 'Diskon/Void/Refund',
@@ -126,7 +135,10 @@ export function AppSidebar() {
     const isOwner = user?.roles?.includes('owner') ?? false;
     const has = (p?: string | string[]) =>
         !p || isOwner || [p].flat().some((x) => user?.permissions?.includes(x));
-    const visible = items.filter((i) => has(i.permission));
+    const features = usePage().props.features as { kds: boolean } | undefined;
+    const visible = items.filter(
+        (i) => has(i.permission) && (!i.feature || features?.[i.feature]),
+    );
 
     return (
         <Sidebar collapsible="icon" variant="inset">

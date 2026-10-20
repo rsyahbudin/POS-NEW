@@ -11,7 +11,7 @@ use App\Domain\Payment\Enums\PaymentMethodType;
 use App\Domain\Payment\Models\Bill;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Payment\Models\Refund;
-use App\Domain\Shift\Models\Shift;
+use App\Domain\Shift\ShiftResolver;
 use App\Models\User;
 use App\Support\Audit;
 use App\Support\BusinessDate;
@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\DB;
  */
 class RefundPaymentAction
 {
-    public function __construct(private PostJournalAction $journal) {}
+    public function __construct(private PostJournalAction $journal, private ShiftResolver $shifts) {}
 
     public function handle(Payment $payment, User $actor, int $amount, string $reason, string $idempotencyKey): Refund
     {
@@ -50,7 +50,7 @@ class RefundPaymentAction
             }
 
             $isCash = $payment->method->type === PaymentMethodType::Cash;
-            $shift = Shift::query()->where('user_id', $actor->id)->whereNull('closed_at')->first();
+            $shift = $this->shifts->forUser($actor);
             if ($isCash && ! $shift) {
                 throw new OrderException('Buka shift dulu untuk refund tunai (uang keluar dari laci).');
             }

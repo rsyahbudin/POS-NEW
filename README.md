@@ -6,6 +6,8 @@ kasir, self-order QR meja, layar dapur (KDS), shift kasir, split bill, dan akunt
 **Stack:** Laravel 13 · PHP 8.4 · React 19 + Inertia (starter kit) · TypeScript · Tailwind 4 + shadcn/ui ·
 PostgreSQL 17 · Redis + Horizon · Reverb (WebSocket) · Pest.
 
+Owner/manager bisa menerima pembayaran lewat shift kasir yang sedang terbuka (Pengaturan > Operasional > `shift.shared_for_managers`) dan menutup shift orang lain dari halaman Shift.
+
 ## Menjalankan di lokal
 
 Prasyarat: Laravel Herd, DBngin (PostgreSQL 17 + Redis).
@@ -31,7 +33,7 @@ Akun demo (password `password`; PIN manager 6 digit untuk void/diskon di atas ba
 | Dapur   | dapur@pos.test   | —      |
 
 Hak akses tiap peran bisa diubah owner di `/admin/roles` (Peran & Akses), tanpa ubah kode.
-Setelah login: `/pos` (kasir), `/kds` (dapur), `/shift`, `/dashboard`, `/admin/*` (back office).
+Setelah login: `/pos` (kasir), `/kds` (dapur; opsional, aktifkan di Pengaturan > Dapur — laporan `Kinerja Dapur` menghitung menit tunggu/buat per item), `/shift`, `/dashboard`, `/admin/*` (back office).
 QR meja: `/m/{token}` (token dicetak lewat Admin › Meja & QR › PDF).
 Ganti password demo sebelum produksi. `POS_REQUIRE_OWNER_2FA=true` (default di `.env.example`) mewajibkan 2FA owner.
 

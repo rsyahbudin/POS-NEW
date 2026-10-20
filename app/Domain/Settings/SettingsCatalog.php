@@ -20,6 +20,7 @@ final class SettingsCatalog
                 'fields' => [
                     ['key' => 'operations.business_day_start', 'type' => 'time', 'label' => 'Jam mulai hari bisnis', 'hint' => 'Transaksi sebelum jam ini masuk ke tanggal bisnis kemarin (mis. 04:00 agar operasional lewat tengah malam tetap satu hari).', 'default' => '04:00'],
                     ['key' => 'pricing.rounding', 'type' => 'select', 'label' => 'Pembulatan grand total', 'hint' => 'Selisih pembulatan dicatat di akun tersendiri.', 'default' => 0, 'options' => [['0', 'Tanpa pembulatan'], ['100', 'Ke Rp100 terdekat'], ['500', 'Ke Rp500 terdekat']]],
+                    ['key' => 'shift.shared_for_managers', 'type' => 'bool', 'label' => 'Manager/owner boleh menerima pembayaran lewat shift kasir yang sedang terbuka', 'hint' => 'Aktif: owner/manager yang tidak punya shift sendiri memakai shift kasir yang terbuka (uang masuk tercatat di shift itu, penerima tetap nama yang login). Nonaktif: setiap orang wajib membuka shift sendiri.', 'default' => true],
                     ['key' => 'discount.cashier_limit_percent', 'type' => 'int', 'label' => 'Batas diskon kasir tanpa PIN (%)', 'hint' => 'Diskon di atas batas ini butuh PIN dari pemegang izin "Diskon di atas batas".', 'default' => 10, 'min' => 0, 'max' => 100],
                 ],
             ]]],
@@ -37,6 +38,11 @@ final class SettingsCatalog
                 ],
             ]]],
             ['key' => 'kitchen', 'label' => 'Dapur (KDS)', 'groups' => [[
+                'title' => 'Aktifkan layar dapur',
+                'fields' => [
+                    ['key' => 'kitchen.enabled', 'type' => 'bool', 'label' => 'Pakai layar dapur (KDS)', 'hint' => 'Aktif: pesanan tampil sebagai tiket di layar dapur, staf dapur menandai Dibuat/Siap, dan laporan "Kinerja dapur" mencatat berapa menit tiap pesanan selesai. Nonaktif (cocok jika kasir sekaligus yang membuat dan mengantar): menu dapur, status dapur, dan laporan disembunyikan.', 'default' => false],
+                ],
+            ], [
                 'title' => 'Warna tiket berdasarkan umur',
                 'fields' => [
                     ['key' => 'kitchen.warn_minutes', 'type' => 'int', 'label' => 'Tiket menguning setelah (menit)', 'hint' => 'Peringatan awal untuk tiket yang lama.', 'default' => 10, 'min' => 1, 'max' => 240],

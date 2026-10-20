@@ -10,7 +10,7 @@ use App\Domain\Payment\Models\PaymentMethod;
 use App\Domain\Settings\OutletContext;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Shift\Actions\OpenShiftAction;
-use App\Domain\Shift\Models\Shift;
+use App\Domain\Shift\ShiftResolver;
 use App\Http\Controllers\Controller;
 use App\Http\Presenters\MenuPresenter;
 use App\Http\Presenters\OrderPresenter;
@@ -27,12 +27,12 @@ class PosController extends Controller
     {
         $user = $this->actor($request);
         $outletId = $this->outlet->id();
-        $shift = Shift::query()->where('user_id', $user->id)->whereNull('closed_at')->first();
+        $shift = app(ShiftResolver::class)->forUser($user);
 
         return Inertia::render('pos/index', [
             'menu' => MenuPresenter::categories($outletId),
             'paymentMethods' => PaymentMethod::query()->where('outlet_id', $outletId)->where('is_active', true)->orderBy('sort')->get(['id', 'name', 'type']),
-            'shift' => $shift ? ['id' => $shift->id, 'opened_at' => $shift->opened_at->toIso8601String()] : null,
+            'shift' => $shift ? ['id' => $shift->id, 'opened_at' => $shift->opened_at->toIso8601String(), 'mine' => $shift->user_id === $user->id, 'owner' => $shift->user?->name] : null,
             'suggestedOpening' => app(OpenShiftAction::class)->suggestedOpeningCash(),
             'can' => [
                 'pay' => $user->can('receive-payment'),
@@ -44,6 +44,7 @@ class PosController extends Controller
             'settings' => [
                 'discount_limit_percent' => (int) $this->settings->get('discount.cashier_limit_percent', 10),
                 'qr_alert_seconds' => (int) $this->settings->get('qr.confirm_alert_seconds', 180),
+                'kds_enabled' => (bool) $this->settings->get('kitchen.enabled', false),
                 'quick_cash' => array_values(array_filter(array_map('intval', explode(',', (string) $this->settings->get('pos.quick_cash', '50000,100000,150000,200000'))))),
                 'outlet_id' => $outletId,
             ],
@@ -64,7 +65,14 @@ class PosController extends Controller
                 'order_id' => $r->order_id, 'table' => $r->order->table?->name, 'table_id' => $r->order->table_id,
             ])->all();
 
-        $ready = OrderItem::query()->where('status', 'ready')->where('ready_at', '>=', now()->subMinutes((int) $this->settings->get('pos.ready_alert_minutes', 15)))
+        // QR rounds the system accepted by itself (auto-confirm): cashier still gets a notification.
+        $recentQr = OrderRound::query()->where('source', 'qr')->where('status', 'confirmed')->whereNull('confirmed_by')
+            ->where('created_at', '>=', now()->subMinutes(3))
+            ->whereHas('order', fn ($q) => $q->where('outlet_id', $outletId))->with('order.table')->latest('id')->limit(20)->get()
+            ->map(fn (OrderRound $r) => ['id' => $r->id, 'table' => $r->order->table?->name, 'customer_name' => $r->customer_name])->all();
+
+        $kds = (bool) $this->settings->get('kitchen.enabled', false);
+        $ready = ! $kds ? [] : OrderItem::query()->where('status', 'ready')->where('ready_at', '>=', now()->subMinutes((int) $this->settings->get('pos.ready_alert_minutes', 15)))
             ->whereHas('order', fn ($q) => $q->where('outlet_id', $outletId)->whereIn('status', ['open', 'partially_paid']))
             ->with('order.table')->get()
             ->map(fn (OrderItem $i) => ['id' => $i->id, 'name' => $i->name_snapshot, 'qty' => $i->qty, 'table' => $i->order->table->name ?? $i->order->call_number ?? $i->order->number, 'order_id' => $i->order_id])->all();
@@ -76,6 +84,7 @@ class PosController extends Controller
         return [
             'floor' => MenuPresenter::floor($outletId),
             'pending_qr' => $pending,
+            'recent_qr' => $recentQr,
             'ready_items' => $ready,
             'takeaway_orders' => $orders,
             'sold_out' => Product::query()->where('outlet_id', $outletId)->where('is_available', false)->pluck('id')->all(),

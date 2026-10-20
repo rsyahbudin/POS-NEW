@@ -17,6 +17,11 @@ export function resetDatabase(): { token: string } {
     artisan(['migrate:fresh', '--seed', '--force', '--no-interaction']);
     // Login is rate limited (5/min per user): clear it so many logins in one run don't lock the tests out.
     artisan(['cache:clear']);
+    // KDS is optional (off by default); the e2e flow goes through it.
+    artisan([
+        'tinker',
+        '--execute=app(App\\Domain\\Settings\\SettingsRepository::class)->set("kitchen.enabled", true);',
+    ]);
     const token = artisan([
         'tinker',
         '--execute=echo App\\Domain\\Floor\\Models\\Table::where("name","I-1")->value("qr_token");',

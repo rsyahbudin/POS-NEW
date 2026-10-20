@@ -9,6 +9,7 @@ use App\Domain\Shift\Actions\CloseShiftAction;
 use App\Domain\Shift\Actions\OpenShiftAction;
 use App\Domain\Shift\Models\Shift;
 use App\Domain\Shift\ShiftCash;
+use App\Domain\Shift\ShiftResolver;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,6 +37,12 @@ class ShiftController extends Controller
                 'bank' => Account::query()->where('outlet_id', $outletId)->where('type', 'asset')->where('system_key', null)->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
             ],
             'recent' => Shift::query()->where('user_id', $user->id)->whereNotNull('closed_at')->latest('closed_at')->limit(5)->get()->map(fn ($s) => $this->present($s, $cash))->all(),
+            // Managers/owner see (and may close) shifts opened by others, e.g. the cashier's.
+            'others' => $user->can('manage-shifts-any')
+                ? Shift::query()->where('outlet_id', $outletId)->whereNull('closed_at')->where('user_id', '!=', $user->id)->with('user:id,name')->get()
+                    ->map(fn (Shift $s) => $this->present($s, $cash) + ['user' => $s->user?->name])->all()
+                : [],
+            'sharing' => app(ShiftResolver::class)->canShare($user),
             'can' => ['any' => $user->can('manage-shifts-any')],
         ]);
     }
@@ -62,9 +69,14 @@ class ShiftController extends Controller
         $data = $request->validate([
             'counted_cash' => 'required|integer|min:0',
             'cash_left' => 'required|integer|min:0', 'deposit_account_id' => 'nullable|integer|exists:accounts,id',
-            'difference_reason' => 'nullable|string|max:200', 'close_key' => 'required|string|max:100',
+            'difference_reason' => 'nullable|string|max:200', 'close_key' => 'required|string|max:100', 'shift_id' => 'nullable|integer',
         ]);
-        $shift = Shift::query()->where('user_id', $this->actor($request)->id)->whereNull('closed_at')->firstOrFail();
+        $actor = $this->actor($request);
+        // Managers/owner may close another person's shift; everybody else closes their own.
+        $shift = isset($data['shift_id']) && $actor->can('manage-shifts-any')
+            ? Shift::query()->whereKey((int) $data['shift_id'])->whereNull('closed_at')->firstOrFail()
+            : Shift::query()->where('user_id', $actor->id)->whereNull('closed_at')->firstOrFail();
+        $closedOwn = $shift->user_id === $actor->id;
         $action->handle(
             $shift, $this->actor($request),
             (int) $data['counted_cash'],
@@ -72,7 +84,7 @@ class ShiftController extends Controller
         );
 
         // Session ends when the cashier's shift closes (PRD 8).
-        if (! $this->actor($request)->can('manage-shifts-any')) {
+        if ($closedOwn && ! $actor->can('manage-shifts-any')) {
             auth()->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();

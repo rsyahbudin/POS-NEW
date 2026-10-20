@@ -49,6 +49,10 @@ function something()
     // ..
 }
 
-pest()->beforeEach(fn () => $this->seed())->in('Feature/Pos');
+pest()->beforeEach(function () {
+    $this->seed();
+    // The kitchen display is optional and off by default; most tests exercise it.
+    setting('kitchen.enabled', true);
+})->in('Feature/Pos');
 
 require_once __DIR__.'/Helpers.php';

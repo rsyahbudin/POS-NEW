@@ -33,6 +33,20 @@ Lihat [nginx.conf](nginx.conf): reverse proxy + proxy WebSocket `/app` ke Reverb
 
 Lihat [supervisor.conf](supervisor.conf): Horizon (queue) dan Reverb (WebSocket).
 
+## 3b. Checklist realtime (jika layar tampil "Offline")
+
+1. `.env` produksi wajib berisi `BROADCAST_CONNECTION=reverb`, `REVERB_APP_ID`, `REVERB_APP_KEY`, `REVERB_APP_SECRET`
+   (isi bebas, tapi harus ada), `REVERB_HOST=127.0.0.1`, `REVERB_PORT=8080`, `REVERB_SCHEME=http`.
+2. `php artisan config:cache`, lalu supervisor `pos-reverb` harus RUNNING.
+3. Nginx meneruskan `/app` (WebSocket) ke `127.0.0.1:8080` (lihat nginx.conf).
+4. Jalankan `php artisan pos:realtime-check` — memeriksa konfigurasi, koneksi ke Reverb, dan kirim event uji.
+5. Browser mengambil host/port WebSocket saat runtime dari halaman (tidak perlu build ulang). Override opsional:
+   `REVERB_PUBLIC_HOST`, `REVERB_PUBLIC_PORT`, `REVERB_PUBLIC_SCHEME`.
+
+Tanpa WebSocket aplikasi tetap jalan lewat polling 10 detik (notifikasi pesanan QR tetap berbunyi, hanya lebih lambat).
+
+Catatan: layar Dapur (KDS) kini opsional dan default MATI. Aktifkan di Pengaturan > Dapur bila dibutuhkan.
+
 ## 4. Alur deploy
 
 1. Push ke `main` memicu GitHub Actions (`.github/workflows/tests.yml`): Pint, Larastan level 8,

@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Domain\Settings\SettingsRepository;
+use App\Support\RealtimeConfig;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -45,6 +47,8 @@ class HandleInertiaRequests extends Middleware
                     'permissions' => $request->user()->getAllPermissions()->pluck('name'),
                 ] : null,
             ],
+            'features' => ['kds' => (bool) app(SettingsRepository::class)->get('kitchen.enabled', false)],
+            'realtime' => fn () => $request->user() ? RealtimeConfig::forRequest($request) : null,
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),

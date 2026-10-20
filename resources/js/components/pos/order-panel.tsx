@@ -67,6 +67,7 @@ export function OrderPanel({
     can,
     actions,
     pick,
+    showKitchenStatus = true,
 }: {
     title: string;
     subtitle?: string;
@@ -75,6 +76,7 @@ export function OrderPanel({
     can: { pay: boolean; void: boolean; refund: boolean; discount: boolean };
     actions: PanelActions;
     pick?: PickState;
+    showKitchenStatus?: boolean;
 }) {
     const cartTotal = cart.reduce((s, l) => s + l.unitPrice * l.qty, 0);
     const editable = !order || order.is_editable;
@@ -189,18 +191,24 @@ export function OrderPanel({
                                                         rupiah(i.line_total)
                                                     )}
                                                 </p>
-                                                <span
-                                                    className={cn(
-                                                        'rounded px-1.5 py-0.5 text-[10px] font-semibold',
-                                                        ITEM_STATUS[i.status]
-                                                            ?.cls,
-                                                    )}
-                                                >
-                                                    {t(
-                                                        ITEM_STATUS[i.status]
-                                                            ?.label ?? i.status,
-                                                    )}
-                                                </span>
+                                                {(showKitchenStatus ||
+                                                    i.status === 'voided') && (
+                                                    <span
+                                                        className={cn(
+                                                            'rounded px-1.5 py-0.5 text-[10px] font-semibold',
+                                                            ITEM_STATUS[
+                                                                i.status
+                                                            ]?.cls,
+                                                        )}
+                                                    >
+                                                        {t(
+                                                            ITEM_STATUS[
+                                                                i.status
+                                                            ]?.label ??
+                                                                i.status,
+                                                        )}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                         {pick?.active &&

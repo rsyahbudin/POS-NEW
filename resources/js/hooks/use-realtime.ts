@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { usePage } from '@inertiajs/react';
 import { getEcho } from '@/lib/echo';
+import type { RealtimeConfig } from '@/lib/echo';
 
 type Subscription = { channel: string; private?: boolean; events: string[] };
 
@@ -13,6 +15,7 @@ export function useRealtime(
     onEvent: (event: string, payload: unknown) => void,
     refresh: () => void,
 ) {
+    const cfg = usePage().props.realtime as RealtimeConfig | null;
     const [online, setOnline] = useState(false);
     const handler = useRef(onEvent);
     const refreshRef = useRef(refresh);
@@ -24,7 +27,7 @@ export function useRealtime(
     });
 
     useEffect(() => {
-        const echo = getEcho();
+        const echo = getEcho(cfg);
         let socketUp = false;
         const timer = window.setInterval(() => {
             if (!socketUp) {
@@ -68,7 +71,7 @@ export function useRealtime(
             conn.unbind('state_change', onState);
             channels.forEach((s) => echo.leave(s.channel));
         };
-    }, [key]);
+    }, [key, cfg?.key, cfg?.host, cfg?.port, cfg?.scheme]);
 
     return { online };
 }

@@ -51,6 +51,8 @@ type Props = {
     suggestedOpening: number;
     accounts: { expense: Acc[]; other: Acc[]; bank: Acc[] };
     recent: ShiftData[];
+    others: (ShiftData & { user: string | null })[];
+    sharing: boolean;
     can: { any: boolean };
 };
 
@@ -59,6 +61,8 @@ export default function ShiftPage({
     suggestedOpening,
     accounts,
     recent,
+    others,
+    sharing,
 }: Props) {
     const errors = usePage().props.errors as Record<string, string> | undefined;
 
@@ -88,6 +92,50 @@ export default function ShiftPage({
                     <Open shift={shift} accounts={accounts} />
                 ) : (
                     <OpenForm suggested={suggestedOpening} />
+                )}
+
+                {others.length > 0 && (
+                    <section
+                        aria-label={t('Shift orang lain yang masih terbuka')}
+                        className="grid gap-3"
+                    >
+                        <h2 className="font-semibold">
+                            {t('Shift orang lain yang masih terbuka')}
+                        </h2>
+                        {sharing && !shift && (
+                            <p className="rounded-xl bg-muted p-3 text-sm">
+                                {t(
+                                    'Kamu bisa menerima pembayaran memakai shift ini tanpa membuka shift sendiri.',
+                                )}
+                            </p>
+                        )}
+                        {others.map((o) => (
+                            <div
+                                key={o.id}
+                                className="grid gap-3 rounded-2xl border bg-card p-3"
+                            >
+                                <p className="font-medium">
+                                    {o.user ?? '-'} · {t('dibuka')}{' '}
+                                    {timeId(o.opened_at)} ·{' '}
+                                    {t('kas seharusnya')}{' '}
+                                    {rupiah(o.summary.expected)}
+                                </p>
+                                <SalesBreakdown shift={o} />
+                                <details className="rounded-xl border p-3">
+                                    <summary className="cursor-pointer text-sm font-semibold">
+                                        {t('Tutup shift ini')}
+                                    </summary>
+                                    <div className="mt-3">
+                                        <CloseForm
+                                            shift={o}
+                                            accounts={accounts.bank}
+                                            shiftId={o.id}
+                                        />
+                                    </div>
+                                </details>
+                            </div>
+                        ))}
+                    </section>
                 )}
 
                 {recent.length > 0 && (
@@ -387,7 +435,15 @@ function Movement({
     );
 }
 
-function CloseForm({ shift, accounts }: { shift: ShiftData; accounts: Acc[] }) {
+function CloseForm({
+    shift,
+    accounts,
+    shiftId,
+}: {
+    shift: ShiftData;
+    accounts: Acc[];
+    shiftId?: number;
+}) {
     const expected = shift.summary.expected;
     const [counted, setCounted] = useState<number | ''>('');
     const [left, setLeft] = useState<number | ''>('');
@@ -530,6 +586,7 @@ function CloseForm({ shift, accounts }: { shift: ShiftData; accounts: Acc[] }) {
                     router.post(
                         '/shift/close',
                         {
+                            shift_id: shiftId ?? null,
                             counted_cash: counted,
                             cash_left: left,
                             deposit_account_id: target ? Number(target) : null,

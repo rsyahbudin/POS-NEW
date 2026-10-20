@@ -1,0 +1,199 @@
+<?php
+
+use App\Domain\Catalog\Models\Station;
+use App\Domain\Floor\Models\Table;
+use App\Domain\Ordering\Actions\ConfirmRoundAction;
+use App\Domain\Ordering\Actions\SubmitQrOrderAction;
+use App\Domain\Ordering\Exceptions\OrderException;
+use App\Domain\Ordering\Models\OrderRound;
+use App\Domain\Payment\Models\Payment;
+use App\Domain\Reporting\KitchenReports;
+use App\Domain\Shift\Models\Shift;
+use App\Domain\Shift\ShiftCash;
+use App\Support\BusinessDate;
+use App\Support\RealtimeConfig;
+use Illuminate\Http\Request;
+
+// ---------------------------------------------------------------- realtime config
+
+it('hands the browser its WebSocket settings at runtime, derived from the page host', function () {
+    config(['broadcasting.default' => 'reverb', 'reverb.apps.apps.0.key' => 'abc123']);
+
+    $local = RealtimeConfig::forRequest(Request::create('http://localhost:8000/pos'));
+    expect($local)->toBe(['key' => 'abc123', 'host' => 'localhost', 'port' => 8080, 'scheme' => 'http']);
+
+    $this->app->detectEnvironment(fn () => 'production');
+    $prod = RealtimeConfig::forRequest(Request::create('https://hmtc.example.com/pos', 'GET', [], [], [], ['HTTPS' => 'on']));
+    expect($prod)->toBe(['key' => 'abc123', 'host' => 'hmtc.example.com', 'port' => 443, 'scheme' => 'https']);
+
+    config(['pos.realtime.host' => 'ws.example.com', 'pos.realtime.port' => 6001, 'pos.realtime.scheme' => 'https']);
+    expect(RealtimeConfig::forRequest(Request::create('http://x.test/'))['host'])->toBe('ws.example.com');
+});
+
+it('gives no realtime config when broadcasting is not set up (screen falls back to polling)', function () {
+    config(['broadcasting.default' => 'null']);
+    expect(RealtimeConfig::forRequest(Request::create('http://localhost/')))->toBeNull();
+
+    config(['broadcasting.default' => 'reverb', 'reverb.apps.apps.0.key' => '']);
+    expect(RealtimeConfig::forRequest(Request::create('http://localhost/')))->toBeNull();
+});
+
+it('shares the realtime config only with signed-in staff', function () {
+    config(['broadcasting.default' => 'reverb', 'reverb.apps.apps.0.key' => 'abc123']);
+    $token = Table::query()->first()->qr_token;
+    $this->get("/m/{$token}")->assertInertia(fn ($p) => $p->where('realtime', null));
+
+    $this->actingAs(userWithRole('cashier'))->get('/pos')->assertInertia(fn ($p) => $p->where('realtime.key', 'abc123')->where('realtime.host', 'localhost'));
+});
+
+// ---------------------------------------------------------------- new QR order alerts (polling fallback)
+
+it('lists auto-accepted QR rounds in the polled state so the cashier is alerted even without WebSocket', function () {
+    setting('qr.auto_confirm', true);
+    $round = app(SubmitQrOrderAction::class)->handle(Table::query()->first()->qr_token, ['customer_name' => 'Rani', 'items' => [['product_id' => product('Americano')->id, 'qty' => 1]]]);
+
+    $cashier = userWithRole('cashier');
+    $this->actingAs($cashier)->getJson('/pos/state')->assertJsonPath('recent_qr.0.id', $round->id)->assertJsonPath('recent_qr.0.customer_name', 'Rani');
+
+    $this->travel(4)->minutes();
+    $this->actingAs($cashier)->getJson('/pos/state')->assertJsonCount(0, 'recent_qr');
+});
+
+it('lists pending QR rounds in the polled state and keeps manually confirmed ones out of recent_qr', function () {
+    $round = app(SubmitQrOrderAction::class)->handle(Table::query()->first()->qr_token, ['customer_name' => 'Budi', 'items' => [['product_id' => product('Americano')->id, 'qty' => 1]]]);
+    $this->actingAs(userWithRole('cashier'))->getJson('/pos/state')->assertJsonPath('pending_qr.0.id', $round->id)->assertJsonCount(0, 'recent_qr');
+
+    app(ConfirmRoundAction::class)->handle($round, userWithRole('cashier'));
+    $this->actingAs(userWithRole('cashier'))->getJson('/pos/state')->assertJsonCount(0, 'pending_qr')->assertJsonCount(0, 'recent_qr');
+    expect(OrderRound::query()->count())->toBe(1);
+});
+
+// ---------------------------------------------------------------- shared shift
+
+it('lets the owner take payments through the cashier\'s open shift', function () {
+    $cashier = userWithRole('cashier');
+    $shift = openShiftFor($cashier, 100000);
+    $owner = userWithRole('owner');
+
+    $this->actingAs($owner)->get('/pos')->assertInertia(fn ($p) => $p->where('shift.id', $shift->id)->where('shift.mine', false)->where('shift.owner', $cashier->name));
+
+    $payment = pay(placeOrder($owner), $owner);
+    expect($payment->shift_id)->toBe($shift->id)->and($payment->received_by)->toBe($owner->id);
+    expect(app(ShiftCash::class)->summarize($shift->fresh())['cash_sales'])->toBe(44000);
+});
+
+it('still requires an own shift for cashiers, and when sharing is switched off', function () {
+    openShiftFor(userWithRole('manager'), 0);   // manager's shift, cashier has none
+    expect(fn () => pay(placeOrder(), userWithRole('cashier')))->toThrow(OrderException::class, 'shift');
+
+    Shift::query()->delete();
+    $cashier = userWithRole('cashier');
+    openShiftFor($cashier, 0);
+    setting('shift.shared_for_managers', false);
+    expect(fn () => pay(placeOrder(), userWithRole('owner')))->toThrow(OrderException::class, 'shift');
+    expect(Payment::query()->count())->toBe(0);
+});
+
+it('prefers the user\'s own shift over the shared one', function () {
+    openShiftFor(userWithRole('cashier'), 0);
+    $mine = openShiftFor(userWithRole('manager'), 0);
+    expect(pay(placeOrder(), userWithRole('manager'))->shift_id)->toBe($mine->id);
+});
+
+it('shows other open shifts to the owner and lets them close one without being logged out', function () {
+    $cashier = userWithRole('cashier');
+    $shift = openShiftFor($cashier, 100000);
+    pay(placeOrder());
+    $owner = userWithRole('owner');
+
+    $this->actingAs($owner)->get('/shift')->assertInertia(fn ($p) => $p->where('others.0.id', $shift->id)->where('others.0.user', $cashier->name)->where('sharing', true)->where('shift', null));
+
+    $this->actingAs($owner)->post('/shift/close', ['shift_id' => $shift->id, 'counted_cash' => 144000, 'cash_left' => 100000, 'close_key' => 'k'])->assertRedirect(route('shift.index'));
+    $this->assertAuthenticatedAs($owner);
+    expect($shift->fresh()->closed_at)->not->toBeNull()->and($shift->fresh()->difference)->toBe(0);
+});
+
+it('does not let a cashier close someone else\'s shift by passing its id', function () {
+    $manager = userWithRole('manager');
+    $theirs = openShiftFor($manager, 0);
+    $cashier = userWithRole('cashier');
+    openShiftFor($cashier, 0);
+
+    $this->actingAs($cashier)->post('/shift/close', ['shift_id' => $theirs->id, 'counted_cash' => 0, 'cash_left' => 0, 'close_key' => 'x']);
+    expect($theirs->fresh()->closed_at)->toBeNull();
+});
+
+// ---------------------------------------------------------------- optional kitchen display
+
+it('closes the kitchen display and hides its menus when KDS is off (default)', function () {
+    setting('kitchen.enabled', false);
+    $kitchen = userWithRole('kitchen');
+    $stationId = Station::query()->value('id');
+
+    $this->actingAs($kitchen)->get('/kds')->assertRedirect('/');
+    $this->actingAs($kitchen)->getJson("/kds/{$stationId}/tickets")->assertNotFound();
+    $this->actingAs(userWithRole('owner'))->get('/dashboard')->assertInertia(fn ($p) => $p->where('features.kds', false));
+
+    $item = placeOrder()->items->first();
+    $this->actingAs($kitchen)->postJson("/kds/items/{$item->id}/advance")->assertNotFound();
+
+    $this->actingAs(userWithRole('cashier'))->get('/pos')->assertInertia(fn ($p) => $p->where('settings.kds_enabled', false)->where('state.ready_items', []));
+});
+
+it('is opened from Settings and then works again', function () {
+    setting('kitchen.enabled', false);
+    $this->actingAs(userWithRole('owner'))->post('/admin/settings', ['values' => ['kitchen.enabled' => true]])->assertSessionHasNoErrors();
+    $this->actingAs(userWithRole('kitchen'))->get('/kds')->assertRedirect();
+    $this->actingAs(userWithRole('owner'))->get('/dashboard')->assertInertia(fn ($p) => $p->where('features.kds', true));
+});
+
+// ---------------------------------------------------------------- kitchen performance report
+
+function timedItem(string $product, int $waitMin, int $makeMin, ?string $at = null): void
+{
+    $order = placeOrder(items: [['product_id' => product($product)->id, 'qty' => 1]], tableId: Table::query()->inRandomOrder()->value('id'));
+    $item = $order->items->first();
+    $t0 = now()->subMinutes(60);
+    $item->round->update(['confirmed_at' => $t0]);
+    $item->update(['status' => 'ready', 'preparing_at' => $t0->copy()->addMinutes($waitMin), 'ready_at' => $t0->copy()->addMinutes($waitMin + $makeMin)]);
+}
+
+it('measures how many minutes the kitchen takes per item', function () {
+    timedItem('Americano', 2, 4);    // 6 min
+    timedItem('Americano', 1, 7);    // 8 min
+    timedItem('Nasi Goreng', 5, 20); // 25 min -> slow (> 20)
+    $d = BusinessDate::for();
+    $r = app(KitchenReports::class);
+
+    $s = $r->summary($d, $d, 20);
+    expect($s['items'])->toBe(3)->and($s['avg_minutes'])->toBe(13.0)->and($s['slow'])->toBe(1)
+        ->and($s['avg_wait'])->toBe(2.7)->and($s['avg_make'])->toBe(10.3);
+
+    $byProduct = $r->by('product', $d, $d)->keyBy('label');
+    expect($byProduct['Nasi Goreng']->avg_minutes)->toBe(25.0)->and($byProduct['Americano']->avg_minutes)->toBe(7.0)->and($byProduct['Americano']->items)->toBe(2);
+    foreach (KitchenReports::DIMENSIONS as $dim) {
+        expect($r->by($dim, $d, $d))->not->toBeEmpty();
+    }
+});
+
+it('ignores voided and never-finished items in the kitchen report', function () {
+    timedItem('Americano', 1, 4);
+    $order = placeOrder(items: [['product_id' => product('Croissant')->id, 'qty' => 1]], tableId: Table::query()->skip(2)->value('id')); // never marked ready
+    expect($order->items->first()->ready_at)->toBeNull();
+
+    $d = BusinessDate::for();
+    expect(app(KitchenReports::class)->summary($d, $d, 20)['items'])->toBe(1);
+});
+
+it('serves the kitchen report page and exports, only to those who may see sales reports', function () {
+    timedItem('Americano', 1, 3);
+    $d = BusinessDate::for();
+    $manager = userWithRole('manager');
+
+    $this->actingAs($manager)->get("/admin/reports/kitchen?from={$d}&to={$d}&dimension=hour")->assertOk()
+        ->assertInertia(fn ($p) => $p->component('admin/reports/kitchen')->where('summary.items', 1)->where('enabled', true));
+    $this->actingAs($manager)->get("/admin/reports/kitchen/export?from={$d}&to={$d}&dimension=station&format=xlsx")->assertOk();
+    $this->actingAs($manager)->get("/admin/reports/kitchen/export?from={$d}&to={$d}&format=pdf")->assertOk();
+    $this->actingAs(userWithRole('cashier'))->get('/admin/reports/kitchen')->assertForbidden();
+    $this->actingAs($manager)->get('/admin/reports/kitchen?dimension=bogus')->assertStatus(302);
+});

@@ -98,7 +98,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
     });
 
     // Kitchen display
-    Route::prefix('kds')->name('kds.')->middleware('permission:update-kitchen-status')->group(function () {
+    Route::prefix('kds')->name('kds.')->middleware(['permission:update-kitchen-status', 'kitchen'])->group(function () {
         Route::get('/', [KdsController::class, 'index'])->name('index');
         Route::get('{station}', [KdsController::class, 'show'])->name('show');
         Route::get('{station}/tickets', [KdsController::class, 'ticketsJson'])->name('tickets');
@@ -172,6 +172,8 @@ Route::middleware(['auth', 'staff'])->group(function () {
 
         Route::middleware('permission:view-sales-reports')->group(function () {
             Route::get('reports/sales', [ReportController::class, 'sales'])->name('reports.sales');
+            Route::get('reports/kitchen', [ReportController::class, 'kitchen'])->name('reports.kitchen');
+            Route::get('reports/kitchen/export', [ReportController::class, 'kitchenExport'])->name('reports.kitchen.export');
             Route::get('reports/adjustments', [ReportController::class, 'adjustments'])->name('reports.adjustments');
             Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
         });

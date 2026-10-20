@@ -153,6 +153,11 @@ export type PendingQr = Round & {
 export type PosState = {
     floor: Floor;
     pending_qr: PendingQr[];
+    recent_qr: {
+        id: number;
+        table: string | null;
+        customer_name: string | null;
+    }[];
     ready_items: {
         id: number;
         name: string;

@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Reporting\KitchenReports;
 use App\Domain\Reporting\SalesReports;
+use App\Domain\Settings\SettingsRepository;
 use App\Exports\ReportSheet;
 use App\Http\Controllers\Controller;
 use App\Support\BusinessDate;
@@ -40,6 +42,43 @@ class ReportController extends Controller
             'summary' => $this->reports->summary($from, $to),
             'rows' => $this->reports->by($dimension, $from, $to),
             'dimensions' => SalesReports::DIMENSIONS,
+        ]);
+    }
+
+    public function kitchen(Request $request, KitchenReports $kitchen, SettingsRepository $settings): Response
+    {
+        [$from, $to] = $this->params($request);
+        $dimension = (string) $request->input('dimension', 'day');
+        abort_unless(in_array($dimension, KitchenReports::DIMENSIONS, true), 422);
+        $slow = (int) $settings->get('kitchen.danger_minutes', 20);
+
+        return Inertia::render('admin/reports/kitchen', [
+            'enabled' => (bool) $settings->get('kitchen.enabled', false),
+            'filters' => ['from' => $from, 'to' => $to, 'dimension' => $dimension],
+            'summary' => $kitchen->summary($from, $to, $slow),
+            'rows' => $kitchen->by($dimension, $from, $to),
+            'slowAfter' => $slow,
+            'dimensions' => KitchenReports::DIMENSIONS,
+        ]);
+    }
+
+    public function kitchenExport(Request $request, KitchenReports $kitchen, SettingsRepository $settings): \Symfony\Component\HttpFoundation\Response
+    {
+        [$from, $to] = $this->params($request);
+        $dimension = (string) $request->input('dimension', 'day');
+        abort_unless(in_array($dimension, KitchenReports::DIMENSIONS, true), 422);
+        $labels = ['day' => 'Hari', 'hour' => 'Jam', 'product' => 'Produk', 'station' => 'Stasiun'];
+        $sub = 'Periode '.$this->rangeLabel($from, $to);
+        $s = $kitchen->summary($from, $to, (int) $settings->get('kitchen.danger_minutes', 20));
+        $rows = $kitchen->by($dimension, $from, $to);
+
+        return ReportFile::download((string) $request->input('format', 'xlsx'), "Kinerja dapur {$labels[$dimension]} {$from} {$to}", [
+            new ReportSheet("Kinerja dapur {$labels[$dimension]}", $sub, [$labels[$dimension], 'Item', 'Rata-rata (menit)', 'Terlama 10% (menit)', 'Terlama (menit)'],
+                $rows->map(fn ($r) => [$r->label, $r->items, $r->avg_minutes, $r->p90_minutes, $r->max_minutes])->all()),
+            new ReportSheet('Ringkasan', $sub, ['Keterangan', 'Nilai'], [
+                ['Item selesai', $s['items']], ['Rata-rata selesai (menit)', $s['avg_minutes']], ['90% selesai dalam (menit)', $s['p90_minutes']],
+                ['Rata-rata menunggu dimulai (menit)', $s['avg_wait']], ['Rata-rata pembuatan (menit)', $s['avg_make']], ['Item lewat batas merah', $s['slow']],
+            ]),
         ]);
     }
 
@@ -104,7 +143,7 @@ class ReportController extends Controller
     /** @return array{0: string, 1: string, 2: string} */
     private function params(Request $request): array
     {
-        $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date', 'dimension' => 'nullable|in:'.implode(',', SalesReports::DIMENSIONS)]);
+        $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date', 'dimension' => 'nullable|in:'.implode(',', array_unique([...SalesReports::DIMENSIONS, ...KitchenReports::DIMENSIONS]))]);
 
         return [
             $request->input('from', CarbonImmutable::parse(BusinessDate::for())->subDays(29)->toDateString()),

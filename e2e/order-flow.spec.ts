@@ -24,7 +24,7 @@ test('QR order -> KDS -> bayar -> struk', async ({
     await page.goto('/shift');
     await page.getByRole('textbox').first().fill('100000');
     await page.getByRole('button', { name: 'Buka shift' }).click();
-    await expect(page.getByText('Modal awal')).toBeVisible();
+    await expect(page.getByText('Penerimaan dari penjualan')).toBeVisible();
     await expectNoHorizontalScroll(page);
 
     // --- customer: scan QR, pesan 1 Americano

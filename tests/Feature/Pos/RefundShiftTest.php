@@ -60,7 +60,7 @@ it('pre-fills the next shift with the cash left behind and journals a variance w
     $cashier = userWithRole('cashier');
     $open = app(OpenShiftAction::class);
     $shift = $open->handle($cashier, 200000);
-    app(CloseShiftAction::class)->handle($shift, $cashier, [100000 => 2], 150000, null);
+    app(CloseShiftAction::class)->handle($shift, $cashier, 200000, 150000, null);
 
     expect($open->suggestedOpeningCash())->toBe(150000);
     $next = $open->handle($cashier, 140000);
@@ -80,9 +80,9 @@ it('computes expected cash and journals the difference, deposit and leaves the f
     expect($summary['expected'])->toBe(100000 + 44000 + 10000 - 5000);
 
     // difference requires a reason
-    expect(fn () => app(CloseShiftAction::class)->handle($shift, $cashier, [50000 => 3], 50000))->toThrow(OrderException::class, 'alasan');
+    expect(fn () => app(CloseShiftAction::class)->handle($shift, $cashier, 150000, 50000))->toThrow(OrderException::class, 'alasan');
 
-    $closed = app(CloseShiftAction::class)->handle($shift, $cashier, [50000 => 2, 20000 => 2, 10000 => 1, 5000 => 1], 100000, null, 'uang receh hilang');
+    $closed = app(CloseShiftAction::class)->handle($shift, $cashier, 155000, 100000, null, 'uang receh hilang');
     // counted = 100.000 + 40.000 + 10.000 + 5.000 = 155.000 ; expected 149.000 ; difference +6.000
     expect($closed->counted_cash)->toBe(155000)->and($closed->difference)->toBe(6000)->and($closed->cash_deposited)->toBe(55000)->and($closed->cash_left)->toBe(100000);
 
@@ -94,7 +94,7 @@ it('computes expected cash and journals the difference, deposit and leaves the f
 it('closes a shift only once, and is idempotent with the same key', function () {
     $cashier = userWithRole('cashier');
     $shift = openShiftFor($cashier, 0);
-    $close = fn ($key) => app(CloseShiftAction::class)->handle($shift, $cashier, [], 0, null, null, $key);
+    $close = fn ($key) => app(CloseShiftAction::class)->handle($shift, $cashier, 0, 0, null, null, $key);
 
     $a = $close('close-1');
     $b = $close('close-1');
@@ -124,7 +124,7 @@ it('blocks opening a shift on a closed business day, and closing the day needs a
 
     expect(fn () => app(CloseBusinessDayAction::class)->handle($manager, BusinessDate::for()))->toThrow(OrderException::class, 'shift');
 
-    app(CloseShiftAction::class)->handle($shift, $manager, [], 0);
+    app(CloseShiftAction::class)->handle($shift, $manager, 0, 0);
     $day = app(CloseBusinessDayAction::class)->handle($manager, BusinessDate::for());
     expect($day->closed_at)->not->toBeNull()->and($day->summary)->toHaveKeys(['orders', 'gross', 'by_method', 'voids', 'comps', 'cash_difference']);
     Queue::assertPushed(SendZReportJob::class);

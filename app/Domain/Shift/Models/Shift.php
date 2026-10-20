@@ -17,7 +17,6 @@ use Illuminate\Support\Carbon;
  * @property int $opening_cash
  * @property int|null $expected_cash
  * @property int|null $counted_cash
- * @property array<mixed>|null $denominations
  * @property int|null $cash_left
  * @property int|null $cash_deposited
  * @property int|null $deposit_account_id
@@ -36,7 +35,6 @@ class Shift extends Model
     protected function casts(): array
     {
         return [
-            'denominations' => 'array',
             'opened_at' => 'datetime',
             'closed_at' => 'datetime',
             'business_date' => 'date:Y-m-d',

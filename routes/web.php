@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\FloorController;
 use App\Http\Controllers\Admin\MenuController;
 use App\Http\Controllers\Admin\ReportController;
+use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Kds\KdsController;
@@ -139,6 +140,13 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::post('users/{user}/pin', [UserController::class, 'setPin'])->name('users.pin');
         });
 
+        Route::middleware('permission:manage-roles')->group(function () {
+            Route::get('roles', [RoleController::class, 'index'])->name('roles');
+            Route::post('roles', [RoleController::class, 'store'])->name('roles.store');
+            Route::put('roles/{role}', [RoleController::class, 'update'])->name('roles.update');
+            Route::delete('roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy');
+        });
+
         Route::middleware('permission:manage-settings')->group(function () {
             Route::get('settings', [SettingsController::class, 'show'])->name('settings');
             Route::post('settings/outlet', [SettingsController::class, 'updateOutlet'])->name('settings.outlet');
@@ -157,6 +165,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::middleware('permission:input-expense')->group(function () {
             Route::get('expenses', [ExpenseController::class, 'index'])->name('expenses');
             Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store');
+            Route::get('expenses/export', [ExpenseController::class, 'export'])->name('expenses.export');
         });
 
         Route::middleware('permission:view-sales-reports')->group(function () {
@@ -168,6 +177,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::middleware('permission:manage-shifts-any')->group(function () {
             Route::get('day-close', [DayCloseController::class, 'index'])->name('day-close');
             Route::post('day-close', [DayCloseController::class, 'close'])->name('day-close.store');
+            Route::get('day-close/export', [DayCloseController::class, 'export'])->name('day-close.export');
         });
 
         Route::middleware('permission:view-accounting')->group(function () {

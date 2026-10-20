@@ -1,4 +1,5 @@
 import { Head, router, usePage } from '@inertiajs/react';
+import { BarList, ChartCard, PairedBars } from '@/components/pos/charts';
 import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import {
@@ -87,6 +88,14 @@ type Props = {
     canManage: boolean;
 };
 
+const TYPE_LABEL: Record<string, string> = {
+    asset: 'Aset (kas, bank)',
+    liability: 'Kewajiban',
+    equity: 'Ekuitas / modal',
+    revenue: 'Pendapatan',
+    expense: 'Beban',
+};
+
 type Tab =
     | 'pl'
     | 'bs'
@@ -109,6 +118,7 @@ export default function Accounting(p: Props) {
             cf: 'cash_flow',
             ledger: 'ledger',
             journal: 'journal',
+            coa: 'accounts',
         }[tab as 'pl'] ?? null;
 
     return (
@@ -126,14 +136,18 @@ export default function Accounting(p: Props) {
                                     variant="outline"
                                     className="h-11"
                                 >
-                                    <a href={exp(reportKey, 'xlsx')}>Excel</a>
+                                    <a href={exp(reportKey, 'xlsx')}>
+                                        Unduh Excel
+                                    </a>
                                 </Button>
                                 <Button
                                     asChild
                                     variant="outline"
                                     className="h-11"
                                 >
-                                    <a href={exp(reportKey, 'pdf')}>PDF</a>
+                                    <a href={exp(reportKey, 'pdf')}>
+                                        Unduh PDF
+                                    </a>
                                 </Button>
                             </>
                         ) : undefined
@@ -178,7 +192,7 @@ export default function Accounting(p: Props) {
                                 <option value="">—</option>
                                 {p.accounts.map((a) => (
                                     <option key={a.id} value={a.id}>
-                                        {a.code} {a.name}
+                                        {a.name}
                                     </option>
                                 ))}
                             </Select>
@@ -231,16 +245,46 @@ export default function Accounting(p: Props) {
                                 value={rupiah(p.profitLoss.net_profit)}
                             />
                         </div>
+                        <div className="grid gap-4 lg:grid-cols-2">
+                            <ChartCard title="Pendapatan vs beban">
+                                <PairedBars
+                                    title="Pendapatan dan beban periode ini"
+                                    labels={['Periode ini']}
+                                    a={{
+                                        name: 'Pendapatan',
+                                        values: [p.profitLoss.total_revenue],
+                                        color: '#059669',
+                                    }}
+                                    b={{
+                                        name: 'Beban',
+                                        values: [p.profitLoss.total_expense],
+                                        color: '#e11d48',
+                                    }}
+                                />
+                            </ChartCard>
+                            <ChartCard title="Beban terbesar">
+                                <BarList
+                                    title="Beban per akun"
+                                    color="#e11d48"
+                                    data={p.profitLoss.expense
+                                        .map((r) => ({
+                                            label: r.name,
+                                            value: r.balance,
+                                        }))
+                                        .sort((a, b) => b.value - a.value)}
+                                />
+                            </ChartCard>
+                        </div>
                         <ResponsiveTable
                             headers={['Akun', 'Jumlah']}
                             numeric={[1]}
                             rows={[
                                 ...p.profitLoss.revenue.map((r) => [
-                                    `${r.code} ${r.name}`,
+                                    r.name,
                                     rupiah(r.balance),
                                 ]),
                                 ...p.profitLoss.expense.map((r) => [
-                                    `${r.code} ${r.name}`,
+                                    r.name,
                                     rupiah(-r.balance),
                                 ]),
                             ]}
@@ -275,10 +319,7 @@ export default function Accounting(p: Props) {
                                 ...p.balanceSheet.liabilities,
                                 ...p.balanceSheet.equity,
                             ]
-                                .map((r) => [
-                                    `${r.code} ${r.name}`,
-                                    rupiah(r.balance),
-                                ])
+                                .map((r) => [r.name, rupiah(r.balance)])
                                 .concat([
                                     [
                                         'Laba berjalan',
@@ -289,23 +330,41 @@ export default function Accounting(p: Props) {
                     </>
                 )}
                 {tab === 'cf' && (
-                    <ResponsiveTable
-                        headers={[
-                            'Akun kas/bank',
-                            'Saldo awal',
-                            'Masuk',
-                            'Keluar',
-                            'Saldo akhir',
-                        ]}
-                        numeric={[1, 2, 3, 4]}
-                        rows={p.cashFlow.map((a) => [
-                            a.name,
-                            rupiah(a.opening),
-                            rupiah(a.inflow),
-                            rupiah(a.outflow),
-                            rupiah(a.closing),
-                        ])}
-                    />
+                    <>
+                        <ChartCard title="Uang masuk vs keluar per akun kas / bank">
+                            <PairedBars
+                                title="Arus kas per akun"
+                                labels={p.cashFlow.map((a) => a.name)}
+                                a={{
+                                    name: 'Masuk',
+                                    values: p.cashFlow.map((a) => a.inflow),
+                                    color: '#059669',
+                                }}
+                                b={{
+                                    name: 'Keluar',
+                                    values: p.cashFlow.map((a) => a.outflow),
+                                    color: '#e11d48',
+                                }}
+                            />
+                        </ChartCard>
+                        <ResponsiveTable
+                            headers={[
+                                'Akun kas/bank',
+                                'Saldo awal',
+                                'Masuk',
+                                'Keluar',
+                                'Saldo akhir',
+                            ]}
+                            numeric={[1, 2, 3, 4]}
+                            rows={p.cashFlow.map((a) => [
+                                a.name,
+                                rupiah(a.opening),
+                                rupiah(a.inflow),
+                                rupiah(a.outflow),
+                                rupiah(a.closing),
+                            ])}
+                        />
+                    </>
                 )}
                 {tab === 'ledger' &&
                     (p.ledger ? (
@@ -418,7 +477,7 @@ function Journals({
                             {j.lines.map((l, i) => (
                                 <tr key={i}>
                                     <td className={l.credit ? 'pl-6' : ''}>
-                                        {l.code} {l.name}
+                                        {l.name}
                                     </td>
                                     <td className="text-right tabular-nums">
                                         {l.debit ? rupiah(l.debit) : ''}
@@ -450,7 +509,7 @@ function Coa({
     canManage: boolean;
     balances: Bal[];
 }) {
-    const [n, setN] = useState({ code: '', name: '', type: 'asset' });
+    const [n, setN] = useState({ name: '', type: 'asset' });
 
     return (
         <div className="grid gap-3">
@@ -458,8 +517,8 @@ function Coa({
                 headers={['Akun', 'Tipe', 'Saldo periode']}
                 numeric={[2]}
                 rows={accounts.map((a) => [
-                    `${a.code} ${a.name}${a.is_system ? ' 🔒' : ''}${a.is_active ? '' : ' (nonaktif)'}`,
-                    a.type,
+                    `${a.name}${a.is_system ? ' 🔒' : ''}${a.is_active ? '' : ' (nonaktif)'}`,
+                    TYPE_LABEL[a.type] ?? a.type,
                     rupiah(balances.find((b) => b.id === a.id)?.balance ?? 0),
                 ])}
             />
@@ -468,29 +527,17 @@ function Coa({
                     <h3 className="font-medium">
                         Akun baru (mis. rekening bank QRIS)
                     </h3>
-                    <div className="grid grid-cols-2 gap-2">
-                        <Input
-                            className="h-11"
-                            placeholder="Kode (1-1230)"
-                            value={n.code}
-                            onChange={(e) =>
-                                setN({ ...n, code: e.target.value })
-                            }
-                        />
+                    <div className="grid gap-2">
                         <Select
                             value={n.type}
                             onChange={(e) =>
                                 setN({ ...n, type: e.target.value })
                             }
                         >
-                            {[
-                                'asset',
-                                'liability',
-                                'equity',
-                                'revenue',
-                                'expense',
-                            ].map((t) => (
-                                <option key={t}>{t}</option>
+                            {Object.entries(TYPE_LABEL).map(([v, l]) => (
+                                <option key={v} value={v}>
+                                    {l}
+                                </option>
                             ))}
                         </Select>
                     </div>
@@ -502,12 +549,12 @@ function Coa({
                     />
                     <Button
                         className="h-11"
-                        disabled={!n.code || !n.name}
+                        disabled={!n.name}
                         onClick={() =>
                             router.post('/admin/accounting/accounts', n, {
                                 preserveScroll: true,
                                 onSuccess: () =>
-                                    setN({ code: '', name: '', type: 'asset' }),
+                                    setN({ name: '', type: 'asset' }),
                             })
                         }
                     >
@@ -592,7 +639,7 @@ function Manual({
                         <option value="">Akun…</option>
                         {accounts.map((a) => (
                             <option key={a.id} value={a.id}>
-                                {a.code} {a.name}
+                                {a.name}
                             </option>
                         ))}
                     </Select>

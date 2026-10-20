@@ -22,6 +22,7 @@ export type PanelActions = {
     sending: boolean;
     setQty: (key: string, delta: number) => void;
     remove: (key: string) => void;
+    setNote: (key: string, note: string) => void;
     voidItem: (i: OrderItem) => void;
     comp: (i: OrderItem) => void;
     discount: (i: OrderItem | null) => void;
@@ -249,11 +250,22 @@ export function OrderPanel({
                                             {rupiah(l.unitPrice * l.qty)}
                                         </p>
                                     </div>
-                                    {l.note && (
-                                        <p className="text-xs italic">
-                                            “{l.note}”
-                                        </p>
-                                    )}
+                                    <input
+                                        type="text"
+                                        value={l.note}
+                                        maxLength={200}
+                                        placeholder={t(
+                                            'Catatan (mis. less ice, tanpa gula)',
+                                        )}
+                                        aria-label={`${t('Catatan')} ${l.label}`}
+                                        onChange={(e) =>
+                                            actions.setNote(
+                                                l.key,
+                                                e.target.value,
+                                            )
+                                        }
+                                        className="mt-1 h-10 w-full rounded-md border border-input bg-background px-2 text-xs"
+                                    />
                                     <div className="mt-1 flex items-center gap-1">
                                         <Button
                                             type="button"

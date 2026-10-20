@@ -1,4 +1,5 @@
 import { Head, router } from '@inertiajs/react';
+import { BarList, ChartCard } from '@/components/pos/charts';
 import { Field, PageHeader, ResponsiveTable } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +25,8 @@ export default function Adjustments({
         ...filters,
         report: 'adjustments',
     }).toString();
+    const sum = (rows: R[]) =>
+        rows.reduce((a, r) => a + Number(r.amount ?? 0), 0);
     const who = (r: R) => `${r.actor ?? '-'} → ${r.approver ?? '-'}`;
 
     return (
@@ -39,14 +42,14 @@ export default function Adjustments({
                                 <a
                                     href={`/admin/reports/export?${q}&format=xlsx`}
                                 >
-                                    Excel
+                                    Unduh Excel
                                 </a>
                             </Button>
                             <Button asChild variant="outline" className="h-11">
                                 <a
                                     href={`/admin/reports/export?${q}&format=pdf`}
                                 >
-                                    PDF
+                                    Unduh PDF
                                 </a>
                             </Button>
                         </>
@@ -84,6 +87,21 @@ export default function Adjustments({
                         Tampilkan
                     </Button>
                 </form>
+                <ChartCard
+                    title="Perbandingan pengurangan nilai transaksi"
+                    hint="Total nominal per jenis pada periode terpilih"
+                >
+                    <BarList
+                        title="Total diskon, void, refund, komplimen"
+                        data={[
+                            { label: 'Diskon', value: sum(discounts) },
+                            { label: 'Void', value: sum(voids) },
+                            { label: 'Refund', value: sum(refunds) },
+                            { label: 'Komplimen', value: sum(comps) },
+                        ]}
+                        color="#e11d48"
+                    />
+                </ChartCard>
                 <Section
                     title="Diskon"
                     headers={[

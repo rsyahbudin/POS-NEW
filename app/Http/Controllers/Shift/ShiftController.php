@@ -60,14 +60,14 @@ class ShiftController extends Controller
     public function close(Request $request, CloseShiftAction $action): RedirectResponse
     {
         $data = $request->validate([
-            'denominations' => 'required|array', 'denominations.*' => 'integer|min:0',
+            'counted_cash' => 'required|integer|min:0',
             'cash_left' => 'required|integer|min:0', 'deposit_account_id' => 'nullable|integer|exists:accounts,id',
             'difference_reason' => 'nullable|string|max:200', 'close_key' => 'required|string|max:100',
         ]);
         $shift = Shift::query()->where('user_id', $this->actor($request)->id)->whereNull('closed_at')->firstOrFail();
         $action->handle(
             $shift, $this->actor($request),
-            array_combine(array_map('intval', array_keys($data['denominations'])), array_map('intval', $data['denominations'])),
+            (int) $data['counted_cash'],
             (int) $data['cash_left'], $data['deposit_account_id'] ?? null, $data['difference_reason'] ?? null, $data['close_key'],
         );
 
@@ -88,7 +88,7 @@ class ShiftController extends Controller
     {
         $summary = $cash->summarize($shift);
         $byMethod = DB::table('payments')->where('shift_id', $shift->id)->join('payment_methods', 'payment_methods.id', '=', 'payments.payment_method_id')
-            ->groupBy('payment_methods.name')->selectRaw('payment_methods.name as name, SUM(payments.amount) as total, COUNT(*) as count')->get();
+            ->groupBy('payment_methods.name', 'payment_methods.type')->selectRaw('payment_methods.name as name, payment_methods.type as type, SUM(payments.amount) as total, COUNT(*) as count')->orderBy('payment_methods.name')->get();
         $orders = DB::table('orders')->where('shift_id', $shift->id)->whereIn('status', ['paid', 'refunded'])->count();
         $voids = DB::table('order_items')->join('orders', 'orders.id', '=', 'order_items.order_id')->where('orders.shift_id', $shift->id)->whereNotNull('order_items.voided_at')->count();
         $discounts = (int) DB::table('orders')->where('shift_id', $shift->id)->sum('discount_total');
@@ -99,7 +99,7 @@ class ShiftController extends Controller
             'opening_cash' => $shift->opening_cash, 'counted_cash' => $shift->counted_cash, 'difference' => $shift->difference,
             'cash_left' => $shift->cash_left, 'cash_deposited' => $shift->cash_deposited, 'difference_reason' => $shift->difference_reason,
             'summary' => $summary,
-            'by_method' => $byMethod->map(fn ($r) => ['name' => $r->name, 'total' => (int) $r->total, 'count' => (int) $r->count])->all(),
+            'by_method' => $byMethod->map(fn ($r) => ['name' => $r->name, 'type' => $r->type, 'total' => (int) $r->total, 'count' => (int) $r->count])->all(),
             'orders' => $orders, 'voids' => $voids, 'discounts' => $discounts, 'comps' => $comps,
             'movements' => $shift->movements()->latest()->get(['direction', 'amount', 'reason', 'created_at'])->all(),
         ];

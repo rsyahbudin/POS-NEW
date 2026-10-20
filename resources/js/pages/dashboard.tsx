@@ -1,7 +1,15 @@
 import { Head, Link } from '@inertiajs/react';
+import {
+    BarList,
+    ChartCard,
+    ColumnChart,
+    LineChart,
+} from '@/components/pos/charts';
 import { PageHeader, ResponsiveTable, Stat } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { dateId, rupiah } from '@/lib/format';
+
+type Row = { label: string; orders: number; total: number };
 
 type Props = {
     date: string;
@@ -12,18 +20,18 @@ type Props = {
         last_week_revenue: number;
         change_percent: number | null;
     };
-    hourly: { label: string; orders: number; total: number }[];
-    topProducts: { label: string; orders: number; total: number }[];
+    hourly: Row[];
+    daily: Row[];
+    topProducts: Row[];
 };
 
 export default function Dashboard({
     date,
     metrics,
     hourly,
+    daily,
     topProducts,
 }: Props) {
-    const max = Math.max(1, ...hourly.map((h) => h.total));
-
     return (
         <>
             <Head title="Dashboard" />
@@ -61,56 +69,45 @@ export default function Dashboard({
                     />
                 </div>
 
-                <section
-                    className="rounded-xl border bg-card p-4"
-                    aria-label="Penjualan per jam"
-                >
-                    <h2 className="mb-3 font-semibold">Penjualan per jam</h2>
-                    {hourly.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
-                            Belum ada transaksi.
-                        </p>
-                    ) : (
-                        <div
-                            className="flex h-40 items-end gap-1"
-                            role="img"
-                            aria-label="Grafik batang penjualan per jam"
-                        >
-                            {hourly.map((h) => (
-                                <div
-                                    key={h.label}
-                                    className="flex flex-1 flex-col items-center justify-end gap-1"
-                                >
-                                    <div
-                                        className="w-full rounded-t bg-primary"
-                                        style={{
-                                            height: `${Math.max(4, (h.total / max) * 100)}%`,
-                                        }}
-                                        title={`${h.label}: ${rupiah(h.total)}`}
-                                    />
-                                    <span className="text-[10px] text-muted-foreground">
-                                        {h.label.slice(0, 2)}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </section>
+                <div className="grid gap-4 lg:grid-cols-2">
+                    <ChartCard title="Omzet 14 hari terakhir">
+                        <LineChart
+                            title="Omzet harian 14 hari terakhir"
+                            data={daily.map((d) => ({
+                                label: d.label,
+                                value: d.total,
+                            }))}
+                        />
+                    </ChartCard>
+                    <ChartCard title="Penjualan per jam (hari ini)">
+                        <ColumnChart
+                            title="Penjualan per jam hari ini"
+                            data={hourly.map((h) => ({
+                                label: h.label.slice(0, 2),
+                                value: h.total,
+                            }))}
+                        />
+                    </ChartCard>
+                </div>
 
-                <section>
-                    <h2 className="mb-2 font-semibold">
-                        Produk terlaris hari ini
-                    </h2>
-                    <ResponsiveTable
-                        headers={['Produk', 'Qty', 'Nilai']}
-                        numeric={[1, 2]}
-                        rows={topProducts.map((p) => [
-                            p.label,
-                            p.orders,
-                            rupiah(p.total),
-                        ])}
+                <ChartCard title="Produk terlaris hari ini">
+                    <BarList
+                        title="Produk terlaris hari ini"
+                        data={topProducts.map((p) => ({
+                            label: p.label,
+                            value: p.total,
+                        }))}
                     />
-                </section>
+                </ChartCard>
+                <ResponsiveTable
+                    headers={['Produk', 'Qty', 'Nilai']}
+                    numeric={[1, 2]}
+                    rows={topProducts.map((p) => [
+                        p.label,
+                        p.orders,
+                        rupiah(p.total),
+                    ])}
+                />
             </div>
         </>
     );

@@ -29,6 +29,7 @@ Akun demo (password `password`; PIN manager 6 digit untuk void/diskon di atas ba
 | Waiter  | waiter@pos.test  | —      |
 | Dapur   | dapur@pos.test   | —      |
 
+Hak akses tiap peran bisa diubah owner di `/admin/roles` (Peran & Akses), tanpa ubah kode.
 Setelah login: `/pos` (kasir), `/kds` (dapur), `/shift`, `/dashboard`, `/admin/*` (back office).
 QR meja: `/m/{token}` (token dicetak lewat Admin › Meja & QR › PDF).
 Ganti password demo sebelum produksi. `POS_REQUIRE_OWNER_2FA=true` (default di `.env.example`) mewajibkan 2FA owner.

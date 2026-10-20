@@ -1,4 +1,5 @@
 import { Head, router, usePage } from '@inertiajs/react';
+import { BarList, ChartCard } from '@/components/pos/charts';
 import { useState } from 'react';
 import {
     Field,
@@ -43,6 +44,18 @@ export default function ExpensesPage({
         receipt: null as File | null,
     });
     const total = expenses.reduce((s, e) => s + e.amount, 0);
+    const byCategory = Object.entries(
+        expenses.reduce<Record<string, number>>(
+            (acc, e) => ({
+                ...acc,
+                [e.category]: (acc[e.category] ?? 0) + e.amount,
+            }),
+            {},
+        ),
+    )
+        .map(([label, value]) => ({ label, value }))
+        .sort((a, b) => b.value - a.value);
+    const exportQs = new URLSearchParams(filters).toString();
 
     return (
         <>
@@ -51,6 +64,24 @@ export default function ExpensesPage({
                 <PageHeader
                     title="Pengeluaran operasional"
                     subtitle={`Total periode: ${rupiah(total)}`}
+                    actions={
+                        <>
+                            <Button asChild variant="outline" className="h-11">
+                                <a
+                                    href={`/admin/expenses/export?${exportQs}&format=xlsx`}
+                                >
+                                    Unduh Excel
+                                </a>
+                            </Button>
+                            <Button asChild variant="outline" className="h-11">
+                                <a
+                                    href={`/admin/expenses/export?${exportQs}&format=pdf`}
+                                >
+                                    Unduh PDF
+                                </a>
+                            </Button>
+                        </>
+                    }
                 />
                 {Object.values(errors ?? {})[0] && (
                     <p role="alert" className="text-sm text-destructive">
@@ -192,6 +223,13 @@ export default function ExpensesPage({
                     </Button>
                 </form>
 
+                <ChartCard title="Pengeluaran per kategori">
+                    <BarList
+                        title="Pengeluaran per kategori"
+                        data={byCategory}
+                        color="#e11d48"
+                    />
+                </ChartCard>
                 <ResponsiveTable
                     headers={[
                         'Tanggal',

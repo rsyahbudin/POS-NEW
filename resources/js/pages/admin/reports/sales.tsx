@@ -1,5 +1,11 @@
 import { Head, router } from '@inertiajs/react';
 import {
+    BarList,
+    ChartCard,
+    ColumnChart,
+    LineChart,
+} from '@/components/pos/charts';
+import {
     Field,
     PageHeader,
     ResponsiveTable,
@@ -54,14 +60,14 @@ export default function SalesReport({
                                 <a
                                     href={`/admin/reports/export?${qs({ format: 'xlsx' })}`}
                                 >
-                                    Excel
+                                    Unduh Excel
                                 </a>
                             </Button>
                             <Button asChild variant="outline" className="h-11">
                                 <a
                                     href={`/admin/reports/export?${qs({ format: 'pdf' })}`}
                                 >
-                                    PDF
+                                    Unduh PDF
                                 </a>
                             </Button>
                         </>
@@ -124,6 +130,35 @@ export default function SalesReport({
                         hint={`Diskon ${rupiah(summary.discounts)}`}
                     />
                 </div>
+                <ChartCard
+                    title={`Penjualan ${LABELS[filters.dimension].toLowerCase()}`}
+                >
+                    {filters.dimension === 'day' ? (
+                        <LineChart
+                            title="Penjualan per hari"
+                            data={rows.map((r) => ({
+                                label: r.label,
+                                value: r.total,
+                            }))}
+                        />
+                    ) : filters.dimension === 'hour' ? (
+                        <ColumnChart
+                            title="Penjualan per jam"
+                            data={rows.map((r) => ({
+                                label: r.label.slice(0, 2),
+                                value: r.total,
+                            }))}
+                        />
+                    ) : (
+                        <BarList
+                            title={`Penjualan ${LABELS[filters.dimension].toLowerCase()}`}
+                            data={rows.map((r) => ({
+                                label: r.label,
+                                value: r.total,
+                            }))}
+                        />
+                    )}
+                </ChartCard>
                 <ResponsiveTable
                     headers={[
                         LABELS[filters.dimension],

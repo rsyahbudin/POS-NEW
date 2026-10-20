@@ -339,6 +339,26 @@ export default function QrMenu({
                                             {rp(l.unit * l.qty)}
                                         </span>
                                     </div>
+                                    <input
+                                        value={l.note}
+                                        maxLength={120}
+                                        placeholder="Catatan (mis. less ice, tanpa gula)"
+                                        aria-label={`Catatan ${l.label}`}
+                                        onChange={(e) =>
+                                            setCart((c) =>
+                                                c.map((x) =>
+                                                    x.key === l.key
+                                                        ? {
+                                                              ...x,
+                                                              note: e.target
+                                                                  .value,
+                                                          }
+                                                        : x,
+                                                ),
+                                            )
+                                        }
+                                        className="mt-1 h-10 w-full rounded-lg border px-2 text-sm"
+                                    />
                                     <div className="mt-1 flex items-center gap-2">
                                         <button
                                             aria-label="Kurangi"

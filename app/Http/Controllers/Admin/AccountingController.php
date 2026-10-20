@@ -10,17 +10,17 @@ use App\Domain\Accounting\Models\JournalEntry;
 use App\Domain\Accounting\Models\Period;
 use App\Domain\Reporting\AccountingReports;
 use App\Domain\Settings\OutletContext;
-use App\Exports\ArrayExport;
+use App\Exports\ReportSheet;
 use App\Http\Controllers\Controller;
 use App\Support\Audit;
 use App\Support\BusinessDate;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Support\ReportFile;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
-use Maatwebsite\Excel\Facades\Excel;
 
 /** Read pages need `view-accounting` (manager can read); every write needs `manage-accounting` (owner). */
 class AccountingController extends Controller
@@ -78,37 +78,76 @@ class AccountingController extends Controller
     {
         $outletId = $this->outlet->id();
         $data = $request->validate([
-            'code' => ['required', 'string', 'max:20', Rule::unique('accounts', 'code')->where('outlet_id', $outletId)->ignore($account?->id)],
+            'code' => ['nullable', 'string', 'max:20', Rule::unique('accounts', 'code')->where('outlet_id', $outletId)->ignore($account?->id)],
             'name' => 'required|string|max:80',
             'type' => 'required|in:asset,liability,equity,revenue,expense', 'is_active' => 'boolean',
         ]);
         if ($account?->is_system) {
             unset($data['type'], $data['code']); // system accounts keep identity; automation depends on them
         }
+        if (! $account && blank($data['code'] ?? null)) {
+            $data['code'] = $this->nextCode($outletId, $data['type']); // codes are internal; staff only see names
+        }
         $account ? $account->update($data) : Account::create($data + ['outlet_id' => $outletId]);
 
         return back()->with('success', 'Akun disimpan.');
     }
 
+    private function nextCode(int $outletId, string $type): string
+    {
+        $prefix = ['asset' => 1, 'liability' => 2, 'equity' => 3, 'revenue' => 4, 'expense' => 5][$type];
+        $last = Account::query()->where('outlet_id', $outletId)->where('code', 'like', "{$prefix}-%")->pluck('code')
+            ->map(fn (string $c) => (int) substr($c, 2))->max() ?? ($prefix * 1000);
+
+        return $prefix.'-'.($last + 10);
+    }
+
     public function export(Request $request): \Symfony\Component\HttpFoundation\Response
     {
         [$from, $to] = $this->range($request);
-        $report = $request->input('report', 'profit_loss');
-        $format = $request->input('format', 'xlsx');
+        $report = (string) $request->input('report', 'profit_loss');
+        $format = (string) $request->input('format', 'xlsx');
+        $range = CarbonImmutable::parse($from)->translatedFormat('d M Y').' s/d '.CarbonImmutable::parse($to)->translatedFormat('d M Y');
+        $asOf = 'Per '.CarbonImmutable::parse($to)->translatedFormat('d M Y');
 
-        [$title, $headings, $rows] = match ($report) {
-            'journal' => ['Jurnal Umum', ['Tanggal', 'Memo', 'Akun', 'Debit', 'Kredit'], $this->journalRows($from, $to)],
-            'ledger' => ['Buku Besar', ['Tanggal', 'Memo', 'Debit', 'Kredit', 'Saldo'], collect($this->reports->ledger($request->integer('account_id'), $from, $to)['lines'])->map(fn ($l) => [$l['date'], $l['memo'], $l['debit'], $l['credit'], $l['balance']])->all()],
-            'balance_sheet' => ['Neraca Sederhana', ['Akun', 'Saldo'], $this->balanceSheetRows($to)],
-            'cash_flow' => ['Arus Kas', ['Akun', 'Saldo awal', 'Masuk', 'Keluar', 'Saldo akhir'], $this->reports->cashFlow($from, $to)->map(fn ($a) => [$a->name, $a->opening, $a->inflow, $a->outflow, $a->closing])->all()],
-            default => ['Laba Rugi', ['Akun', 'Jumlah'], $this->profitLossRows($from, $to)],
+        $sheet = match ($report) {
+            'journal' => new ReportSheet('Jurnal Umum', "Periode {$range}", ['Tanggal', 'Memo', 'Akun', 'Debit (Rp)', 'Kredit (Rp)'], $this->journalRows($from, $to)),
+            'ledger' => $this->ledgerSheet($request->integer('account_id'), $from, $to, $range),
+            'balance_sheet' => new ReportSheet('Neraca Sederhana', $asOf, ['Akun', 'Saldo (Rp)'], $this->balanceSheetRows($to)),
+            'cash_flow' => $this->cashFlowSheet($from, $to, $range),
+            'accounts' => new ReportSheet('Daftar Akun', 'Chart of accounts', ['Akun', 'Tipe', 'Status'], $this->accountRows()),
+            default => new ReportSheet('Laba Rugi', "Periode {$range}", ['Akun', 'Jumlah (Rp)'], $this->profitLossRows($from, $to)),
         };
 
-        $name = str_replace(' ', '-', strtolower($title))."-{$from}-{$to}";
+        return ReportFile::download($format, "{$sheet->section()['title']} {$from} {$to}", [$sheet]);
+    }
 
-        return $format === 'pdf'
-            ? Pdf::loadView('pdf.table', ['title' => $title, 'subtitle' => "{$from} s/d {$to}", 'headings' => $headings, 'rows' => $rows])->download("{$name}.pdf")
-            : Excel::download(new ArrayExport($headings, $rows), "{$name}.xlsx");
+    private function ledgerSheet(int $accountId, string $from, string $to, string $range): ReportSheet
+    {
+        $name = Account::query()->whereKey($accountId)->value('name') ?? 'Akun';
+        $ledger = $this->reports->ledger($accountId, $from, $to);
+        $rows = array_map(fn ($l) => [CarbonImmutable::parse($l['date'])->translatedFormat('d M Y'), $l['memo'], $l['debit'], $l['credit'], $l['balance']], $ledger['lines']);
+        array_unshift($rows, ['Saldo awal', '', '', '', $ledger['opening']]);
+
+        return new ReportSheet("Buku Besar {$name}", "Periode {$range}", ['Tanggal', 'Keterangan', 'Debit (Rp)', 'Kredit (Rp)', 'Saldo (Rp)'], $rows);
+    }
+
+    private function cashFlowSheet(string $from, string $to, string $range): ReportSheet
+    {
+        $rows = $this->reports->cashFlow($from, $to);
+
+        return new ReportSheet('Arus Kas', "Periode {$range}", ['Akun kas / bank', 'Saldo awal (Rp)', 'Masuk (Rp)', 'Keluar (Rp)', 'Saldo akhir (Rp)'],
+            $rows->map(fn ($a) => [$a->name, $a->opening, $a->inflow, $a->outflow, $a->closing])->all(),
+            ['Total', (int) $rows->sum('opening'), (int) $rows->sum('inflow'), (int) $rows->sum('outflow'), (int) $rows->sum('closing')]);
+    }
+
+    /** @return array<int, array<int, mixed>> */
+    private function accountRows(): array
+    {
+        $labels = ['asset' => 'Aset', 'liability' => 'Kewajiban', 'equity' => 'Ekuitas', 'revenue' => 'Pendapatan', 'expense' => 'Beban'];
+
+        return Account::query()->where('outlet_id', $this->outlet->id())->orderBy('code')->get()
+            ->map(fn (Account $a) => [$a->name, $labels[$a->type->value], $a->is_active ? 'Aktif' : 'Nonaktif'])->all();
     }
 
     /** @return array<int, array<int, mixed>> */
@@ -117,25 +156,25 @@ class AccountingController extends Controller
         $rows = [];
         foreach ($this->reports->journals($from, $to, 5000) as $entry) {
             foreach ($entry->lines as $line) {
-                $rows[] = [$entry->date, $entry->memo, "{$line->code} {$line->name}", (int) $line->debit, (int) $line->credit];
+                $rows[] = [CarbonImmutable::parse($entry->date)->translatedFormat('d M Y'), $entry->memo, $line->name, (int) $line->debit, (int) $line->credit];
             }
         }
 
         return $rows;
     }
 
-    /** @return list<list<scalar>> */
+    /** @return array<int, array<int, mixed>> */
     private function profitLossRows(string $from, string $to): array
     {
         $pl = $this->reports->profitLoss($from, $to);
         $rows = [['PENDAPATAN', '']];
         foreach ($pl['revenue'] as $r) {
-            $rows[] = ["{$r->code} {$r->name}", $r->balance];
+            $rows[] = [$r->name, $r->balance];
         }
         $rows[] = ['Total pendapatan', $pl['total_revenue']];
         $rows[] = ['BEBAN', ''];
         foreach ($pl['expense'] as $r) {
-            $rows[] = ["{$r->code} {$r->name}", $r->balance];
+            $rows[] = [$r->name, $r->balance];
         }
         $rows[] = ['Total beban', $pl['total_expense']];
         $rows[] = ['LABA BERSIH', $pl['net_profit']];
@@ -143,22 +182,22 @@ class AccountingController extends Controller
         return $rows;
     }
 
-    /** @return list<list<scalar>> */
+    /** @return array<int, array<int, mixed>> */
     private function balanceSheetRows(string $asOf): array
     {
         $bs = $this->reports->balanceSheet($asOf);
         $rows = [['ASET', '']];
         foreach ($bs['assets'] as $r) {
-            $rows[] = ["{$r->code} {$r->name}", $r->balance];
+            $rows[] = [$r->name, $r->balance];
         }
         $rows[] = ['Total aset', $bs['total_assets']];
         $rows[] = ['KEWAJIBAN', ''];
         foreach ($bs['liabilities'] as $r) {
-            $rows[] = ["{$r->code} {$r->name}", $r->balance];
+            $rows[] = [$r->name, $r->balance];
         }
         $rows[] = ['EKUITAS', ''];
         foreach ($bs['equity'] as $r) {
-            $rows[] = ["{$r->code} {$r->name}", $r->balance];
+            $rows[] = [$r->name, $r->balance];
         }
         $rows[] = ['Laba berjalan', $bs['current_earnings']];
         $rows[] = ['Total kewajiban + ekuitas', $bs['total_liabilities_equity']];

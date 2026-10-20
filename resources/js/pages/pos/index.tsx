@@ -409,6 +409,8 @@ export default function PosPage(props: Props) {
                 ),
             ),
         remove: (key) => setCart((c) => c.filter((l) => l.key !== key)),
+        setNote: (key, note) =>
+            setCart((c) => c.map((l) => (l.key === key ? { ...l, note } : l))),
         voidItem: (item) => setDialog({ kind: 'void-item', item }),
         comp: (item) => setDialog({ kind: 'comp', item }),
         discount: (item) => setDialog({ kind: 'discount', item }),

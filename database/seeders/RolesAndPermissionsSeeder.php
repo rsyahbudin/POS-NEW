@@ -14,7 +14,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'create-order', 'receive-payment', 'discount-within-limit', 'discount-over-limit', 'void', 'refund',
         'open-close-shift', 'manage-shifts-any', 'update-kitchen-status', 'input-expense',
         'view-sales-reports', 'view-own-shift-recap', 'view-accounting', 'manage-accounting',
-        'manage-menu', 'manage-pricing', 'manage-users', 'manage-settings', 'manage-tables',
+        'manage-menu', 'manage-pricing', 'manage-users', 'manage-settings', 'manage-tables', 'manage-roles',
     ];
 
     public const ROLES = [
@@ -36,9 +36,14 @@ class RolesAndPermissionsSeeder extends Seeder
             Permission::findOrCreate($name, 'web');
         }
 
+        // Owner always holds everything. Other roles get defaults only when first created,
+        // so permissions edited in the app (Peran & Akses) survive a re-seed.
         Role::findOrCreate('owner', 'web')->syncPermissions(self::ALL);
         foreach (self::ROLES as $role => $permissions) {
-            Role::findOrCreate($role, 'web')->syncPermissions($permissions);
+            $model = Role::findOrCreate($role, 'web');
+            if ($model->wasRecentlyCreated) {
+                $model->syncPermissions($permissions);
+            }
         }
     }
 }

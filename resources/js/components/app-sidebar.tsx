@@ -10,6 +10,7 @@ import {
     QrCode,
     Receipt,
     Settings,
+    ShieldCheck,
     ShoppingBasket,
     Users,
     UtensilsCrossed,
@@ -102,6 +103,12 @@ const items: Item[] = [
         href: '/admin/users',
         icon: Users,
         permission: 'manage-users',
+    },
+    {
+        title: 'Peran & Akses',
+        href: '/admin/roles',
+        icon: ShieldCheck,
+        permission: 'manage-roles',
     },
     {
         title: 'Pengaturan',

@@ -21,7 +21,7 @@ export default function UsersPage({
     roles,
 }: {
     users: U[];
-    roles: string[];
+    roles: { name: string; label: string }[];
 }) {
     const errors = usePage().props.errors as Record<string, string>;
     const [form, setForm] = useState<{
@@ -44,7 +44,7 @@ export default function UsersPage({
             <div className="grid gap-4 p-4">
                 <PageHeader
                     title="Manajemen user"
-                    subtitle="User dinonaktifkan, tidak pernah dihapus."
+                    subtitle="User dinonaktifkan, tidak pernah dihapus. Hak akses tiap peran diatur di menu Peran & Akses."
                     actions={
                         <Button
                             className="h-11"
@@ -76,7 +76,8 @@ export default function UsersPage({
                             <p className="font-medium">
                                 {u.name}{' '}
                                 <span className="rounded bg-muted px-1.5 py-0.5 text-xs">
-                                    {u.role}
+                                    {roles.find((r) => r.name === u.role)
+                                        ?.label ?? u.role}
                                 </span>
                             </p>
                             <p className="text-sm text-muted-foreground">
@@ -186,7 +187,9 @@ export default function UsersPage({
                             }
                         >
                             {roles.map((r) => (
-                                <option key={r}>{r}</option>
+                                <option key={r.name} value={r.name}>
+                                    {r.label}
+                                </option>
                             ))}
                         </Select>
                     </Field>

@@ -6,6 +6,7 @@ use App\Domain\Settings\OutletContext;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Audit;
+use App\Support\PermissionCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -24,7 +25,7 @@ class UserController extends Controller
                 'id' => $u->id, 'name' => $u->name, 'email' => $u->email, 'is_active' => $u->is_active,
                 'role' => $u->getRoleNames()->first(), 'has_pin' => $u->pin_hash !== null, 'has_2fa' => $u->two_factor_confirmed_at !== null,
             ]),
-            'roles' => Role::query()->orderBy('id')->pluck('name'),
+            'roles' => Role::query()->orderBy('id')->pluck('name')->map(fn (string $n) => ['name' => $n, 'label' => PermissionCatalog::BUILT_IN[$n] ?? $n])->all(),
         ]);
     }
 

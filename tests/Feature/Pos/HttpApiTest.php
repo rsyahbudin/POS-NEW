@@ -169,7 +169,7 @@ it('logs out and blocks deactivated staff', function () {
 it('logs the cashier out when the shift is closed', function () {
     $cashier = userWithRole('cashier');
     openShiftFor($cashier, 0);
-    $this->actingAs($cashier)->post('/shift/close', ['denominations' => [50000 => 0], 'cash_left' => 0, 'close_key' => 'k1'])->assertRedirect(route('login'));
+    $this->actingAs($cashier)->post('/shift/close', ['counted_cash' => 0, 'cash_left' => 0, 'close_key' => 'k1'])->assertRedirect(route('login'));
     $this->assertGuest();
 });
 

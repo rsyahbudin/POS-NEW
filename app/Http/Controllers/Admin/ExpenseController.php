@@ -7,9 +7,12 @@ use App\Domain\Expense\Actions\RecordExpenseAction;
 use App\Domain\Expense\Models\Expense;
 use App\Domain\Expense\Models\ExpenseCategory;
 use App\Domain\Settings\OutletContext;
+use App\Exports\ReportSheet;
 use App\Http\Controllers\Controller;
 use App\Support\BusinessDate;
 use App\Support\ImageOptimizer;
+use App\Support\ReportFile;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -35,6 +38,24 @@ class ExpenseController extends Controller
             'categories' => ExpenseCategory::query()->where('outlet_id', $id)->orderBy('name')->get(['id', 'name']),
             'sources' => Account::query()->where('outlet_id', $id)->where('type', 'asset')->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
             'today' => BusinessDate::for(),
+        ]);
+    }
+
+    public function export(Request $request): \Symfony\Component\HttpFoundation\Response
+    {
+        $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date']);
+        $from = (string) $request->input('from', date('Y-m-01'));
+        $to = (string) $request->input('to', BusinessDate::for());
+        $expenses = Expense::query()->where('outlet_id', $this->outlet->id())->whereBetween('date', [$from, $to])->with('category')->orderBy('date')->orderBy('id')->get();
+        $range = CarbonImmutable::parse($from)->translatedFormat('d M Y').' s/d '.CarbonImmutable::parse($to)->translatedFormat('d M Y');
+
+        $byCategory = $expenses->groupBy(fn (Expense $e) => $e->category->name)->map(fn ($g, $name) => [(string) $name, $g->count(), (int) $g->sum('amount')])->values()->all();
+
+        return ReportFile::download((string) $request->input('format', 'xlsx'), "Pengeluaran {$from} {$to}", [
+            new ReportSheet('Pengeluaran', "Periode {$range}", ['Tanggal', 'Kategori', 'Nominal (Rp)', 'Catatan'],
+                $expenses->map(fn (Expense $e) => [$e->date->translatedFormat('d M Y'), $e->category->name, $e->amount, $e->note ?? ''])->all(),
+                ['Total', '', (int) $expenses->sum('amount'), '']),
+            new ReportSheet('Per kategori', "Periode {$range}", ['Kategori', 'Jumlah transaksi', 'Total (Rp)'], $byCategory, ['Total', $expenses->count(), (int) $expenses->sum('amount')]),
         ]);
     }
 

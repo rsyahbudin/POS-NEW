@@ -1,5 +1,5 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
     Field,
@@ -32,7 +32,7 @@ type ShiftData = {
     cash_deposited: number | null;
     difference_reason: string | null;
     summary: Summary;
-    by_method: { name: string; total: number; count: number }[];
+    by_method: { name: string; type: string; total: number; count: number }[];
     orders: number;
     voids: number;
     discounts: number;
@@ -53,8 +53,6 @@ type Props = {
     recent: ShiftData[];
     can: { any: boolean };
 };
-
-const DENOMS = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
 
 export default function ShiftPage({
     shift,
@@ -173,6 +171,74 @@ function OpenForm({ suggested }: { suggested: number }) {
     );
 }
 
+function SalesBreakdown({ shift }: { shift: ShiftData }) {
+    const total = shift.by_method.reduce((a, m) => a + m.total, 0);
+
+    return (
+        <section
+            className="rounded-xl border bg-card p-3 text-sm"
+            aria-label={t('Penerimaan per metode bayar')}
+        >
+            <h2 className="mb-2 font-semibold">
+                {t('Penerimaan dari penjualan')}
+            </h2>
+            {shift.by_method.length === 0 ? (
+                <p className="text-muted-foreground">
+                    {t('Belum ada pembayaran.')}
+                </p>
+            ) : (
+                <table className="w-full">
+                    <thead>
+                        <tr className="text-xs text-muted-foreground">
+                            <th className="py-1 text-left font-normal">
+                                {t('Metode')}
+                            </th>
+                            <th className="py-1 text-right font-normal">
+                                {t('Transaksi')}
+                            </th>
+                            <th className="py-1 text-right font-normal">
+                                {t('Jumlah')}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {shift.by_method.map((m) => (
+                            <tr key={m.name} className="border-t">
+                                <td className="py-1.5">
+                                    {m.name}
+                                    {m.type !== 'cash' && (
+                                        <span className="ml-1 text-xs text-muted-foreground">
+                                            ({t('tidak masuk laci')})
+                                        </span>
+                                    )}
+                                </td>
+                                <td className="py-1.5 text-right tabular-nums">
+                                    {m.count}
+                                </td>
+                                <td className="py-1.5 text-right tabular-nums">
+                                    {rupiah(m.total)}
+                                </td>
+                            </tr>
+                        ))}
+                        <tr className="border-t font-semibold">
+                            <td className="py-1.5" colSpan={2}>
+                                {t('Total penjualan')}
+                            </td>
+                            <td className="py-1.5 text-right tabular-nums">
+                                {rupiah(total)}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            )}
+            <p className="mt-2 text-xs text-muted-foreground">
+                {shift.orders} order · {shift.voids} void · {t('diskon')}{' '}
+                {rupiah(shift.discounts)} · {shift.comps} {t('komplimen')}
+            </p>
+        </section>
+    );
+}
+
 function Open({
     shift,
     accounts,
@@ -195,7 +261,7 @@ function Open({
                     value={`${rupiah(s.cash_in)} / ${rupiah(s.cash_out)}`}
                 />
                 <Stat
-                    label={t('Kas seharusnya')}
+                    label={t('Kas seharusnya di laci')}
                     value={rupiah(s.expected)}
                     hint={
                         s.cash_refunds
@@ -204,23 +270,9 @@ function Open({
                     }
                 />
             </div>
-            <section className="rounded-xl border bg-card p-3 text-sm">
-                <h2 className="mb-1 font-semibold">{t('Rekap sementara')}</h2>
-                <p>
-                    {shift.orders} order · {shift.voids} void · {t('diskon')}{' '}
-                    {rupiah(shift.discounts)} · {shift.comps} {t('komplimen')}
-                </p>
-                {shift.by_method.map((m) => (
-                    <p key={m.name} className="flex justify-between">
-                        <span>
-                            {m.name} ({m.count})
-                        </span>
-                        <span className="tabular-nums">{rupiah(m.total)}</span>
-                    </p>
-                ))}
-            </section>
+            <SalesBreakdown shift={shift} />
             <Movement accounts={accounts} movements={shift.movements} />
-            <CloseForm expected={s.expected} accounts={accounts.bank} />
+            <CloseForm shift={shift} accounts={accounts.bank} />
         </>
     );
 }
@@ -290,7 +342,7 @@ function Movement({
                     <option value="">{t('— pilih —')}</option>
                     {list.map((a) => (
                         <option key={a.id} value={a.id}>
-                            {a.code} {a.name}
+                            {a.name}
                         </option>
                     ))}
                 </Select>
@@ -335,79 +387,92 @@ function Movement({
     );
 }
 
-function CloseForm({
-    expected,
-    accounts,
-}: {
-    expected: number;
-    accounts: Acc[];
-}) {
-    const [counts, setCounts] = useState<Record<number, number>>({});
+function CloseForm({ shift, accounts }: { shift: ShiftData; accounts: Acc[] }) {
+    const expected = shift.summary.expected;
+    const [counted, setCounted] = useState<number | ''>('');
     const [left, setLeft] = useState<number | ''>('');
     const [reason, setReason] = useState('');
     const [busy, setBusy] = useState(false);
     const key = useRef(uuid());
 
-    const counted = useMemo(
-        () =>
-            Object.entries(counts).reduce((s, [d, c]) => s + Number(d) * c, 0),
-        [counts],
-    );
-    const diff = counted - expected;
+    const c = typeof counted === 'number' ? counted : 0;
+    const diff = c - expected;
     const leftN = typeof left === 'number' ? left : 0;
-    const bad = leftN > counted;
+    const bad = leftN > c;
+    const nonCash = shift.by_method.filter((m) => m.type !== 'cash');
 
     return (
         <section className="grid gap-3 rounded-xl border bg-card p-4">
             <h2 className="font-semibold">{t('Tutup shift')}</h2>
-            <p className="text-xs text-muted-foreground">
-                {t('Hitung uang fisik per pecahan.')}
-            </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {DENOMS.map((d) => (
-                    <label key={d} className="grid gap-1 text-xs">
-                        {rupiah(d)}
-                        <Input
-                            className="h-11 text-center"
-                            inputMode="numeric"
-                            value={counts[d] ?? ''}
-                            placeholder="0"
-                            onChange={(e) =>
-                                setCounts((c) => ({
-                                    ...c,
-                                    [d]: Math.max(
-                                        0,
-                                        Number(
-                                            e.target.value.replace(/\D/g, ''),
-                                        ) || 0,
-                                    ),
-                                }))
-                            }
-                            aria-label={`${t('Jumlah lembar')} ${rupiah(d)}`}
-                        />
-                    </label>
-                ))}
-            </div>
-            <dl
-                className="grid gap-1 rounded-lg bg-muted p-3 text-sm"
-                aria-live="polite"
-            >
+
+            <dl className="grid gap-1 rounded-lg bg-muted p-3 text-sm">
                 <div className="flex justify-between">
-                    <dt>{t('Kas seharusnya')}</dt>
+                    <dt>{t('Modal awal')}</dt>
+                    <dd className="tabular-nums">
+                        {rupiah(shift.summary.opening)}
+                    </dd>
+                </div>
+                <div className="flex justify-between">
+                    <dt>＋ {t('Penjualan tunai')}</dt>
+                    <dd className="tabular-nums">
+                        {rupiah(shift.summary.cash_sales)}
+                    </dd>
+                </div>
+                <div className="flex justify-between">
+                    <dt>＋ {t('Kas masuk')}</dt>
+                    <dd className="tabular-nums">
+                        {rupiah(shift.summary.cash_in)}
+                    </dd>
+                </div>
+                <div className="flex justify-between">
+                    <dt>－ {t('Kas keluar')}</dt>
+                    <dd className="tabular-nums">
+                        {rupiah(shift.summary.cash_out)}
+                    </dd>
+                </div>
+                <div className="flex justify-between">
+                    <dt>－ {t('Refund tunai')}</dt>
+                    <dd className="tabular-nums">
+                        {rupiah(shift.summary.cash_refunds)}
+                    </dd>
+                </div>
+                <div className="flex justify-between border-t pt-1 font-semibold">
+                    <dt>{t('Kas seharusnya di laci')}</dt>
                     <dd className="tabular-nums">{rupiah(expected)}</dd>
                 </div>
-                <div className="flex justify-between">
-                    <dt>{t('Kas fisik')}</dt>
-                    <dd className="tabular-nums">{rupiah(counted)}</dd>
-                </div>
-                <div
-                    className={`flex justify-between font-semibold ${diff === 0 ? 'text-emerald-700' : 'text-red-700'}`}
-                >
-                    <dt>{t('Selisih')}</dt>
-                    <dd className="tabular-nums">{rupiah(diff)}</dd>
-                </div>
+                {nonCash.map((m) => (
+                    <div
+                        key={m.name}
+                        className="flex justify-between text-xs text-muted-foreground"
+                    >
+                        <dt>
+                            {m.name} ({t('masuk rekening, bukan laci')})
+                        </dt>
+                        <dd className="tabular-nums">{rupiah(m.total)}</dd>
+                    </div>
+                ))}
             </dl>
-            {diff !== 0 && (
+
+            <Field
+                label={t('Uang tunai di laci (hasil hitung kasir)')}
+                hint={t(
+                    'Isi total nominal uang tunai yang benar-benar ada, tidak perlu per pecahan.',
+                )}
+            >
+                <MoneyInput value={counted} onChange={setCounted} autoFocus />
+            </Field>
+            <div
+                className={`flex justify-between rounded-lg p-3 text-sm font-semibold ${counted === '' ? 'bg-muted' : diff === 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}
+                aria-live="polite"
+            >
+                <span>{t('Selisih')}</span>
+                <span className="tabular-nums">
+                    {counted === ''
+                        ? '—'
+                        : `${diff > 0 ? '+' : ''}${rupiah(diff)}`}
+                </span>
+            </div>
+            {counted !== '' && diff !== 0 && (
                 <Field label={t('Alasan selisih (wajib)')}>
                     <Input
                         className="h-11"
@@ -422,10 +487,10 @@ function CloseForm({
             <p className="text-sm">
                 {t('Disetor')}:{' '}
                 <strong className="tabular-nums">
-                    {rupiah(Math.max(0, counted - leftN))}
+                    {rupiah(Math.max(0, c - leftN))}
                 </strong>
             </p>
-            {counted - leftN > 0 && (
+            {c - leftN > 0 && (
                 <Field label={t('Setor ke')}>
                     <DepositTo accounts={accounts} />
                 </Field>
@@ -439,7 +504,11 @@ function CloseForm({
                 variant="destructive"
                 className="h-12"
                 disabled={
-                    busy || bad || left === '' || (diff !== 0 && !reason.trim())
+                    busy ||
+                    bad ||
+                    counted === '' ||
+                    left === '' ||
+                    (diff !== 0 && !reason.trim())
                 }
                 onClick={() => {
                     if (
@@ -461,9 +530,7 @@ function CloseForm({
                     router.post(
                         '/shift/close',
                         {
-                            denominations: Object.fromEntries(
-                                DENOMS.map((d) => [d, counts[d] ?? 0]),
-                            ),
+                            counted_cash: counted,
                             cash_left: left,
                             deposit_account_id: target ? Number(target) : null,
                             difference_reason: reason || null,

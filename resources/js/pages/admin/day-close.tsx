@@ -1,4 +1,5 @@
 import { Head, router } from '@inertiajs/react';
+import { ChartCard, LineChart } from '@/components/pos/charts';
 import { PageHeader, ResponsiveTable, Stat } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { dateId, rupiah, timeId } from '@/lib/format';
@@ -36,6 +37,20 @@ export default function DayClose({
                 <PageHeader
                     title="Tutup hari (Z-report)"
                     subtitle={`Hari bisnis ${dateId(date)}`}
+                    actions={
+                        <>
+                            <Button asChild variant="outline" className="h-11">
+                                <a href="/admin/day-close/export?format=xlsx">
+                                    Unduh Excel
+                                </a>
+                            </Button>
+                            <Button asChild variant="outline" className="h-11">
+                                <a href="/admin/day-close/export?format=pdf">
+                                    Unduh PDF
+                                </a>
+                            </Button>
+                        </>
+                    }
                 />
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                     <Stat
@@ -101,6 +116,15 @@ export default function DayClose({
                     </Button>
                 )}
 
+                <ChartCard title="Omzet bersih per hari (riwayat tutup hari)">
+                    <LineChart
+                        title="Omzet bersih per hari"
+                        data={[...history].reverse().map((h) => ({
+                            label: h.date,
+                            value: h.summary.net,
+                        }))}
+                    />
+                </ChartCard>
                 <section>
                     <h2 className="mb-2 font-semibold">Riwayat</h2>
                     <ResponsiveTable

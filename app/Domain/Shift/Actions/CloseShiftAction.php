@@ -17,19 +17,19 @@ class CloseShiftAction
     public function __construct(private PostJournalAction $journal, private ShiftCash $cash) {}
 
     /**
-     * @param  array<int, int>  $denominations  denomination (Rp) => count
+     * @param  int  $countedCash  physical cash the cashier counted in the drawer
      * @param  int|null  $depositAccountId  bank account receiving the deposit; null = handed to owner (recorded against Modal Pemilik)
      */
     public function handle(
         Shift $shift,
         User $user,
-        array $denominations,
+        int $countedCash,
         int $cashLeft,
         ?int $depositAccountId = null,
         ?string $differenceReason = null,
         ?string $closeKey = null,
     ): Shift {
-        return DB::transaction(function () use ($shift, $user, $denominations, $cashLeft, $depositAccountId, $differenceReason, $closeKey) {
+        return DB::transaction(function () use ($shift, $user, $countedCash, $cashLeft, $depositAccountId, $differenceReason, $closeKey) {
             $shift = Shift::query()->lockForUpdate()->findOrFail($shift->id);
             if (! $shift->isOpen()) {
                 if ($closeKey !== null && $shift->close_key === $closeKey) {
@@ -41,13 +41,10 @@ class CloseShiftAction
                 throw new OrderException('Hanya pemilik shift atau manager yang bisa menutup shift ini.');
             }
 
-            $counted = 0;
-            foreach ($denominations as $denom => $count) {
-                if ($denom <= 0 || $count < 0) {
-                    throw new OrderException('Pecahan uang tidak valid.');
-                }
-                $counted += $denom * $count;
+            if ($countedCash < 0) {
+                throw new OrderException('Kas fisik tidak boleh negatif.');
             }
+            $counted = $countedCash;
 
             $expected = $this->cash->summarize($shift)['expected'];
             $difference = $counted - $expected;
@@ -60,7 +57,7 @@ class CloseShiftAction
             $deposit = $counted - $cashLeft;
 
             $shift->update([
-                'expected_cash' => $expected, 'counted_cash' => $counted, 'denominations' => $denominations,
+                'expected_cash' => $expected, 'counted_cash' => $counted,
                 'cash_left' => $cashLeft, 'cash_deposited' => $deposit, 'deposit_account_id' => $depositAccountId,
                 'difference' => $difference, 'difference_reason' => $differenceReason,
                 'closed_at' => now(), 'close_key' => $closeKey,

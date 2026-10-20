@@ -174,7 +174,7 @@ it('logs the cashier out when the shift is closed', function () {
 });
 
 it('requires owner 2FA when enabled', function () {
-    config(['pos.require_owner_2fa' => true]);
+    setting('security.require_owner_2fa', true);
     $this->actingAs(userWithRole('owner'))->get('/admin/menu')->assertRedirect(route('security.edit'));
     $this->actingAs(userWithRole('manager'))->get('/admin/menu')->assertOk();
 });

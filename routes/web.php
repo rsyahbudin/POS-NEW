@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Auth\PinLoginController;
 use App\Http\Controllers\Kds\KdsController;
 use App\Http\Controllers\Pos\OrderController;
 use App\Http\Controllers\Pos\PosController;
@@ -35,6 +36,8 @@ Route::get('r/{publicId}', [ReceiptController::class, 'show'])->middleware('thro
 | Staff
 |--------------------------------------------------------------------------
 */
+Route::post('login/pin', [PinLoginController::class, 'store'])->middleware(['guest', 'throttle:6,1'])->name('login.pin');
+
 Route::get('/', function () {
     $user = auth()->user();
     if (! $user) {

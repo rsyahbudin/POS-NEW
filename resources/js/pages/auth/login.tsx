@@ -1,4 +1,5 @@
 import { Form, Head } from '@inertiajs/react';
+import { useState } from 'react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import TextLink from '@/components/text-link';
@@ -14,9 +15,70 @@ import PasskeyVerify from '@/components/passkey-verify';
 type Props = {
     status?: string;
     canResetPassword: boolean;
+    pinLogin?: boolean;
 };
 
-export default function Login({ status, canResetPassword }: Props) {
+export default function Login({
+    status,
+    canResetPassword,
+    pinLogin = false,
+}: Props) {
+    const [mode, setMode] = useState<'pin' | 'email'>(
+        pinLogin ? 'pin' : 'email',
+    );
+
+    if (mode === 'pin') {
+        return (
+            <>
+                <Head title="Masuk dengan PIN" />
+                <Form
+                    action="/login/pin"
+                    method="post"
+                    resetOnError
+                    className="flex flex-col gap-6"
+                >
+                    {({ processing, errors }) => (
+                        <div className="grid gap-6">
+                            <div className="grid gap-2">
+                                <Label htmlFor="pin">PIN (6 digit)</Label>
+                                <Input
+                                    id="pin"
+                                    name="pin"
+                                    type="password"
+                                    inputMode="numeric"
+                                    pattern="[0-9]{6}"
+                                    maxLength={6}
+                                    required
+                                    autoFocus
+                                    autoComplete="off"
+                                    placeholder="••••••"
+                                    className="h-14 text-center text-2xl tracking-[0.5em]"
+                                />
+                                <InputError message={errors.pin} />
+                            </div>
+                            <Button
+                                type="submit"
+                                className="h-12 w-full"
+                                disabled={processing}
+                                data-test="pin-login-button"
+                            >
+                                {processing && <Spinner />}
+                                Masuk
+                            </Button>
+                            <button
+                                type="button"
+                                className="text-sm text-muted-foreground underline"
+                                onClick={() => setMode('email')}
+                            >
+                                Login owner / manager (email)
+                            </button>
+                        </div>
+                    )}
+                </Form>
+            </>
+        );
+    }
+
     return (
         <>
             <Head title="Log in" />
@@ -94,6 +156,16 @@ export default function Login({ status, canResetPassword }: Props) {
                 )}
             </Form>
 
+            {pinLogin && (
+                <button
+                    type="button"
+                    className="mt-4 w-full text-center text-sm text-muted-foreground underline"
+                    onClick={() => setMode('pin')}
+                >
+                    Masuk dengan PIN (staf)
+                </button>
+            )}
+
             {status && (
                 <div className="mb-4 text-center text-sm font-medium text-green-600">
                     {status}
@@ -104,6 +176,6 @@ export default function Login({ status, canResetPassword }: Props) {
 }
 
 Login.layout = {
-    title: 'Log in to your account',
-    description: 'Enter your email and password below to log in',
+    title: 'Masuk ke POS',
+    description: 'Staf: masukkan PIN. Owner/manager: email dan password.',
 };

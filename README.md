@@ -35,7 +35,7 @@ Akun demo (password `password`; PIN manager 6 digit untuk void/diskon di atas ba
 Hak akses tiap peran bisa diubah owner di `/admin/roles` (Peran & Akses), tanpa ubah kode.
 Setelah login: `/pos` (kasir), `/kds` (dapur; opsional, aktifkan di Pengaturan > Dapur — laporan `Kinerja Dapur` menghitung menit tunggu/buat per item), `/shift`, `/dashboard`, `/admin/*` (back office).
 QR meja: `/m/{token}` (token dicetak lewat Admin › Meja & QR › PDF).
-Ganti password demo sebelum produksi. `POS_REQUIRE_OWNER_2FA=true` (default di `.env.example`) mewajibkan 2FA owner.
+Ganti password demo sebelum produksi. Login: owner/manager memakai email + password; staf (kasir, waiter, dapur) cukup PIN 6 digit masing-masing (diatur di menu User; peran yang boleh PIN diatur di Pengaturan > Keamanan). 2FA owner opsional (Pengaturan > Keamanan).
 
 ## Test & kualitas
 
@@ -90,6 +90,5 @@ Semua modul punya Action, endpoint, halaman, dan test, dengan catatan di bawah.
   keluar dari halaman Shift agar masuk hitungan laci. Shift pertama tanpa shift sebelumnya tidak membuat jurnal
   modal awal; isi saldo awal lewat Akuntansi › Jurnal manual (jurnal pembuka terhadap Modal Pemilik).
 - Registrasi publik dan verifikasi email bawaan starter dinonaktifkan (staf dibuat owner).
-- Env lokal memakai `POS_REQUIRE_OWNER_2FA=false` agar mudah dicoba; set `true` untuk staging/produksi.
 
 Deploy: lihat [docs/deploy](docs/deploy/README.md).

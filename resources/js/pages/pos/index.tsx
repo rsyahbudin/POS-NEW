@@ -694,7 +694,7 @@ export default function PosPage(props: Props) {
         <>
             <Head title="Kasir" />
             <div className="flex h-dvh flex-col bg-background">
-                <header className="flex items-center gap-2 border-b bg-card px-3 py-2">
+                <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b bg-card px-3 py-2">
                     <Link href="/" className="text-base font-semibold">
                         POS
                     </Link>
@@ -715,9 +715,13 @@ export default function PosPage(props: Props) {
                     {!online && (
                         <span
                             role="status"
+                            aria-label="Offline"
                             className="flex items-center gap-1 rounded bg-red-100 px-2 py-0.5 text-xs text-red-900"
                         >
-                            <WifiOff className="size-3" /> Offline
+                            <WifiOff className="size-3" />{' '}
+                            <span className="hidden min-[400px]:inline">
+                                Offline
+                            </span>
                         </span>
                     )}
                     <div className="ml-auto flex items-center gap-1">

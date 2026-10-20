@@ -21,7 +21,6 @@ export const e2eEnv = {
     CACHE_STORE: 'file',
     QUEUE_CONNECTION: 'sync',
     BROADCAST_CONNECTION: 'null',
-    POS_REQUIRE_OWNER_2FA: 'false',
     PHP_CLI_SERVER_WORKERS: '4',
 };
 

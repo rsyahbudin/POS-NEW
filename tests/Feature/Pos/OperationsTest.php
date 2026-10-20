@@ -149,9 +149,11 @@ it('is opened from Settings and then works again', function () {
 
 // ---------------------------------------------------------------- kitchen performance report
 
-function timedItem(string $product, int $waitMin, int $makeMin, ?string $at = null): void
+function timedItem(string $product, int $waitMin, int $makeMin): void
 {
-    $order = placeOrder(items: [['product_id' => product($product)->id, 'qty' => 1]], tableId: Table::query()->inRandomOrder()->value('id'));
+    static $n = 0;
+    $n %= 6;
+    $order = placeOrder(items: [['product_id' => product($product)->id, 'qty' => 1]], tableId: Table::query()->orderBy('id')->skip($n++)->value('id'));
     $item = $order->items->first();
     $t0 = now()->subMinutes(60);
     $item->round->update(['confirmed_at' => $t0]);
@@ -178,7 +180,7 @@ it('measures how many minutes the kitchen takes per item', function () {
 
 it('ignores voided and never-finished items in the kitchen report', function () {
     timedItem('Americano', 1, 4);
-    $order = placeOrder(items: [['product_id' => product('Croissant')->id, 'qty' => 1]], tableId: Table::query()->skip(2)->value('id')); // never marked ready
+    $order = placeOrder(items: [['product_id' => product('Croissant')->id, 'qty' => 1]], tableId: Table::query()->skip(8)->value('id')); // never marked ready
     expect($order->items->first()->ready_at)->toBeNull();
 
     $d = BusinessDate::for();
@@ -196,4 +198,52 @@ it('serves the kitchen report page and exports, only to those who may see sales 
     $this->actingAs($manager)->get("/admin/reports/kitchen/export?from={$d}&to={$d}&format=pdf")->assertOk();
     $this->actingAs(userWithRole('cashier'))->get('/admin/reports/kitchen')->assertForbidden();
     $this->actingAs($manager)->get('/admin/reports/kitchen?dimension=bogus')->assertStatus(302);
+});
+
+// ---------------------------------------------------------------- PIN login
+
+it('logs floor staff in with their own PIN and sends them home', function () {
+    $cashier = userWithRole('cashier');
+    $cashier->forceFill(['pin_hash' => Hash::make('123456')])->save();
+
+    $this->post('/login/pin', ['pin' => '123456'])->assertRedirect('/');
+    $this->assertAuthenticatedAs($cashier);
+});
+
+it('rejects a wrong PIN, an inactive user and PINs of office roles', function () {
+    $cashier = userWithRole('cashier');
+    $cashier->forceFill(['pin_hash' => Hash::make('123456')])->save();
+    $manager = userWithRole('manager');
+    $manager->forceFill(['pin_hash' => Hash::make('222222')])->save();
+
+    $this->post('/login/pin', ['pin' => '000000'])->assertSessionHasErrors('pin');
+    $this->post('/login/pin', ['pin' => '222222'])->assertSessionHasErrors('pin'); // manager: email + password only
+    $this->assertGuest();
+
+    $cashier->update(['is_active' => false]);
+    $this->post('/login/pin', ['pin' => '123456'])->assertSessionHasErrors('pin');
+    $this->assertGuest();
+});
+
+it('lets the owner choose which roles use PIN login, or turn it off', function () {
+    $manager = userWithRole('manager');
+    $manager->forceFill(['pin_hash' => Hash::make('222222')])->save();
+    setting('security.pin_login_roles', 'cashier,manager');
+    $this->post('/login/pin', ['pin' => '222222'])->assertRedirect('/');
+    $this->post('/logout');
+
+    setting('security.pin_login_roles', '');
+    $this->get('/login')->assertInertia(fn ($p) => $p->where('pinLogin', false));
+    $this->post('/login/pin', ['pin' => '222222'])->assertSessionHasErrors('pin');
+});
+
+it('throttles PIN guessing', function () {
+    foreach (range(1, 6) as $i) {
+        $this->post('/login/pin', ['pin' => '00000'.$i]);
+    }
+    $this->post('/login/pin', ['pin' => '000007'])->assertStatus(429);
+});
+
+it('leaves owner 2FA off unless Pengaturan > Keamanan turns it on', function () {
+    $this->actingAs(userWithRole('owner'))->get('/admin/menu')->assertOk();
 });

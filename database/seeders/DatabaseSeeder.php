@@ -25,12 +25,12 @@ class DatabaseSeeder extends Seeder
             ['owner', 'Owner', 'owner@pos.test', '111111'],
             ['manager', 'Manager', 'manager@pos.test', '222222'],
             ['cashier', 'Kasir', 'kasir@pos.test', '333333'],
-            ['waiter', 'Waiter', 'waiter@pos.test', null],
-            ['kitchen', 'Dapur', 'dapur@pos.test', null],
+            ['waiter', 'Waiter', 'waiter@pos.test', '444444'],
+            ['kitchen', 'Dapur', 'dapur@pos.test', '555555'],
         ] as [$role, $name, $email, $pin]) {
             $user = User::firstOrCreate(['email' => $email], [
                 'name' => $name, 'password' => Hash::make('password'), 'outlet_id' => $outlet->id,
-                'pin_hash' => $pin ? Hash::make($pin) : null, 'email_verified_at' => now(),
+                'pin_hash' => Hash::make($pin), 'email_verified_at' => now(),
             ]);
             $user->syncRoles([$role]);
         }

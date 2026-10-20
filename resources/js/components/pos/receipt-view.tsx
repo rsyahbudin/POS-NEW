@@ -56,6 +56,11 @@ export function ReceiptView({ r }: { r: Receipt }) {
             ))}
             {r.change > 0 && <Line l="Kembali" r={rupiah(r.change)} />}
             {r.footer && <p className="mt-3 text-center">{r.footer}</p>}
+            {r.show_link && (
+                <p className="mt-2 text-center text-[11px] break-all">
+                    {r.public_url}
+                </p>
+            )}
         </div>
     );
 }

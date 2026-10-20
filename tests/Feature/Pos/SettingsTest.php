@@ -6,8 +6,10 @@ use App\Domain\Ordering\Actions\SubmitQrOrderAction;
 use App\Domain\Ordering\Enums\RoundStatus;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Ordering\Models\OrderItem;
+use App\Domain\Settings\Models\Outlet;
 use App\Domain\Settings\SettingsCatalog;
 use App\Domain\Settings\SettingsRepository;
+use App\Http\Presenters\ReceiptPresenter;
 use App\Support\ApprovalGate;
 use Spatie\Activitylog\Models\Activity;
 
@@ -104,4 +106,27 @@ it('hides ready items from the kitchen after the configured minutes', function (
     setting('kitchen.ready_visible_minutes', 2);
     $this->actingAs($kitchen)->getJson($url)->assertJsonCount(0, 'tickets');
     expect(OrderItem::query()->count())->toBe(1);
+});
+
+it('customises the receipt from settings: header, toggles and digital link', function () {
+    openShiftFor(userWithRole('cashier'), 0);
+    Outlet::query()->update(['npwp' => '01.234.567.8-901.000']);
+    $order = placeOrder();
+    pay($order);
+    $bill = $order->bills()->first();
+
+    $r = ReceiptPresenter::forBill($bill);
+    expect($r['cashier'])->not->toBeNull()->and($r['table'])->not->toBeNull()->and($r['outlet']['npwp'])->toBe('01.234.567.8-901.000')
+        ->and($r['header'])->toBeNull()->and($r['show_link'])->toBeFalse();
+
+    setting('receipt.header', 'WA 0812-0000-0000');
+    setting('receipt.show_cashier', false);
+    setting('receipt.show_table', false);
+    setting('receipt.show_npwp', false);
+    setting('receipt.show_link', true);
+    setting('receipt.footer', 'Sampai jumpa lagi');
+
+    $r = ReceiptPresenter::forBill($bill->fresh());
+    expect($r['header'])->toBe('WA 0812-0000-0000')->and($r['cashier'])->toBeNull()->and($r['table'])->toBeNull()
+        ->and($r['outlet']['npwp'])->toBeNull()->and($r['show_link'])->toBeTrue()->and($r['footer'])->toBe('Sampai jumpa lagi');
 });

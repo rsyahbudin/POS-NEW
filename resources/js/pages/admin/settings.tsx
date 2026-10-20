@@ -7,7 +7,9 @@ import {
     Select,
     Tabs,
 } from '@/components/pos/ui';
+import { ReceiptView } from '@/components/pos/receipt-view';
 import { Button } from '@/components/ui/button';
+import type { Receipt } from '@/types/pos';
 import { Input } from '@/components/ui/input';
 
 type Acc = { id: number; code: string; name: string };
@@ -110,6 +112,7 @@ export default function SettingsPage({
                         key={active.key}
                         tab={active}
                         settings={settings}
+                        outlet={outlet}
                     />
                 )}
                 {tab === 'pay' && (
@@ -178,12 +181,68 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
     );
 }
 
+function sampleReceipt(
+    v: Record<string, string | number | boolean | null>,
+    outlet: Props['outlet'],
+): Receipt {
+    const on = (k: string) => v[k] === true;
+
+    return {
+        copy: false,
+        outlet: {
+            name: outlet.name,
+            address: outlet.address,
+            npwp: on('receipt.show_npwp')
+                ? (outlet.npwp ?? '00.000.000.0-000.000')
+                : null,
+        },
+        header: v['receipt.header'] ? String(v['receipt.header']) : null,
+        show_link: on('receipt.show_link'),
+        order_number: 'ORD-261020-0001',
+        label: null,
+        is_split: false,
+        date: '20 Okt 2026 12:30',
+        cashier: on('receipt.show_cashier') ? 'Kasir' : null,
+        table: on('receipt.show_table') ? 'I-1' : null,
+        call_number: on('receipt.show_call_number') ? 'A-001' : null,
+        items: [
+            {
+                name: 'Americano',
+                qty: 2,
+                unit_price: 27000,
+                line_total: 54000,
+                modifiers: ['Extra Shot'],
+            },
+            {
+                name: 'Croissant',
+                qty: 1,
+                unit_price: 25000,
+                line_total: 25000,
+                modifiers: [],
+            },
+        ],
+        subtotal: 79000,
+        discount_total: 0,
+        charges: [],
+        rounding: 0,
+        grand_total: 79000,
+        payments: [
+            { method: 'Tunai', amount: 79000, tendered: 100000, change: 21000 },
+        ],
+        change: 21000,
+        footer: v['receipt.footer'] ? String(v['receipt.footer']) : null,
+        public_url: 'https://contoh.com/r/01ABC',
+    };
+}
+
 function CatalogForm({
     tab,
     settings,
+    outlet,
 }: {
     tab: CatalogTab;
     settings: Props['settings'];
+    outlet: Props['outlet'];
 }) {
     const fields = tab.groups.flatMap((g) => g.fields);
     const [v, setV] = useState<
@@ -198,105 +257,130 @@ function CatalogForm({
     );
 
     return (
-        <div className="grid max-w-2xl gap-4">
-            {tab.groups.map((g) => (
-                <section
-                    key={g.title}
-                    className="grid gap-4 rounded-xl border bg-card p-4"
-                >
-                    <h2 className="font-semibold">{g.title}</h2>
-                    {g.fields.map((f) =>
-                        f.type === 'bool' ? (
-                            <label
-                                key={f.key}
-                                className="flex cursor-pointer items-start gap-3 rounded-lg border p-3"
-                            >
-                                <input
-                                    type="checkbox"
-                                    role="switch"
-                                    className="mt-0.5 size-6 shrink-0"
-                                    checked={v[f.key] === true}
-                                    onChange={(e) =>
-                                        setV({
-                                            ...v,
-                                            [f.key]: e.target.checked,
-                                        })
-                                    }
-                                />
-                                <span>
-                                    <span className="block font-medium">
-                                        {f.label}
-                                    </span>
-                                    <span className="block text-xs text-muted-foreground">
-                                        {f.hint}
-                                    </span>
-                                </span>
-                            </label>
-                        ) : (
-                            <Field key={f.key} label={f.label} hint={f.hint}>
-                                {f.type === 'select' ? (
-                                    <Select
-                                        value={String(v[f.key] ?? '')}
+        <div
+            className={
+                tab.key === 'pos'
+                    ? 'grid items-start gap-4 lg:grid-cols-[minmax(0,40rem)_380px]'
+                    : ''
+            }
+        >
+            <div className="grid max-w-2xl gap-4">
+                {tab.groups.map((g) => (
+                    <section
+                        key={g.title}
+                        className="grid gap-4 rounded-xl border bg-card p-4"
+                    >
+                        <h2 className="font-semibold">{g.title}</h2>
+                        {g.fields.map((f) =>
+                            f.type === 'bool' ? (
+                                <label
+                                    key={f.key}
+                                    className="flex cursor-pointer items-start gap-3 rounded-lg border p-3"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        role="switch"
+                                        className="mt-0.5 size-6 shrink-0"
+                                        checked={v[f.key] === true}
                                         onChange={(e) =>
                                             setV({
                                                 ...v,
-                                                [f.key]: e.target.value,
-                                            })
-                                        }
-                                    >
-                                        {f.options?.map(([val, label]) => (
-                                            <option key={val} value={val}>
-                                                {label}
-                                            </option>
-                                        ))}
-                                    </Select>
-                                ) : (
-                                    <Input
-                                        className="h-11"
-                                        type={
-                                            f.type === 'time'
-                                                ? 'time'
-                                                : f.type === 'int'
-                                                  ? 'number'
-                                                  : f.type === 'secret'
-                                                    ? 'password'
-                                                    : 'text'
-                                        }
-                                        min={f.min}
-                                        max={f.max}
-                                        value={String(v[f.key] ?? '')}
-                                        onChange={(e) =>
-                                            setV({
-                                                ...v,
-                                                [f.key]: e.target.value,
+                                                [f.key]: e.target.checked,
                                             })
                                         }
                                     />
-                                )}
-                            </Field>
-                        ),
-                    )}
-                </section>
-            ))}
-            <Button
-                className="h-12"
-                onClick={() =>
-                    router.post(
-                        '/admin/settings',
-                        {
-                            values: Object.fromEntries(
-                                Object.entries(v).map(([k, x]) => [
-                                    k,
-                                    x === '' ? null : x,
-                                ]),
+                                    <span>
+                                        <span className="block font-medium">
+                                            {f.label}
+                                        </span>
+                                        <span className="block text-xs text-muted-foreground">
+                                            {f.hint}
+                                        </span>
+                                    </span>
+                                </label>
+                            ) : (
+                                <Field
+                                    key={f.key}
+                                    label={f.label}
+                                    hint={f.hint}
+                                >
+                                    {f.type === 'select' ? (
+                                        <Select
+                                            value={String(v[f.key] ?? '')}
+                                            onChange={(e) =>
+                                                setV({
+                                                    ...v,
+                                                    [f.key]: e.target.value,
+                                                })
+                                            }
+                                        >
+                                            {f.options?.map(([val, label]) => (
+                                                <option key={val} value={val}>
+                                                    {label}
+                                                </option>
+                                            ))}
+                                        </Select>
+                                    ) : (
+                                        <Input
+                                            className="h-11"
+                                            type={
+                                                f.type === 'time'
+                                                    ? 'time'
+                                                    : f.type === 'int'
+                                                      ? 'number'
+                                                      : f.type === 'secret'
+                                                        ? 'password'
+                                                        : 'text'
+                                            }
+                                            min={f.min}
+                                            max={f.max}
+                                            value={String(v[f.key] ?? '')}
+                                            onChange={(e) =>
+                                                setV({
+                                                    ...v,
+                                                    [f.key]: e.target.value,
+                                                })
+                                            }
+                                        />
+                                    )}
+                                </Field>
                             ),
-                        },
-                        { preserveScroll: true },
-                    )
-                }
-            >
-                Simpan pengaturan
-            </Button>
+                        )}
+                    </section>
+                ))}
+                <Button
+                    className="h-12"
+                    onClick={() =>
+                        router.post(
+                            '/admin/settings',
+                            {
+                                values: Object.fromEntries(
+                                    Object.entries(v).map(([k, x]) => [
+                                        k,
+                                        x === '' ? null : x,
+                                    ]),
+                                ),
+                            },
+                            { preserveScroll: true },
+                        )
+                    }
+                >
+                    Simpan pengaturan
+                </Button>
+            </div>
+            {tab.key === 'pos' && (
+                <aside
+                    className="sticky top-4 rounded-2xl border bg-muted p-3"
+                    aria-label="Pratinjau struk"
+                >
+                    <p className="mb-2 text-center text-xs font-medium text-muted-foreground">
+                        Pratinjau struk
+                    </p>
+                    <div className="overflow-hidden rounded-xl border">
+                        <ReceiptView r={sampleReceipt(v, outlet)} />
+                    </div>
+                </aside>
+            )}
         </div>
     );
 }

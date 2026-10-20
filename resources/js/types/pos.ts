@@ -196,6 +196,8 @@ export type Receipt = {
         address: string | null;
         npwp: string | null;
     };
+    header: string | null;
+    show_link: boolean;
     order_number: string;
     label: string | null;
     is_split: boolean;

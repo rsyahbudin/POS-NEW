@@ -16,6 +16,7 @@ createdb -h 127.0.0.1 -U postgres pos_testing  # database test (PostgreSQL asli,
 cp .env.example .env && php artisan key:generate
 composer install && npm install
 php artisan migrate --seed
+php artisan storage:link                       # foto produk, logo, foto nota
 composer run dev                               # server, queue/Horizon, Reverb, Vite, log
 ```
 

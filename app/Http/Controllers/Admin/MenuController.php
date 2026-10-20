@@ -12,6 +12,7 @@ use App\Domain\Settings\OutletContext;
 use App\Http\Controllers\Controller;
 use App\Support\Audit;
 use App\Support\ImageOptimizer;
+use App\Support\MediaUrl;
 use App\Support\Realtime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -36,7 +37,7 @@ class MenuController extends Controller
             'products' => Product::query()->where('outlet_id', $id)->with(['variants', 'modifierGroups:id'])->orderBy('category_id')->orderBy('sort')->get()->map(fn ($p) => [
                 'id' => $p->id, 'name' => $p->name, 'sku' => $p->sku, 'description' => $p->description, 'category_id' => $p->category_id, 'station_id' => $p->station_id,
                 'base_price' => $p->base_price, 'is_available' => $p->is_available, 'stock_qty' => $p->stock_qty, 'sort' => $p->sort,
-                'image' => $p->image_path ? \Storage::url($p->image_path) : null,
+                'image' => MediaUrl::public($p->image_path),
                 'variants' => $p->variants->map(fn ($v) => ['id' => $v->id, 'name' => $v->name, 'price' => $v->price])->all(),
                 'modifier_group_ids' => $p->modifierGroups->pluck('id')->all(),
             ]),

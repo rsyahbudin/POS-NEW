@@ -5,7 +5,7 @@ namespace App\Http\Presenters;
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Floor\Models\Area;
 use App\Domain\Ordering\Models\Order;
-use Illuminate\Support\Facades\Storage;
+use App\Support\MediaUrl;
 
 class MenuPresenter
 {
@@ -23,7 +23,7 @@ class MenuPresenter
                 'name' => $c->name,
                 'products' => $c->products->filter(fn ($p) => ! $onlyAvailable || $p->is_available)->map(fn ($p) => [
                     'id' => $p->id, 'name' => $p->name, 'sku' => $p->sku, 'description' => $p->description,
-                    'price' => $p->base_price, 'image' => $p->image_path ? Storage::url($p->image_path) : null,
+                    'price' => $p->base_price, 'image' => MediaUrl::public($p->image_path),
                     'is_available' => $p->is_available, 'stock_qty' => $p->stock_qty,
                     'variants' => $p->variants->map(fn ($v) => ['id' => $v->id, 'name' => $v->name, 'price' => $v->price])->all(),
                     'modifier_groups' => $p->modifierGroups->map(fn ($g) => [

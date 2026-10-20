@@ -90,6 +90,16 @@ export function ProductGrid({
                                 markMode && 'ring-2 ring-amber-500',
                             )}
                         >
+                            {p.image && (
+                                <img
+                                    src={p.image}
+                                    alt=""
+                                    width={96}
+                                    height={64}
+                                    loading="lazy"
+                                    className="mb-2 h-16 w-full rounded-lg object-cover"
+                                />
+                            )}
                             <span className="line-clamp-2 text-sm leading-tight font-medium">
                                 {p.name}
                             </span>

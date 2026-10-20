@@ -11,6 +11,7 @@ use App\Exports\ReportSheet;
 use App\Http\Controllers\Controller;
 use App\Support\BusinessDate;
 use App\Support\ImageOptimizer;
+use App\Support\MediaUrl;
 use App\Support\ReportFile;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -33,7 +34,7 @@ class ExpenseController extends Controller
             'filters' => compact('from', 'to'),
             'expenses' => Expense::query()->where('outlet_id', $id)->whereBetween('date', [$from, $to])->with('category')->latest('date')->latest('id')->get()->map(fn ($e) => [
                 'id' => $e->id, 'date' => $e->date->format('Y-m-d'), 'category' => $e->category->name, 'amount' => $e->amount, 'note' => $e->note,
-                'receipt' => $e->receipt_path ? \Storage::url($e->receipt_path) : null,
+                'receipt' => $e->receipt_path ? MediaUrl::public($e->receipt_path) : null,
             ]),
             'categories' => ExpenseCategory::query()->where('outlet_id', $id)->orderBy('name')->get(['id', 'name']),
             'sources' => Account::query()->where('outlet_id', $id)->where('type', 'asset')->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),

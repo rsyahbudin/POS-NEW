@@ -13,6 +13,7 @@ use App\Domain\Settings\SettingsRepository;
 use App\Http\Controllers\Controller;
 use App\Support\Audit;
 use App\Support\ImageOptimizer;
+use App\Support\MediaUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -34,7 +35,7 @@ class SettingsController extends Controller
         $values['telegram.bot_token'] = $values['telegram.bot_token'] ? '••••••••' : null;
 
         return Inertia::render('admin/settings', [
-            'outlet' => Outlet::find($id)?->only(['name', 'address', 'npwp']) + ['logo' => Outlet::find($id)?->logo_path ? \Storage::url(Outlet::find($id)->logo_path) : null],
+            'outlet' => Outlet::find($id)?->only(['name', 'address', 'npwp']) + ['logo' => Outlet::find($id)?->logo_path ? MediaUrl::public(Outlet::find($id)->logo_path) : null],
             'settings' => $values,
             'catalog' => SettingsCatalog::tabs(),
             'paymentMethods' => PaymentMethod::query()->where('outlet_id', $id)->orderBy('sort')->get(['id', 'name', 'type', 'account_id', 'is_active']),

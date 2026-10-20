@@ -12,6 +12,7 @@ export function ReasonDialog({
     confirmLabel,
     destructive,
     extra,
+    quick,
     onClose,
     onSubmit,
 }: {
@@ -20,6 +21,7 @@ export function ReasonDialog({
     confirmLabel: string;
     destructive?: boolean;
     extra?: React.ReactNode;
+    quick?: string[];
     onClose: () => void;
     onSubmit: (reason: string) => Promise<void> | void;
 }) {
@@ -38,6 +40,22 @@ export function ReasonDialog({
                     onChange={(e) => setReason(e.target.value)}
                 />
             </Field>
+            {quick && (
+                <div className="flex flex-wrap gap-2">
+                    {quick.map((q) => (
+                        <Button
+                            key={q}
+                            type="button"
+                            size="sm"
+                            variant={reason === q ? 'default' : 'outline'}
+                            className="h-9"
+                            onClick={() => setReason(q)}
+                        >
+                            {q}
+                        </Button>
+                    ))}
+                </div>
+            )}
             <Button
                 type="button"
                 variant={destructive ? 'destructive' : 'default'}

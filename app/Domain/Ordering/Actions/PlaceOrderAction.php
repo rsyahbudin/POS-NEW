@@ -50,7 +50,7 @@ class PlaceOrderAction
         $outletId = $this->outlet->id();
         $type = OrderType::from((string) $data['type']);
 
-        if ($type === OrderType::DineIn && empty($data['table_id'])) {
+        if ($type === OrderType::DineIn && empty($data['table_id']) && empty($data['counter']) && empty($data['order_id'])) {
             throw new OrderException('Pilih meja untuk dine-in.');
         }
         if ($type === OrderType::Online && blank($data['platform'] ?? null)) {
@@ -102,7 +102,7 @@ class PlaceOrderAction
             return $order;
         }
 
-        if ($type === OrderType::DineIn) {
+        if ($type === OrderType::DineIn && ! empty($data['table_id'])) {
             $table = Table::query()->lockForUpdate()->whereKey((int) $data['table_id'])->firstOrFail();
             $existing = Order::query()
                 ->where('table_id', $table->id)
@@ -115,14 +115,14 @@ class PlaceOrderAction
 
         $date = BusinessDate::for();
         $number = sprintf('ORD-%s-%04d', CarbonImmutable::parse($date)->format('ymd'), $this->counter->next($outletId, $date, 'order'));
-        $call = $type === OrderType::Takeaway ? sprintf('A-%03d', $this->counter->next($outletId, $date, 'call')) : null;
+        $call = ($type === OrderType::Takeaway || empty($data['table_id'])) && $type !== OrderType::Online ? sprintf('A-%03d', $this->counter->next($outletId, $date, 'call')) : null;
 
         return Order::create([
             'outlet_id' => $outletId,
             'number' => $number,
             'type' => $type,
             'platform' => $data['platform'] ?? null,
-            'table_id' => $type === OrderType::DineIn ? $data['table_id'] : null,
+            'table_id' => $type === OrderType::DineIn ? ($data['table_id'] ?? null) : null,
             'status' => OrderStatus::Open,
             'customer_name' => $data['customer_name'] ?? null,
             'call_number' => $call,

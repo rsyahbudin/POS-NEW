@@ -29,7 +29,7 @@ class VoidOrderAction
         if (trim($reason) === '') {
             throw new OrderException('Alasan void wajib diisi.');
         }
-        $approver = $this->gate->resolve($actor, 'void', $pin);
+        $approver = $this->gate->resolveCancel($actor, $pin);
 
         return DB::transaction(function () use ($order, $actor, $approver, $reason) {
             $order = Order::query()->lockForUpdate()->findOrFail($order->id);

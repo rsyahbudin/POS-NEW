@@ -620,16 +620,6 @@ export function OrderPanel({
                                         {t('Diskon')}
                                     </Button>
                                 )}
-                                {can.pay && pick?.supported && (
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        className="h-11 border-primary text-primary"
-                                        onClick={pick.toggle}
-                                    >
-                                        {t('Bayar per item')}
-                                    </Button>
-                                )}
                                 {can.pay && (
                                     <Button
                                         type="button"
@@ -637,7 +627,7 @@ export function OrderPanel({
                                         className="h-11"
                                         onClick={actions.split}
                                     >
-                                        {t('Pecah tagihan')}
+                                        {t('Split bill')}
                                     </Button>
                                 )}
                                 {order.table && (
@@ -777,7 +767,7 @@ function PickSummary({ pick }: { pick: PickState }) {
             className="grid gap-2 rounded-xl border-2 border-primary/40 bg-primary/5 p-3"
             aria-live="polite"
         >
-            <p className="text-sm font-semibold">{t('Bayar per item')}</p>
+            <p className="text-sm font-semibold">{t('Bayar sebagian dulu')}</p>
             {count === 0 ? (
                 <p className="text-sm text-muted-foreground">
                     {t('Pilih item dan jumlahnya di daftar pesanan.')}

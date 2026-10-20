@@ -4,7 +4,6 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
-use App\Domain\Settings\SettingsRepository;
 use App\Http\Controllers\Auth\PinLoginController;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -51,7 +50,7 @@ class FortifyServiceProvider extends ServiceProvider
     private function configureViews(): void
     {
         Fortify::loginView(fn (Request $request) => Inertia::render('auth/login', [
-            'pinLogin' => PinLoginController::roles(app(SettingsRepository::class)) !== [],
+            'pinLogin' => PinLoginController::enabled(),
             'canResetPassword' => Features::enabled(Features::resetPasswords()),
             'status' => $request->session()->get('status'),
         ]));

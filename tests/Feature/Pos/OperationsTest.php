@@ -4,6 +4,8 @@ use App\Domain\Catalog\Models\Station;
 use App\Domain\Floor\Models\Table;
 use App\Domain\Ordering\Actions\ConfirmRoundAction;
 use App\Domain\Ordering\Actions\SubmitQrOrderAction;
+use App\Domain\Ordering\Actions\VoidItemAction;
+use App\Domain\Ordering\Actions\VoidOrderAction;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Ordering\Models\OrderRound;
 use App\Domain\Payment\Models\Payment;
@@ -13,6 +15,7 @@ use App\Domain\Shift\ShiftCash;
 use App\Support\BusinessDate;
 use App\Support\RealtimeConfig;
 use Illuminate\Http\Request;
+use Spatie\Permission\Models\Role;
 
 // ---------------------------------------------------------------- realtime config
 
@@ -225,14 +228,14 @@ it('rejects a wrong PIN, an inactive user and PINs of office roles', function ()
     $this->assertGuest();
 });
 
-it('lets the owner choose which roles use PIN login, or turn it off', function () {
+it('lets the owner choose per role who may use PIN login, or turn it off', function () {
     $manager = userWithRole('manager');
     $manager->forceFill(['pin_hash' => Hash::make('222222')])->save();
-    setting('security.pin_login_roles', 'cashier,manager');
+    Role::findByName('manager')->forceFill(['allow_pin_login' => true])->save();
     $this->post('/login/pin', ['pin' => '222222'])->assertRedirect('/');
     $this->post('/logout');
 
-    setting('security.pin_login_roles', '');
+    Role::query()->update(['allow_pin_login' => false]);
     $this->get('/login')->assertInertia(fn ($p) => $p->where('pinLogin', false));
     $this->post('/login/pin', ['pin' => '222222'])->assertSessionHasErrors('pin');
 });
@@ -246,4 +249,62 @@ it('throttles PIN guessing', function () {
 
 it('leaves owner 2FA off unless Pengaturan > Keamanan turns it on', function () {
     $this->actingAs(userWithRole('owner'))->get('/admin/menu')->assertOk();
+});
+
+// ---------------------------------------------------------------- cancelling without a manager
+
+it('lets a cashier cancel an unpaid order or item without a PIN, with the reason and who did it reported', function () {
+    $cashier = userWithRole('cashier');
+    $order = placeOrder();
+    $item = $order->items->first();
+
+    app(VoidItemAction::class)->handle($item, $cashier, 'Salah input');
+    expect($item->fresh()->voided_by)->toBe($cashier->id)->and($item->fresh()->void_reason)->toBe('Salah input');
+
+    $other = placeOrder(items: [['product_id' => product('Americano')->id, 'qty' => 1]], tableId: Table::query()->skip(1)->value('id'));
+    $this->actingAs($cashier)->postJson("/pos/orders/{$other->id}/void", ['reason' => 'Pelanggan batal'])->assertOk();
+    expect($other->fresh()->status->value)->toBe('cancelled')->and($other->fresh()->cancel_reason)->toBe('Pelanggan batal');
+
+    $d = BusinessDate::for();
+    $this->actingAs(userWithRole('manager'))->get("/admin/reports/adjustments?from={$d}&to={$d}")
+        ->assertInertia(fn ($p) => $p->where('voids.0.reason', fn ($r) => in_array($r, ['Salah input', 'Pelanggan batal'], true))->where('voids.0.actor', $cashier->name));
+});
+
+it('still demands a reason when cancelling, and refunds keep needing a manager', function () {
+    $cashier = userWithRole('cashier');
+    $order = placeOrder();
+    expect(fn () => app(VoidItemAction::class)->handle($order->items->first(), $cashier, ' '))->toThrow(OrderException::class, 'Alasan');
+
+    openShiftFor($cashier, 0);
+    $paid = placeOrder(tableId: Table::query()->skip(2)->value('id'));
+    pay($paid, $cashier);
+    expect(fn () => app(VoidOrderAction::class)->handle($paid->fresh(), $cashier, 'x'))->toThrow(OrderException::class);
+});
+
+// ---------------------------------------------------------------- dine-in paid at the counter
+
+it('takes a dine-in order at the counter with no table and gives it a call number', function () {
+    $cashier = userWithRole('cashier');
+    $res = $this->actingAs($cashier)->postJson('/pos/orders', ['type' => 'dine_in', 'counter' => true, 'items' => itemsPayload()])->assertCreated();
+
+    expect($res->json('order.type'))->toBe('dine_in')->and($res->json('order.table'))->toBeNull()->and($res->json('order.call_number'))->toStartWith('A-');
+    $this->actingAs($cashier)->postJson('/pos/orders', ['type' => 'dine_in', 'items' => itemsPayload()])->assertUnprocessable();
+});
+
+// ---------------------------------------------------------------- split bill
+
+it('splits equally and per person, each bill payable on its own', function () {
+    openShiftFor(userWithRole('cashier'), 0);
+    $cashier = userWithRole('cashier');
+    $order = placeOrder(); // 44.000
+
+    $res = $this->actingAs($cashier)->postJson("/pos/orders/{$order->id}/split", ['mode' => 'equal', 'count' => 2])->assertOk();
+    expect(collect($res->json('order.bills'))->where('status', 'unpaid')->pluck('grand_total')->sort()->values()->all())->toBe([22000, 22000]);
+
+    $line = $order->items->first(); // 2 x Americano: one each
+    $res = $this->actingAs($cashier)->postJson("/pos/orders/{$order->id}/split", ['mode' => 'item', 'parts' => [
+        ['label' => 'Orang 1', 'items' => [['order_item_id' => $line->id, 'qty' => 1]]],
+        ['label' => 'Orang 2', 'items' => [['order_item_id' => $line->id, 'qty' => 1]]],
+    ]])->assertOk();
+    expect(collect($res->json('order.bills'))->where('status', 'unpaid')->sum('grand_total'))->toBe(44000);
 });

@@ -46,6 +46,19 @@ class ApprovalGate
         return $approver;
     }
 
+    /**
+     * Cancelling an unpaid order or item: any staff who can take orders may do it (reason is mandatory and
+     * reported). Pengaturan > Keamanan can require a manager PIN again.
+     */
+    public function resolveCancel(User $actor, ?string $pin): User
+    {
+        if (! (bool) app(SettingsRepository::class)->get('security.cancel_needs_pin', false)) {
+            return $actor;
+        }
+
+        return $this->resolve($actor, 'void', $pin);
+    }
+
     private function ensureNotLocked(User $actor): void
     {
         if ($actor->pin_locked_until && $actor->pin_locked_until->isFuture()) {

@@ -5,6 +5,7 @@ import {
     Clock,
     Settings2,
     ShoppingBag,
+    UtensilsCrossed,
     Volume2,
     VolumeX,
     WifiOff,
@@ -286,7 +287,10 @@ export default function PosPage(props: Props) {
         setView('menu');
     };
 
-    const openTakeaway = (type: 'takeaway' | 'online', platform = '') => {
+    const openTakeaway = (
+        type: 'takeaway' | 'online' | 'dine_in',
+        platform = '',
+    ) => {
         setCtx({ type, table: null, platform });
         setCart([]);
         setOrder(null);
@@ -378,6 +382,7 @@ export default function PosPage(props: Props) {
                 type: ctx.type,
                 table_id: ctx.table?.id ?? null,
                 order_id: order?.id ?? null,
+                counter: ctx.type === 'dine_in' && !ctx.table,
                 platform: ctx.platform || null,
                 items: cart.map((l) => ({
                     product_id: l.product.id,
@@ -557,10 +562,14 @@ export default function PosPage(props: Props) {
         }
 
         if (order?.call_number) {
-            return `Takeaway ${order.call_number}`;
+            return `${order.type === 'dine_in' ? t('Dine-in') : 'Takeaway'} ${order.call_number}`;
         }
 
-        return ctx.type === 'online' ? `Online ${ctx.platform}` : 'Takeaway';
+        if (ctx.type === 'online') {
+            return `Online ${ctx.platform}`;
+        }
+
+        return ctx.type === 'dine_in' ? t('Dine-in (bayar dulu)') : 'Takeaway';
     }, [ctx, order]);
 
     const cartCount = cart.reduce((s, l) => s + l.qty, 0);
@@ -882,7 +891,7 @@ export default function PosPage(props: Props) {
 
                         {view === 'tables' ? (
                             <div className="min-h-0 flex-1 overflow-y-auto">
-                                <div className="mb-4 grid grid-cols-2 gap-2">
+                                <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
                                     <Button
                                         type="button"
                                         variant="outline"
@@ -890,6 +899,15 @@ export default function PosPage(props: Props) {
                                         onClick={() => openTakeaway('takeaway')}
                                     >
                                         <ShoppingBag /> Takeaway
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="h-14"
+                                        onClick={() => openTakeaway('dine_in')}
+                                    >
+                                        <UtensilsCrossed />{' '}
+                                        {t('Dine-in bayar dulu')}
                                     </Button>
                                     <Button
                                         type="button"
@@ -1035,6 +1053,12 @@ export default function PosPage(props: Props) {
             {order && dialog?.kind === 'split' && (
                 <SplitDialog
                     order={order}
+                    canPayPartial={payPick.supported}
+                    onPayPartial={() => {
+                        setDialog(null);
+                        setPickOn(true);
+                        setPickQty({});
+                    }}
                     onClose={() => setDialog(null)}
                     onDone={(o) => {
                         apply(o);
@@ -1071,9 +1095,15 @@ export default function PosPage(props: Props) {
             {dialog?.kind === 'void-item' && (
                 <ReasonDialog
                     title={`Void ${dialog.item.name}`}
-                    description={t('Butuh PIN manager untuk kasir.')}
+                    description={t('Item dibatalkan dan tercatat di laporan.')}
                     confirmLabel="Void"
                     destructive
+                    quick={[
+                        'Salah input',
+                        'Pelanggan batal',
+                        'Stok habis',
+                        'Terlalu lama',
+                    ]}
                     onClose={() => setDialog(null)}
                     onSubmit={async (reason) => {
                         const r = await guard(() =>
@@ -1123,6 +1153,12 @@ export default function PosPage(props: Props) {
                     )}
                     confirmLabel={t('Void order')}
                     destructive
+                    quick={[
+                        'Salah input',
+                        'Pelanggan batal',
+                        'Stok habis',
+                        'Terlalu lama',
+                    ]}
                     onClose={() => setDialog(null)}
                     onSubmit={async (reason) => {
                         const r = await guard(() =>

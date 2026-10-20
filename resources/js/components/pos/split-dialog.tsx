@@ -1,29 +1,39 @@
-import { useMemo, useState } from 'react';
+import { Minus, Plus, Receipt, Users, UtensilsCrossed } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Modal } from '@/components/pos/modal';
-import { Field, MoneyInput } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import { t } from '@/lang';
 import { api, ApiError } from '@/lib/api';
 import { rupiah } from '@/lib/format';
 import type { Order, OrderItem } from '@/types/pos';
 
-type Mode = 'item' | 'equal' | 'amount';
+type Mode = 'choose' | 'equal' | 'person';
 
+/**
+ * Split bill: everyone pays their own share. "Bagi rata" divides the total, "Per orang" assigns
+ * items to each person and shows what each pays. The third card pays only some items now.
+ */
 export function SplitDialog({
     order,
+    canPayPartial,
+    onPayPartial,
     onClose,
     onDone,
 }: {
     order: Order;
+    canPayPartial: boolean;
+    onPayPartial: () => void;
     onClose: () => void;
     onDone: (o: Order) => void;
 }) {
-    const [mode, setMode] = useState<Mode>('equal');
-    const [count, setCount] = useState(2);
-    const [amounts, setAmounts] = useState<(number | '')[]>(['', '']);
+    const alreadySplit = order.bills.some((b) => b.mode !== null);
+    const [mode, setMode] = useState<Mode>('choose');
+    const [people, setPeople] = useState(2);
+    const [active, setActive] = useState(0);
     const [parts, setParts] = useState<Record<number, number>[]>([{}, {}]);
+    const [totals, setTotals] = useState<(number | null)[]>([null, null]);
     const [busy, setBusy] = useState(false);
 
     const items: OrderItem[] = useMemo(
@@ -37,17 +47,68 @@ export function SplitDialog({
                 ),
         [order],
     );
-    const alreadySplit = order.bills.some((b) => b.mode !== null);
-    const amountSum = amounts.reduce<number>(
-        (s, a) => s + (typeof a === 'number' ? a : 0),
-        0,
-    );
 
     const assigned = (id: number) =>
         parts.reduce((s, p) => s + (p[id] ?? 0), 0);
-    const itemsOk =
-        items.every((i) => assigned(i.id) === i.qty) &&
-        parts.every((p) => Object.values(p).some((q) => q > 0));
+    const left = (it: OrderItem) => it.qty - assigned(it.id);
+    const allAssigned = items.every((i) => left(i) === 0);
+    const everyoneHasItems = parts.every((p) =>
+        Object.values(p).some((q) => q > 0),
+    );
+    const share = Math.floor(order.grand_total / people);
+
+    const resize = (n: number) => {
+        const next = Math.max(2, Math.min(12, n));
+        setPeople(next);
+        setParts((p) => Array.from({ length: next }, (_, i) => p[i] ?? {}));
+        setTotals((p) => Array.from({ length: next }, (_, i) => p[i] ?? null));
+        setActive((a) => Math.min(a, next - 1));
+    };
+
+    // What each person pays, priced by the server (tax, service, discount included).
+    useEffect(() => {
+        if (mode !== 'person') {
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            parts.forEach((p, i) => {
+                const picked = Object.entries(p)
+                    .filter(([, q]) => q > 0)
+                    .map(([id, qty]) => ({ order_item_id: Number(id), qty }));
+
+                if (picked.length === 0) {
+                    setTotals((arr) => arr.map((x, j) => (j === i ? 0 : x)));
+
+                    return;
+                }
+
+                api<{ grand_total: number }>(
+                    'POST',
+                    `/pos/orders/${order.id}/carve/preview`,
+                    { items: picked },
+                )
+                    .then((r) =>
+                        setTotals((arr) =>
+                            arr.map((x, j) => (j === i ? r.grand_total : x)),
+                        ),
+                    )
+                    .catch(() => undefined);
+            });
+        }, 250);
+
+        return () => window.clearTimeout(timer);
+    }, [mode, parts, order.id]);
+
+    const setQty = (personIdx: number, it: OrderItem, qty: number) => {
+        const others = assigned(it.id) - (parts[personIdx][it.id] ?? 0);
+        const clamped = Math.max(0, Math.min(it.qty - others, qty));
+        setParts((arr) =>
+            arr.map((x, j) =>
+                j === personIdx ? { ...x, [it.id]: clamped } : x,
+            ),
+        );
+    };
 
     const submit = async () => {
         setBusy(true);
@@ -55,33 +116,25 @@ export function SplitDialog({
         try {
             const body =
                 mode === 'equal'
-                    ? { mode, count }
-                    : mode === 'amount'
-                      ? {
-                            mode,
-                            parts: amounts.map((a, i) => ({
-                                label: `Tamu ${i + 1}`,
-                                amount: a,
-                            })),
-                        }
-                      : {
-                            mode,
-                            parts: parts.map((p, i) => ({
-                                label: `Tamu ${i + 1}`,
-                                items: Object.entries(p)
-                                    .filter(([, q]) => q > 0)
-                                    .map(([id, qty]) => ({
-                                        order_item_id: Number(id),
-                                        qty,
-                                    })),
-                            })),
-                        };
+                    ? { mode: 'equal', count: people }
+                    : {
+                          mode: 'item',
+                          parts: parts.map((p, i) => ({
+                              label: `${t('Orang')} ${i + 1}`,
+                              items: Object.entries(p)
+                                  .filter(([, q]) => q > 0)
+                                  .map(([id, qty]) => ({
+                                      order_item_id: Number(id),
+                                      qty,
+                                  })),
+                          })),
+                      };
             const res = await api<{ order: Order }>(
                 'POST',
                 `/pos/orders/${order.id}/split`,
                 body,
             );
-            toast.success(t('Tagihan dipecah.'));
+            toast.success(t('Tagihan dipecah. Bayar satu per satu.'));
             onDone(res.order);
         } catch (e) {
             toast.error(
@@ -108,22 +161,50 @@ export function SplitDialog({
         }
     };
 
-    const resize = (n: number) => {
-        setAmounts((a) => Array.from({ length: n }, (_, i) => a[i] ?? ''));
-        setParts((p) => Array.from({ length: n }, (_, i) => p[i] ?? {}));
-    };
+    const Stepper = (
+        <div className="flex items-center gap-2">
+            <span className="text-sm">{t('Jumlah orang')}</span>
+            <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-11"
+                aria-label={t('Kurangi orang')}
+                onClick={() => resize(people - 1)}
+            >
+                <Minus />
+            </Button>
+            <span className="w-8 text-center text-lg font-bold tabular-nums">
+                {people}
+            </span>
+            <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-11"
+                aria-label={t('Tambah orang')}
+                onClick={() => resize(people + 1)}
+            >
+                <Plus />
+            </Button>
+        </div>
+    );
 
     return (
         <Modal
             open
             onClose={onClose}
-            title={t('Pecah tagihan')}
+            title={t('Split bill')}
             description={`${order.number} · ${rupiah(order.grand_total)}`}
             className="sm:max-w-xl"
         >
             {alreadySplit && (
-                <div className="flex items-center justify-between rounded-lg bg-muted p-3 text-sm">
-                    <span>{t('Order sudah dipecah.')}</span>
+                <div className="flex items-center justify-between gap-2 rounded-lg bg-muted p-3 text-sm">
+                    <span>
+                        {t(
+                            'Tagihan sudah dipecah. Memecah ulang menggantikan yang lama.',
+                        )}
+                    </span>
                     <Button
                         type="button"
                         variant="outline"
@@ -131,187 +212,241 @@ export function SplitDialog({
                         onClick={cancelSplit}
                         disabled={busy || order.paid_total > 0}
                     >
-                        {t('Batalkan split')}
+                        {t('Satukan lagi')}
                     </Button>
                 </div>
             )}
 
-            <div role="radiogroup" className="grid grid-cols-3 gap-2">
-                {(
-                    [
-                        ['equal', 'Bagi rata'],
-                        ['item', 'Per item'],
-                        ['amount', 'Nominal bebas'],
-                    ] as [Mode, string][]
-                ).map(([m, label]) => (
-                    <Button
-                        key={m}
-                        type="button"
-                        role="radio"
-                        aria-checked={mode === m}
-                        variant={mode === m ? 'default' : 'outline'}
-                        className="h-11"
-                        onClick={() => setMode(m)}
-                    >
-                        {t(label)}
-                    </Button>
-                ))}
-            </div>
+            {mode === 'choose' && (
+                <div className="grid gap-2">
+                    <Choice
+                        icon={<Users />}
+                        title={t('Bagi rata')}
+                        text={t('Total dibagi sama banyak ke beberapa orang.')}
+                        onClick={() => setMode('equal')}
+                    />
+                    <Choice
+                        icon={<UtensilsCrossed />}
+                        title={t('Per orang (pilih item)')}
+                        text={t(
+                            'Tiap orang bayar item miliknya sendiri, pajak dan service ikut proporsional.',
+                        )}
+                        onClick={() => setMode('person')}
+                    />
+                    {canPayPartial && (
+                        <Choice
+                            icon={<Receipt />}
+                            title={t('Bayar sebagian dulu')}
+                            text={t(
+                                'Pilih item yang dibayar sekarang, sisanya dibayar nanti.',
+                            )}
+                            onClick={onPayPartial}
+                        />
+                    )}
+                </div>
+            )}
 
             {mode === 'equal' && (
-                <Field
-                    label={t('Jumlah tagihan')}
-                    hint={t(
-                        'Sisa pembagian rupiah dibebankan ke tagihan terakhir.',
-                    )}
-                >
-                    <Input
-                        className="h-11"
-                        type="number"
-                        min={2}
-                        max={20}
-                        value={count}
-                        onChange={(e) =>
-                            setCount(
-                                Math.max(
-                                    2,
-                                    Math.min(20, Number(e.target.value)),
-                                ),
-                            )
-                        }
-                    />
-                </Field>
-            )}
-
-            {mode !== 'equal' && (
-                <div className="flex items-center gap-2">
-                    <span className="text-sm">{t('Jumlah tagihan')}</span>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        aria-label={t('Kurangi')}
-                        onClick={() => resize(Math.max(2, amounts.length - 1))}
-                    >
-                        −
-                    </Button>
-                    <span className="w-6 text-center tabular-nums">
-                        {amounts.length}
-                    </span>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        aria-label={t('Tambah')}
-                        onClick={() => resize(Math.min(12, amounts.length + 1))}
-                    >
-                        +
-                    </Button>
-                </div>
-            )}
-
-            {mode === 'amount' && (
-                <div className="grid gap-2">
-                    {amounts.map((a, i) => (
-                        <Field key={i} label={`${t('Tamu')} ${i + 1}`}>
-                            <MoneyInput
-                                value={a}
-                                onChange={(v) =>
-                                    setAmounts((arr) =>
-                                        arr.map((x, j) => (j === i ? v : x)),
-                                    )
-                                }
-                            />
-                        </Field>
-                    ))}
-                    <p
-                        className={
-                            amountSum === order.grand_total
-                                ? 'text-sm text-emerald-700'
-                                : 'text-sm text-destructive'
-                        }
-                        aria-live="polite"
-                    >
-                        {t('Total')} {rupiah(amountSum)} /{' '}
-                        {rupiah(order.grand_total)}
-                    </p>
-                </div>
-            )}
-
-            {mode === 'item' && (
                 <div className="grid gap-3">
-                    {items.map((it) => (
-                        <div key={it.id} className="rounded-lg border p-2">
-                            <p className="text-sm font-medium">
-                                {it.name}{' '}
-                                <span className="text-muted-foreground">
-                                    × {it.qty}
-                                </span>
+                    {Stepper}
+                    <div className="rounded-xl border bg-primary/5 p-4 text-center">
+                        <p className="text-sm text-muted-foreground">
+                            {t('Tiap orang membayar')}
+                        </p>
+                        <p className="text-3xl font-bold tabular-nums">
+                            {rupiah(share)}
+                        </p>
+                        {share * people !== order.grand_total && (
+                            <p className="text-xs text-muted-foreground">
+                                {t(
+                                    'Sisa pembagian dibebankan ke orang terakhir.',
+                                )}
                             </p>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                                {parts.map((p, i) => (
-                                    <label
-                                        key={i}
-                                        className="flex items-center gap-1 text-xs"
-                                    >
-                                        {t('Tamu')} {i + 1}
-                                        <input
-                                            type="number"
-                                            min={0}
-                                            max={it.qty}
-                                            value={p[it.id] ?? 0}
-                                            aria-label={`${it.name} ${t('Tamu')} ${i + 1}`}
-                                            className="h-10 w-14 rounded-md border border-input px-2 text-center"
-                                            onChange={(e) =>
-                                                setParts((arr) =>
-                                                    arr.map((x, j) =>
-                                                        j === i
-                                                            ? {
-                                                                  ...x,
-                                                                  [it.id]:
-                                                                      Math.max(
-                                                                          0,
-                                                                          Math.min(
-                                                                              it.qty,
-                                                                              Number(
-                                                                                  e
-                                                                                      .target
-                                                                                      .value,
-                                                                              ),
-                                                                          ),
-                                                                      ),
-                                                              }
-                                                            : x,
-                                                    ),
-                                                )
-                                            }
-                                        />
-                                    </label>
-                                ))}
-                            </div>
-                            {assigned(it.id) !== it.qty && (
-                                <p className="mt-1 text-xs text-destructive">
-                                    {t('Alokasikan semua qty')} (
-                                    {assigned(it.id)}/{it.qty})
-                                </p>
-                            )}
-                        </div>
-                    ))}
+                        )}
+                    </div>
+                    <Footer
+                        busy={busy}
+                        label={`${t('Buat')} ${people} ${t('tagihan')}`}
+                        onBack={() => setMode('choose')}
+                        onSubmit={submit}
+                    />
                 </div>
             )}
 
+            {mode === 'person' && (
+                <div className="grid gap-3">
+                    {Stepper}
+                    <div
+                        role="tablist"
+                        aria-label={t('Orang')}
+                        className="grid grid-cols-2 gap-2 sm:grid-cols-3"
+                    >
+                        {parts.map((_, i) => (
+                            <button
+                                key={i}
+                                type="button"
+                                role="tab"
+                                aria-selected={active === i}
+                                onClick={() => setActive(i)}
+                                className={cn(
+                                    'rounded-xl border-2 p-2 text-left',
+                                    active === i
+                                        ? 'border-primary bg-primary/10'
+                                        : 'border-border',
+                                )}
+                            >
+                                <span className="block text-xs text-muted-foreground">
+                                    {t('Orang')} {i + 1}
+                                </span>
+                                <span className="block font-bold tabular-nums">
+                                    {totals[i] === null
+                                        ? '…'
+                                        : rupiah(totals[i] ?? 0)}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+
+                    <ul className="grid gap-2">
+                        {items.map((it) => {
+                            const mine = parts[active]?.[it.id] ?? 0;
+
+                            return (
+                                <li
+                                    key={it.id}
+                                    className="flex items-center gap-2 rounded-lg border p-2"
+                                >
+                                    <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm font-medium">
+                                            {it.name}
+                                        </p>
+                                        <p
+                                            className={cn(
+                                                'text-xs',
+                                                left(it) === 0
+                                                    ? 'text-emerald-700'
+                                                    : 'text-amber-700',
+                                            )}
+                                        >
+                                            {left(it) === 0
+                                                ? t('Sudah dibagi semua')
+                                                : `${left(it)} ${t('belum dibagi')}`}{' '}
+                                            · {it.qty} {t('total')}
+                                        </p>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        className="size-11"
+                                        aria-label={`${t('Kurangi')} ${it.name}`}
+                                        onClick={() =>
+                                            setQty(active, it, mine - 1)
+                                        }
+                                    >
+                                        <Minus />
+                                    </Button>
+                                    <span className="w-6 text-center font-bold tabular-nums">
+                                        {mine}
+                                    </span>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        className="size-11"
+                                        aria-label={`${t('Tambah')} ${it.name}`}
+                                        onClick={() =>
+                                            setQty(active, it, mine + 1)
+                                        }
+                                    >
+                                        <Plus />
+                                    </Button>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                    {!allAssigned && (
+                        <p
+                            className="text-sm text-amber-700"
+                            aria-live="polite"
+                        >
+                            {t(
+                                'Masih ada item yang belum dibagi ke siapa pun.',
+                            )}
+                        </p>
+                    )}
+                    <Footer
+                        busy={busy}
+                        disabled={!allAssigned || !everyoneHasItems}
+                        label={`${t('Buat')} ${people} ${t('tagihan')}`}
+                        onBack={() => setMode('choose')}
+                        onSubmit={submit}
+                    />
+                </div>
+            )}
+        </Modal>
+    );
+}
+
+function Choice({
+    icon,
+    title,
+    text,
+    onClick,
+}: {
+    icon: React.ReactNode;
+    title: string;
+    text: string;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="flex items-center gap-3 rounded-xl border-2 p-3 text-left hover:border-primary"
+        >
+            <span className="text-primary [&_svg]:size-6">{icon}</span>
+            <span>
+                <span className="block font-semibold">{title}</span>
+                <span className="block text-sm text-muted-foreground">
+                    {text}
+                </span>
+            </span>
+        </button>
+    );
+}
+
+function Footer({
+    busy,
+    disabled,
+    label,
+    onBack,
+    onSubmit,
+}: {
+    busy: boolean;
+    disabled?: boolean;
+    label: string;
+    onBack: () => void;
+    onSubmit: () => void;
+}) {
+    return (
+        <div className="grid grid-cols-[auto_1fr] gap-2">
+            <Button
+                type="button"
+                variant="outline"
+                className="h-12"
+                onClick={onBack}
+            >
+                {t('Kembali')}
+            </Button>
             <Button
                 type="button"
                 className="h-12"
-                disabled={
-                    busy ||
-                    (mode === 'amount' && amountSum !== order.grand_total) ||
-                    (mode === 'item' && !itemsOk)
-                }
-                onClick={submit}
+                disabled={busy || disabled}
+                onClick={onSubmit}
             >
-                {t('Pecah tagihan')}
+                {label}
             </Button>
-        </Modal>
+        </div>
     );
 }

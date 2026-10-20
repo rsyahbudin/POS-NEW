@@ -14,6 +14,7 @@ type Role = {
     label: string;
     built_in: boolean;
     locked: boolean;
+    pin_login: boolean;
     users_count: number;
     permissions: string[];
 };
@@ -31,6 +32,7 @@ export default function RolesPage({
     );
     const active = roles.find((r) => r.id === activeId) ?? roles[0];
     const [drafts, setDrafts] = useState<Record<number, string[]>>({});
+    const [pinDrafts, setPinDrafts] = useState<Record<number, boolean>>({});
     const [newName, setNewName] = useState('');
 
     if (!active) {
@@ -40,11 +42,13 @@ export default function RolesPage({
     const current = active.locked
         ? groups.flatMap((g) => g.items.map((i) => i.name))
         : (drafts[active.id] ?? active.permissions);
+    const pinLogin = pinDrafts[active.id] ?? active.pin_login;
     const dirty =
         !active.locked &&
-        drafts[active.id] !== undefined &&
-        [...drafts[active.id]].sort().join() !==
-            [...active.permissions].sort().join();
+        ((drafts[active.id] !== undefined &&
+            [...drafts[active.id]].sort().join() !==
+                [...active.permissions].sort().join()) ||
+            pinLogin !== active.pin_login);
 
     const toggle = (name: string) => {
         if (active.locked) {
@@ -194,15 +198,24 @@ export default function RolesPage({
                                         onClick={() =>
                                             router.put(
                                                 `/admin/roles/${active.id}`,
-                                                { permissions: current },
+                                                {
+                                                    permissions: current,
+                                                    pin_login: pinLogin,
+                                                },
                                                 {
                                                     preserveScroll: true,
-                                                    onSuccess: () =>
+                                                    onSuccess: () => {
                                                         setDrafts((d) => {
                                                             const n = { ...d };
                                                             delete n[active.id];
                                                             return n;
-                                                        }),
+                                                        });
+                                                        setPinDrafts((d) => {
+                                                            const n = { ...d };
+                                                            delete n[active.id];
+                                                            return n;
+                                                        });
+                                                    },
                                                 },
                                             )
                                         }
@@ -217,6 +230,34 @@ export default function RolesPage({
                                 Owner selalu punya semua izin dan tidak bisa
                                 diubah.
                             </p>
+                        )}
+
+                        {!active.locked && (
+                            <label className="flex cursor-pointer items-start gap-3 rounded-xl border bg-card p-3">
+                                <input
+                                    type="checkbox"
+                                    className="mt-0.5 size-5 shrink-0"
+                                    checked={pinLogin}
+                                    onChange={(e) =>
+                                        setPinDrafts((d) => ({
+                                            ...d,
+                                            [active.id]: e.target.checked,
+                                        }))
+                                    }
+                                />
+                                <span>
+                                    <span className="block text-sm font-medium">
+                                        Login dengan PIN
+                                    </span>
+                                    <span className="block text-xs text-muted-foreground">
+                                        Semua akun di peran ini masuk cukup
+                                        dengan PIN 6 digit masing-masing (PIN
+                                        tiap orang berbeda, diatur di menu
+                                        User). Matikan untuk peran kantor yang
+                                        memakai email + password.
+                                    </span>
+                                </span>
+                            </label>
                         )}
 
                         {groups.map((g) => {

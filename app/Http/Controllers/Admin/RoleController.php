@@ -33,6 +33,7 @@ class RoleController extends Controller
                 'label' => PermissionCatalog::BUILT_IN[$r->name] ?? $r->name,
                 'built_in' => array_key_exists($r->name, PermissionCatalog::BUILT_IN),
                 'locked' => $r->name === 'owner',
+                'pin_login' => (bool) $r->getAttribute('allow_pin_login'),
                 'users_count' => $r->users_count,
                 'permissions' => $r->permissions->pluck('name')->sort()->values()->all(),
             ])->all(),
@@ -57,9 +58,13 @@ class RoleController extends Controller
         if ($role->name === 'owner') {
             return back()->with('error', 'Izin owner tidak bisa diubah.');
         }
-        $data = $request->validate(['permissions' => 'array', 'permissions.*' => Rule::in(PermissionCatalog::all())]);
+        $data = $request->validate(['permissions' => 'array', 'permissions.*' => Rule::in(PermissionCatalog::all()), 'pin_login' => 'nullable|boolean']);
         $before = $role->permissions->pluck('name')->sort()->values()->all();
         $role->syncPermissions($data['permissions'] ?? []);
+        if (array_key_exists('pin_login', $data) && (bool) $role->getAttribute('allow_pin_login') !== (bool) $data['pin_login']) {
+            $role->forceFill(['allow_pin_login' => (bool) $data['pin_login']])->save();
+            Audit::log('role.pin_login_changed', null, ['role' => $role->name, 'allowed' => (bool) $data['pin_login']]);
+        }
         app(PermissionRegistrar::class)->forgetCachedPermissions();
         $after = array_values($data['permissions'] ?? []);
         sort($after);

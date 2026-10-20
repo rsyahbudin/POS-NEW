@@ -13,6 +13,7 @@ type U = {
     is_active: boolean;
     role: string | null;
     has_pin: boolean;
+    pin_login: boolean;
     has_2fa: boolean;
 };
 
@@ -84,8 +85,12 @@ export default function UsersPage({
                                 {u.email}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                                {u.has_pin ? 'PIN diset' : 'Tanpa PIN'} ·{' '}
-                                {u.has_2fa ? '2FA aktif' : '2FA belum'} ·{' '}
+                                {u.has_pin
+                                    ? 'PIN diset'
+                                    : u.pin_login
+                                      ? 'Belum ada PIN (belum bisa login)'
+                                      : 'Tanpa PIN'}{' '}
+                                · {u.has_2fa ? '2FA aktif' : '2FA belum'} ·{' '}
                                 {u.is_active ? 'aktif' : 'nonaktif'}
                             </p>
                             <div className="mt-2 flex flex-wrap gap-2">

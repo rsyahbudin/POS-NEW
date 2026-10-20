@@ -27,7 +27,10 @@ export default function Adjustments({
     }).toString();
     const sum = (rows: R[]) =>
         rows.reduce((a, r) => a + Number(r.amount ?? 0), 0);
-    const who = (r: R) => `${r.actor ?? '-'} → ${r.approver ?? '-'}`;
+    const who = (r: R) =>
+        !r.approver || r.approver === r.actor
+            ? String(r.actor ?? '-')
+            : `${r.actor ?? '-'} → ${r.approver}`;
 
     return (
         <>

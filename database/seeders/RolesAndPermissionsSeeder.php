@@ -43,6 +43,7 @@ class RolesAndPermissionsSeeder extends Seeder
             $model = Role::findOrCreate($role, 'web');
             if ($model->wasRecentlyCreated) {
                 $model->syncPermissions($permissions);
+                $model->forceFill(['allow_pin_login' => in_array($role, ['cashier', 'waiter', 'kitchen'], true)])->save();
             }
         }
     }

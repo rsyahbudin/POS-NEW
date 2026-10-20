@@ -68,7 +68,8 @@ test('pay only the selected items, then the rest', async ({
     if (narrow) {
         await page.getByRole('button', { name: /ORD-/ }).click();
     }
-    await page.getByRole('button', { name: 'Bayar per item' }).click();
+    await page.getByRole('button', { name: 'Split bill' }).click();
+    await page.getByRole('button', { name: /Bayar sebagian dulu/ }).click();
     await page
         .getByRole('group', { name: 'Bayar 2× Americano' })
         .or(page.getByRole('group', { name: /Americano/ }))

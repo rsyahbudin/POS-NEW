@@ -17,6 +17,7 @@ class PlaceOrderRequest extends FormRequest
         return [
             'type' => ['required', 'in:dine_in,takeaway,online'],
             'table_id' => ['nullable', 'integer', 'exists:tables,id'],
+            'counter' => ['nullable', 'boolean'],
             'order_id' => ['nullable', 'integer', 'exists:orders,id'],
             'platform' => ['nullable', 'string', 'max:40'],
             'customer_name' => ['nullable', 'string', 'max:60'],

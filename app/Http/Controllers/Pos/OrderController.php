@@ -81,6 +81,7 @@ class OrderController extends Controller
 
     public function void(Order $order, Request $request, VoidOrderAction $action): JsonResponse
     {
+        abort_unless($this->actor($request)->can('create-order'), 403);
         $data = $request->validate(['reason' => 'required|string|max:200', 'pin' => 'nullable|digits:6']);
 
         return $this->respond($action->handle($order, $this->actor($request), $data['reason'], $data['pin'] ?? null));

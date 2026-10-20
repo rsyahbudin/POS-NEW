@@ -8,7 +8,8 @@ use App\Domain\Pricing\Actions\ApplyDiscountAction;
 use App\Support\ApprovalGate;
 use Spatie\Activitylog\Models\Activity;
 
-it('lets a cashier void only with a valid manager PIN and records the approver', function () {
+it('lets a cashier void only with a valid manager PIN when the setting requires it', function () {
+    setting('security.cancel_needs_pin', true);
     $order = placeOrder();
     $item = $order->items->first();
     $cashier = userWithRole('cashier');
@@ -39,6 +40,7 @@ it('locks the cashier out for 15 minutes after 5 wrong PINs', function () {
 });
 
 it('does not accept a cashier PIN as a manager approval', function () {
+    setting('security.cancel_needs_pin', true);
     $order = placeOrder();
     expect(fn () => app(VoidItemAction::class)->handle($order->items->first(), userWithRole('waiter'), 'x', '333333'))->toThrow(OrderException::class, 'salah');
 });

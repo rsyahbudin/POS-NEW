@@ -66,7 +66,8 @@ it('pays over HTTP idempotently and returns change', function () {
         ->and($a->json('order.status'))->toBe('paid')->and(DB::table('payments')->count())->toBe(1);
 });
 
-it('voids with a manager PIN over HTTP', function () {
+it('voids with a manager PIN over HTTP when the setting requires it', function () {
+    setting('security.cancel_needs_pin', true);
     $cashier = userWithRole('cashier');
     $order = $this->actingAs($cashier)->postJson('/pos/orders', ['type' => 'takeaway', 'items' => itemsPayload()])->json('order');
     $itemId = $order['rounds'][0]['items'][0]['id'];

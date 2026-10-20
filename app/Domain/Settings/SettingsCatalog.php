@@ -76,8 +76,12 @@ final class SettingsCatalog
             ['key' => 'security', 'label' => 'Keamanan', 'groups' => [[
                 'title' => 'Login',
                 'fields' => [
-                    ['key' => 'security.pin_login_roles', 'type' => 'text', 'label' => 'Peran yang masuk dengan PIN', 'hint' => 'Nama peran dipisah koma (mis. cashier,waiter,kitchen). Staf peran ini login cukup dengan PIN 6 digit miliknya (diatur di menu User). Peran lain, termasuk owner dan manager, tetap memakai email + password. Kosongkan untuk mematikan login PIN.', 'default' => 'cashier,waiter,kitchen', 'max' => 120],
                     ['key' => 'security.require_owner_2fa', 'type' => 'bool', 'label' => 'Wajibkan 2FA untuk owner', 'hint' => 'Aktif: owner harus mengaktifkan verifikasi dua langkah (aplikasi authenticator) sebelum memakai aplikasi.', 'default' => false],
+                ],
+            ], [
+                'title' => 'Pembatalan',
+                'fields' => [
+                    ['key' => 'security.cancel_needs_pin', 'type' => 'bool', 'label' => 'Pembatalan pesanan/item (belum dibayar) butuh PIN manager', 'hint' => 'Nonaktif (disarankan untuk kafe kecil): staf boleh membatalkan sendiri dengan alasan wajib; tercatat di laporan Diskon/Void/Refund beserta siapa pembatalnya. Refund setelah bayar tetap butuh PIN.', 'default' => false],
                 ],
             ], [
                 'title' => 'PIN manager',

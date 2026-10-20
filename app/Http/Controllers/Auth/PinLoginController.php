@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Auth;
 
-use App\Domain\Settings\SettingsRepository;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -10,25 +9,23 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Role;
 
 /**
  * Floor staff sign in with their own 6-digit PIN (unique per person, see UserController).
- * Only roles listed in Pengaturan > Keamanan may do this; office roles keep email + password.
+ * Only roles with "Login dengan PIN" on (Peran & Akses) may do this; office roles keep email + password.
  */
 class PinLoginController extends Controller
 {
-    public function __construct(private SettingsRepository $settings) {}
-
-    /** @return list<string> */
-    public static function roles(SettingsRepository $settings): array
+    public static function enabled(): bool
     {
-        return array_values(array_filter(array_map('trim', explode(',', (string) $settings->get('security.pin_login_roles', '')))));
+        return Role::query()->where('allow_pin_login', true)->exists();
     }
 
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate(['pin' => ['required', 'digits:6']]);
-        $roles = self::roles($this->settings);
+        $roles = Role::query()->where('allow_pin_login', true)->pluck('name')->all();
 
         $user = $roles === [] ? null : User::query()
             ->role($roles)->where('is_active', true)->whereNotNull('pin_hash')->whereNull('two_factor_confirmed_at')->get()

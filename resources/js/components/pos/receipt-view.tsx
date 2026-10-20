@@ -9,6 +9,7 @@ export function ReceiptView({ r }: { r: Receipt }) {
                 <p className="text-base font-bold">{r.outlet.name}</p>
                 {r.outlet.address && <p>{r.outlet.address}</p>}
                 {r.outlet.npwp && <p>NPWP {r.outlet.npwp}</p>}
+                {r.header && <p>{r.header}</p>}
                 {r.copy && <p className="mt-1 font-bold">*** COPY ***</p>}
             </div>
             <hr className="my-2 border-dashed border-black" />

@@ -15,6 +15,7 @@ class ReceiptPresenter
         $bill->loadMissing(['order.table', 'order.opener', 'items', 'charges.orderCharge', 'payments.method']);
         $order = $bill->order;
         $outlet = Outlet::find($order->outlet_id);
+        $cfg = app(SettingsRepository::class);
 
         $rows = [];
         if ($bill->items->isNotEmpty()) {
@@ -36,14 +37,15 @@ class ReceiptPresenter
 
         return [
             'copy' => $copy,
-            'outlet' => ['name' => $outlet?->name, 'address' => $outlet?->address, 'npwp' => $outlet?->npwp],
+            'outlet' => ['name' => $outlet?->name, 'address' => $outlet?->address, 'npwp' => $cfg->get('receipt.show_npwp', true) ? $outlet?->npwp : null],
+            'header' => ($h = (string) $cfg->get('receipt.header', '')) !== '' ? $h : null,
             'order_number' => $order->number,
             'label' => $bill->label,
             'is_split' => $bill->split_mode !== null,
             'date' => ($bill->paid_at ?? now())->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i'),
-            'cashier' => $bill->payments->first()?->receiver->name ?? $order->opener?->name,
-            'table' => $order->table?->name,
-            'call_number' => $order->call_number,
+            'cashier' => $cfg->get('receipt.show_cashier', true) ? ($bill->payments->first()?->receiver->name ?? $order->opener?->name) : null,
+            'table' => $cfg->get('receipt.show_table', true) ? $order->table?->name : null,
+            'call_number' => $cfg->get('receipt.show_call_number', true) ? $order->call_number : null,
             'items' => $rows,
             'subtotal' => $bill->subtotal,
             'discount_total' => $bill->discount_total,
@@ -57,6 +59,7 @@ class ReceiptPresenter
             'change' => (int) $bill->payments->sum('change'),
             'footer' => app(SettingsRepository::class)->get('receipt.footer'),
             'public_url' => route('receipt.show', $bill->public_id),
+            'show_link' => (bool) $cfg->get('receipt.show_link', false),
         ];
     }
 }

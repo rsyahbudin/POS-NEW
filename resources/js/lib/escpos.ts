@@ -38,6 +38,10 @@ export function receiptEscPos(r: Receipt, paper: PaperWidth): string[] {
         out.push(`NPWP ${r.outlet.npwp}\n`);
     }
 
+    if (r.header) {
+        out.push(`${r.header}\n`);
+    }
+
     if (r.copy) {
         out.push(ESC + 'E' + '\x01', '*** COPY ***\n', ESC + 'E' + '\x00');
     }
@@ -116,6 +120,10 @@ export function receiptEscPos(r: Receipt, paper: PaperWidth): string[] {
 
     if (r.footer) {
         out.push(ESC + 'a' + '\x01', `\n${r.footer}\n`);
+    }
+
+    if (r.show_link) {
+        out.push(ESC + 'a' + '\x01', `\n${r.public_url}\n`);
     }
 
     out.push('\n\n\n', GS + 'V' + '\x00');

@@ -56,8 +56,14 @@ final class SettingsCatalog
                     ['key' => 'pos.ready_alert_minutes', 'type' => 'int', 'label' => 'Item siap antar tampil di kasir (menit)', 'hint' => 'Daftar "siap diantar" di atas layar kasir.', 'default' => 15, 'min' => 1, 'max' => 180],
                 ],
             ], [
-                'title' => 'Struk',
+                'title' => 'Isi struk (pratinjau di sebelah kanan)',
                 'fields' => [
+                    ['key' => 'receipt.header', 'type' => 'text', 'label' => 'Teks tambahan di bawah nama outlet', 'hint' => 'Mis. nomor WhatsApp, Instagram, atau jam buka. Nama, alamat, dan NPWP diatur di tab Outlet.', 'default' => '', 'max' => 120],
+                    ['key' => 'receipt.show_npwp', 'type' => 'bool', 'label' => 'Tampilkan NPWP', 'hint' => 'Hanya tampil jika NPWP diisi di tab Outlet.', 'default' => true],
+                    ['key' => 'receipt.show_cashier', 'type' => 'bool', 'label' => 'Tampilkan nama kasir', 'hint' => '', 'default' => true],
+                    ['key' => 'receipt.show_table', 'type' => 'bool', 'label' => 'Tampilkan nomor meja', 'hint' => '', 'default' => true],
+                    ['key' => 'receipt.show_call_number', 'type' => 'bool', 'label' => 'Tampilkan nomor panggil (takeaway)', 'hint' => '', 'default' => true],
+                    ['key' => 'receipt.show_link', 'type' => 'bool', 'label' => 'Cetak link struk digital', 'hint' => 'Customer bisa membuka struk di HP lewat link ini.', 'default' => false],
                     ['key' => 'receipt.footer', 'type' => 'text', 'label' => 'Catatan kaki struk', 'hint' => 'Tampil di bagian bawah struk.', 'default' => 'Terima kasih atas kunjungan Anda', 'max' => 200],
                 ],
             ]]],

@@ -3,6 +3,7 @@
 namespace App\Domain\Inventory\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -20,6 +21,18 @@ use Illuminate\Support\Carbon;
 class Ingredient extends Model
 {
     protected $guarded = [];
+
+    /** @return HasMany<StockMovement, $this> */
+    public function movements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class);
+    }
+
+    /** @return HasMany<IngredientUnit, $this> */
+    public function packs(): HasMany
+    {
+        return $this->hasMany(IngredientUnit::class);
+    }
 
     protected function casts(): array
     {

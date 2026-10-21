@@ -7,10 +7,12 @@ use App\Domain\Import\Importer;
 use App\Domain\Import\ImportNumber;
 use App\Domain\Inventory\Models\Ingredient;
 use App\Domain\Inventory\StockCountService;
+use App\Domain\Inventory\Units;
 
 /**
  * Fills the user's stock count draft from a sheet. The draft is then checked and sent as usual
  * (and approved by a manager when that rule is on). The template never shows the system quantity.
+ * The Satuan column says what the Hitungan is counted in; it must be a unit defined for the ingredient.
  */
 class CountImporter extends Importer
 {
@@ -47,9 +49,10 @@ class CountImporter extends Importer
     {
         return [
             '1. Isi kolom Hitungan dengan jumlah bahan yang sebenarnya ada. Bahan yang Hitungannya kosong tidak ikut dihitung.',
-            '2. Semua bahan yang terdaftar sudah ada di sheet Data. Angka stok di sistem sengaja tidak ditampilkan.',
-            '3. Hasil impor masuk ke draf Stok Opname Anda. Periksa lagi di layar Stok Opname lalu tekan Kirim hitungan.',
-            '4. Bahan BARU: tulis namanya di baris kosong paling bawah dan isi Satuan. Hanya manager yang boleh menambah bahan baru; untuk staf, bahan yang belum terdaftar akan ditolak.',
+            '2. Satuan = satuan dari angka Hitungan. Boleh satuan dasar (g, ml, pcs), kg / liter, atau kemasan yang sudah ditentukan (mis. 3 botol). Pilih dari daftar; satuan di luar daftar ditolak.',
+            '3. Semua bahan yang terdaftar sudah ada di sheet Data. Angka stok di sistem sengaja tidak ditampilkan.',
+            '4. Hasil impor masuk ke draf Stok Opname Anda. Periksa lagi di layar Stok Opname lalu tekan Kirim hitungan.',
+            '5. Bahan BARU hanya bisa ditambahkan manager (tulis nama dan satuan dasar g, ml, atau pcs). Untuk staf, bahan yang belum terdaftar ditolak.',
         ];
     }
 
@@ -60,7 +63,14 @@ class CountImporter extends Importer
 
     public function lists(int $outletId): array
     {
-        return ['name' => $this->ingredients($outletId)->where('is_active', true)->pluck('name')->sort()->values()->all()];
+        $units = [];
+        foreach ($this->ingredients($outletId)->where('is_active', true) as $i) {
+            foreach (Units::choices($i) as $choice) {
+                $units[$choice['name']] = true;
+            }
+        }
+
+        return ['name' => $this->ingredients($outletId)->where('is_active', true)->pluck('name')->sort()->values()->all(), 'unit' => array_keys($units)];
     }
 
     public function check(array $rows, ImportContext $ctx): array
@@ -79,14 +89,21 @@ class CountImporter extends Importer
             $unit = $c['unit'] ?? null;
             $key = mb_strtolower((string) $name);
             $ing = $existing->get($key);
+            $baseUnit = $ing === null ? Units::base($unit) : $ing->unit;
+            $base = null;
+            $unitError = null;
+            if ($ing !== null && $counted !== null && $counted >= 0) {
+                [$base, $unitError] = $this->toBase($ing, $unit, $counted);
+            }
 
             $error = match (true) {
                 $name === null => 'Nama bahan kosong.',
                 $counted === null || $counted < 0 => 'Hitungan harus angka 0 atau lebih.',
                 isset($seen[$key]) => "Bahan \"{$name}\" muncul dua kali.",
                 $ing === null && ! $canCreate => "Bahan \"{$name}\" belum terdaftar. Minta manager menambahkannya.",
-                $ing === null && $unit === null => "Bahan \"{$name}\" belum terdaftar: isi Satuan agar dibuat otomatis.",
-                $ing === null && mb_strlen((string) $unit) > 12 => 'Satuan terlalu panjang (maks 12 huruf).',
+                $ing === null && $unit === null => "Bahan \"{$name}\" belum terdaftar: isi Satuan dasar (g, ml, atau pcs).",
+                $ing === null && $baseUnit === null => "Satuan \"{$unit}\" tidak dikenal untuk bahan baru. Pakai g, ml, atau pcs.",
+                $unitError !== null => $unitError,
                 default => null,
             };
             if ($error) {
@@ -95,7 +112,8 @@ class CountImporter extends Importer
                 continue;
             }
             $seen[$key] = true;
-            $out[] = $this->result($row['line'], $ing === null ? 'new' : 'ok', $ing === null ? 'Bahan baru akan dibuat.' : null, $c, ['name' => $name, 'unit' => $unit, 'counted' => $counted]);
+            $base ??= $counted;
+            $out[] = $this->result($row['line'], $ing === null ? 'new' : 'ok', $ing === null ? 'Bahan baru akan dibuat.' : ($base !== $counted ? "= {$base} {$ing->unit}" : null), $c, ['name' => $name, 'base_unit' => $baseUnit, 'counted' => $base]);
         }
 
         return $out;
@@ -112,7 +130,7 @@ class CountImporter extends Importer
             $rec = $r['record'];
             $ing = $existing->get(mb_strtolower($rec['name']));
             if ($ing === null) {
-                $ing = Ingredient::create(['outlet_id' => $ctx->outletId, 'name' => $rec['name'], 'unit' => $rec['unit']]);
+                $ing = Ingredient::create(['outlet_id' => $ctx->outletId, 'name' => $rec['name'], 'unit' => $rec['base_unit']]);
                 $created++;
             }
             $merged[$ing->id] = $rec['counted'];

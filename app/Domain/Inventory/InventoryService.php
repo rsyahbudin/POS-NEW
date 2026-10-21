@@ -118,6 +118,38 @@ class InventoryService
     }
 
     /**
+     * Turns purchase lines as people enter them (quantity in any allowed unit, price as a total or per entered unit)
+     * into base-unit quantities and cost per base unit.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     * @return list<array{ingredient_id: int, qty: float, unit_cost: float}>
+     */
+    public function normalizePurchaseItems(int $outletId, array $items): array
+    {
+        $out = [];
+        foreach ($items as $row) {
+            $ing = Ingredient::query()->where('outlet_id', $outletId)->findOrFail((int) $row['ingredient_id']);
+            $qty = (float) $row['qty'];
+            $factor = Units::factor($ing, isset($row['unit']) ? (string) $row['unit'] : null);
+            $base = $qty * $factor;
+            if ($base <= 0) {
+                throw new OrderException("Jumlah {$ing->name} harus lebih dari 0.");
+            }
+            $total = $row['total'] ?? null;
+            $perUnit = $row['unit_cost'] ?? null;
+            if ($total === null && $perUnit === null) {
+                throw new OrderException("Isi harga untuk {$ing->name}.");
+            }
+            $out[] = [
+                'ingredient_id' => $ing->id, 'qty' => round($base, 4),
+                'unit_cost' => $total !== null ? (float) $total / $base : (float) $perUnit / $factor,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * Goods received, applied at once (managers). Raises stock and re-averages the cost.
      *
      * @param  array{supplier?: string|null, purchased_on: string, note?: string|null, items: list<array{ingredient_id: int, qty: float|int, unit_cost: float|int}>}  $data

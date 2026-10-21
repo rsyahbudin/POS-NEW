@@ -7,11 +7,15 @@ use App\Domain\Import\Importer;
 use App\Domain\Import\ImportNumber;
 use App\Domain\Inventory\InventoryService;
 use App\Domain\Inventory\Models\Ingredient;
+use App\Domain\Inventory\Units;
 use App\Models\User;
 use App\Support\Audit;
 use App\Support\BusinessDate;
 
-/** One purchase (goods received) from a list of ingredient, quantity and price. New ingredients are created on the way. */
+/**
+ * One purchase from a list of ingredient, quantity, unit and price. The unit must be one that is defined for the
+ * ingredient (its base unit, kg / liter, or a packaging such as "botol"); quantities are converted to the base unit.
+ */
 class PurchaseImporter extends Importer
 {
     public function key(): string
@@ -57,11 +61,12 @@ class PurchaseImporter extends Importer
     public function notes(): array
     {
         return [
-            '1. Isi Jumlah dan Harga per satuan untuk bahan yang dibeli. Baris yang Jumlahnya kosong dilewati.',
-            '2. Semua bahan yang sudah terdaftar sudah ada di sheet Data. Pilih dari daftar atau ketik nama bahan yang sama persis.',
-            '3. Bahan BARU: tulis namanya di baris kosong paling bawah dan isi Satuan (g, ml, pcs). Bahan akan dibuat otomatis.',
-            '4. Isi Harga per satuan (harga 1 gram/ml/pcs) ATAU Total harga yang dibayar untuk baris itu. Cukup salah satu; kalau dua-duanya diisi, Harga per satuan dipakai.',
-            '5. Tanggal dan pemasok diisi di layar impor, bukan di file.',
+            '1. Isi Jumlah dan harga untuk bahan yang dibeli. Baris yang Jumlahnya kosong dilewati.',
+            '2. Satuan = satuan dari angka Jumlah. Pilih dari daftar: satuan dasar bahan (g, ml, pcs), kg / liter, atau kemasan yang sudah ditentukan (mis. botol, dus). Satuan di luar daftar ditolak.',
+            '3. Contoh: sirup disimpan dalam ml. Beli 2 botol (1 botol = 750 ml): Satuan "botol", Jumlah 2. Sistem mengubahnya jadi 1.500 ml.',
+            '4. Isi Harga per satuan (harga 1 satuan yang Anda tulis, mis. per botol) ATAU Total harga yang dibayar untuk baris itu. Salah satu saja; kalau dua-duanya diisi, Harga per satuan dipakai.',
+            '5. Bahan BARU hanya bisa ditambahkan manager: tulis nama dan satuan dasar (g, ml, atau pcs). Kemasan diatur di halaman Stok & Bahan.',
+            '6. Tanggal dan pemasok diisi di layar impor, bukan di file.',
         ];
     }
 
@@ -72,7 +77,14 @@ class PurchaseImporter extends Importer
 
     public function lists(int $outletId): array
     {
-        return ['name' => $this->ingredients($outletId)->pluck('name')->sort()->values()->all()];
+        $units = [];
+        foreach ($this->ingredients($outletId)->where('is_active', true) as $i) {
+            foreach (Units::choices($i) as $choice) {
+                $units[$choice['name']] = true;
+            }
+        }
+
+        return ['name' => $this->ingredients($outletId)->pluck('name')->sort()->values()->all(), 'unit' => array_keys($units)];
     }
 
     public function check(array $rows, ImportContext $ctx): array
@@ -83,22 +95,32 @@ class PurchaseImporter extends Importer
         foreach ($rows as $row) {
             $c = $row['cells'];
             $name = $c['name'] ?? null;
-            $qty = ImportNumber::parse($c['qty'] ?? null);
-            $total = ImportNumber::parse($c['total'] ?? null);
-            $cost = ImportNumber::parse($c['unit_cost'] ?? null) ?? ($total !== null && $qty !== null && $qty > 0 ? $total / $qty : null);
-            $unit = $c['unit'] ?? null;
-            $ing = $name === null ? null : $existing->get(mb_strtolower($name));
-
             if ($name !== null && ($c['qty'] ?? null) === null && ($c['unit_cost'] ?? null) === null && ($c['total'] ?? null) === null) {
                 continue; // template row left empty
             }
+            $qty = ImportNumber::parse($c['qty'] ?? null);
+            $perUnit = ImportNumber::parse($c['unit_cost'] ?? null);
+            $total = ImportNumber::parse($c['total'] ?? null);
+            $unit = $c['unit'] ?? null;
+            $ing = $name === null ? null : $existing->get(mb_strtolower($name));
+            $baseUnit = $ing === null ? Units::base($unit) : $ing->unit;
+            $baseQty = null;
+            $unitError = null;
+            if ($ing !== null && $qty !== null && $qty > 0) {
+                [$baseQty, $unitError] = $this->toBase($ing, $unit, $qty);
+            } elseif ($ing === null && $qty !== null) {
+                $baseQty = $qty;
+            }
+            $price = $perUnit !== null ? $perUnit : $total;
+
             $error = match (true) {
                 $name === null => 'Nama bahan kosong.',
                 $qty === null || $qty <= 0 => 'Jumlah harus angka lebih dari 0.',
-                $cost === null || $cost < 0 => 'Isi Harga per satuan atau Total harga (angka).',
+                $price === null || $price < 0 => 'Isi Harga per satuan atau Total harga (angka).',
                 $ing === null && ! $canCreate => "Bahan \"{$name}\" belum terdaftar. Minta manager menambahkannya.",
-                $ing === null && $unit === null => "Bahan \"{$name}\" belum terdaftar: isi Satuan agar dibuat otomatis.",
-                $ing === null && mb_strlen((string) $unit) > 12 => 'Satuan terlalu panjang (maks 12 huruf).',
+                $ing === null && $unit === null => "Bahan \"{$name}\" belum terdaftar: isi Satuan dasar (g, ml, atau pcs).",
+                $ing === null && $baseUnit === null => "Satuan \"{$unit}\" tidak dikenal untuk bahan baru. Pakai g, ml, atau pcs.",
+                $unitError !== null => $unitError,
                 default => null,
             };
             if ($error) {
@@ -106,7 +128,12 @@ class PurchaseImporter extends Importer
 
                 continue;
             }
-            $out[] = $this->result($row['line'], $ing === null ? 'new' : 'ok', $ing === null ? 'Bahan baru akan dibuat.' : null, $c, ['name' => $name, 'unit' => $unit, 'qty' => $qty, 'unit_cost' => $cost]);
+            $baseQty ??= $qty;
+            $factor = $qty > 0 ? $baseQty / $qty : 1.0;
+            $out[] = $this->result($row['line'], $ing === null ? 'new' : 'ok', $ing === null ? 'Bahan baru akan dibuat.' : ($factor !== 1.0 ? "= {$baseQty} {$ing->unit}" : null), $c, [
+                'name' => $name, 'base_unit' => $baseUnit, 'qty' => $baseQty,
+                'unit_cost' => $perUnit !== null ? $perUnit / $factor : (float) $total / $baseQty,
+            ]);
         }
 
         return $out;
@@ -121,7 +148,7 @@ class PurchaseImporter extends Importer
             $rec = $r['record'];
             $ing = $existing->get(mb_strtolower($rec['name']));
             if ($ing === null) {
-                $ing = Ingredient::create(['outlet_id' => $ctx->outletId, 'name' => $rec['name'], 'unit' => $rec['unit']]);
+                $ing = Ingredient::create(['outlet_id' => $ctx->outletId, 'name' => $rec['name'], 'unit' => $rec['base_unit']]);
                 $existing->put(mb_strtolower($rec['name']), $ing);
                 $created++;
             }

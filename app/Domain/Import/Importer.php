@@ -3,6 +3,8 @@
 namespace App\Domain\Import;
 
 use App\Domain\Inventory\Models\Ingredient;
+use App\Domain\Inventory\Units;
+use App\Domain\Ordering\Exceptions\OrderException;
 use App\Models\User;
 use Illuminate\Support\Collection;
 
@@ -73,6 +75,20 @@ abstract class Importer
     protected function ingredients(int $outletId): Collection
     {
         return Ingredient::query()->where('outlet_id', $outletId)->get()->keyBy(fn (Ingredient $i) => mb_strtolower($i->name));
+    }
+
+    /**
+     * Quantity as typed (in the given unit, or the ingredient's base unit when empty) converted to the base unit.
+     *
+     * @return array{0: float|null, 1: string|null} base quantity, or an error message
+     */
+    protected function toBase(Ingredient $ing, ?string $unit, float $qty): array
+    {
+        try {
+            return [Units::toBase($ing, $unit, $qty), null];
+        } catch (OrderException $e) {
+            return [null, $e->getMessage()];
+        }
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Domain\Import\Importer;
 use App\Domain\Import\ImportNumber;
 use App\Domain\Inventory\Models\Ingredient;
 use App\Domain\Inventory\Models\RecipeLine;
+use App\Domain\Inventory\Units;
 use App\Support\Audit;
 use Illuminate\Support\Collection;
 
@@ -47,7 +48,8 @@ class RecipesImporter extends Importer
             '2. Menu yang sudah punya resep sudah terisi. Menu tanpa resep muncul satu baris dengan kolom Bahan dan Jumlah kosong: isi saja.',
             '3. Menu yang tercantum di file ini resepnya DIGANTI penuh oleh isi file. Menu yang tidak ada di file tidak berubah.',
             '4. Varian: isi nama varian (mis. Large) bila bahan itu hanya dipakai untuk varian tersebut. Kosong = semua varian.',
-            '5. Bahan BARU: tulis namanya dan isi Satuan, bahan akan dibuat otomatis (stok 0).',
+            '5. Jumlah memakai satuan dasar bahan (mis. sirup = ml). Kolom Satuan boleh dikosongkan; kalau diisi harus satuan yang ditentukan untuk bahan itu (mis. ml, atau l untuk liter) dan akan diubah ke satuan dasar. Satuan di luar daftar ditolak.',
+            '6. Bahan BARU: tulis namanya dan satuan dasar (g, ml, atau pcs); bahan dibuat otomatis (stok 0).',
         ];
     }
 
@@ -99,6 +101,12 @@ class RecipesImporter extends Importer
             $ing = $ingName === null ? null : $existing->get(mb_strtolower($ingName));
             $qty = ImportNumber::parse($c['qty'] ?? null);
             $unit = $c['unit'] ?? null;
+            $baseUnit = $ing === null ? Units::base($unit) : $ing->unit;
+            $base = null;
+            $unitError = null;
+            if ($ing !== null && $qty !== null && $qty > 0) {
+                [$base, $unitError] = $this->toBase($ing, $unit, $qty);
+            }
 
             $error = match (true) {
                 $name === null => 'Nama menu kosong.',
@@ -106,8 +114,9 @@ class RecipesImporter extends Importer
                 $variantName !== null && $variant === null => "Varian \"{$variantName}\" tidak ada di menu {$name}.",
                 $ingName === null => 'Nama bahan kosong.',
                 $qty === null || $qty <= 0 => 'Jumlah harus angka lebih dari 0.',
-                $ing === null && $unit === null => "Bahan \"{$ingName}\" belum terdaftar: isi Satuan agar dibuat otomatis.",
-                $ing === null && mb_strlen((string) $unit) > 12 => 'Satuan terlalu panjang (maks 12 huruf).',
+                $ing === null && $unit === null => "Bahan \"{$ingName}\" belum terdaftar: isi Satuan dasar (g, ml, atau pcs).",
+                $ing === null && $baseUnit === null => "Satuan \"{$unit}\" tidak dikenal untuk bahan baru. Pakai g, ml, atau pcs.",
+                $unitError !== null => $unitError,
                 default => null,
             };
             if ($error) {
@@ -116,7 +125,7 @@ class RecipesImporter extends Importer
                 continue;
             }
             $out[] = $this->result($row['line'], $ing === null ? 'new' : 'ok', $ing === null ? 'Bahan baru akan dibuat.' : null, $c, [
-                'product_id' => $product->id, 'variant_id' => $variant?->id, 'ingredient' => $ingName, 'unit' => $unit, 'qty' => $qty,
+                'product_id' => $product?->id, 'variant_id' => $variant?->id, 'ingredient' => $ingName, 'unit' => $baseUnit, 'qty' => $base ?? $qty,
             ]);
         }
 

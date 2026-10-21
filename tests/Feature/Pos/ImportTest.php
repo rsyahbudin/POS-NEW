@@ -6,6 +6,7 @@ use App\Domain\Catalog\Models\Product;
 use App\Domain\Import\ImportNumber;
 use App\Domain\Inventory\InventoryService;
 use App\Domain\Inventory\Models\Ingredient;
+use App\Domain\Inventory\Models\IngredientUnit;
 use App\Domain\Inventory\Models\Purchase;
 use App\Domain\Inventory\Models\RecipeLine;
 use App\Domain\Inventory\Models\StockCount;
@@ -81,19 +82,23 @@ it('imports ingredients: adds new ones with opening stock, updates existing ones
     ing('Gula', 'g', 50, 10);
     $manager = userWithRole('manager');
     $file = sheetFile([
-        ['Bahan *', 'Satuan *', 'Batas menipis', 'Stok awal', 'Harga per satuan'],
-        ['Gula', 'kg', '200', '', ''],           // update unit + minimum
-        ['Susu', 'ml', '500', '8.000', '20'],    // new
-        ['Kopi', '', '10', '', ''],              // error: no unit
-        ['Susu', 'ml', '', '', ''],              // error: twice
+        ['Bahan *', 'Satuan *', 'Kemasan beli', 'Isi kemasan', 'Batas menipis', 'Stok awal', 'Harga per satuan'],
+        ['Gula', 'g', 'karung', '25.000', '200', '', ''],       // update minimum + add packaging
+        ['Sirup', 'ml', 'botol', '750', '500', '8.000', '20'],  // new, with packaging
+        ['Kopi', '', '', '', '10', '', ''],                      // error: no unit
+        ['Sirup', 'ml', '', '', '', '', ''],                     // error: twice
+        ['Teh', 'kg', '', '', '', '', ''],                       // error: not a base unit
+        ['Susu', 'liter', '', '', '', '', ''],                   // error: not a base unit
     ]);
 
     $preview = previewOf($this, 'ingredients', $file, $manager)->assertOk()->json();
-    expect($preview['summary'])->toMatchArray(['total' => 4, 'new' => 1, 'update' => 1, 'error' => 2]);
+    expect($preview['summary'])->toMatchArray(['total' => 6, 'new' => 1, 'update' => 1, 'error' => 4]);
 
     $this->actingAs($manager)->postJson('/import/ingredients/apply', ['rows' => $preview['payload']])->assertOk()->assertJsonPath('message', 'Impor selesai: 1 bahan baru, 1 diperbarui.');
-    expect(Ingredient::query()->where('name', 'Susu')->first())->toMatchArray(['unit' => 'ml', 'stock' => 8000.0, 'avg_cost' => 20.0]);
-    expect(Ingredient::query()->where('name', 'Gula')->first())->toMatchArray(['unit' => 'kg', 'min_stock' => 200.0, 'stock' => 50.0]);
+    expect(Ingredient::query()->where('name', 'Sirup')->first())->toMatchArray(['unit' => 'ml', 'stock' => 8000.0, 'avg_cost' => 20.0]);
+    expect(IngredientUnit::query()->where('name', 'botol')->value('factor'))->toBe(750.0);
+    expect(Ingredient::query()->where('name', 'Gula')->first())->toMatchArray(['unit' => 'g', 'min_stock' => 200.0, 'stock' => 50.0]);
+    expect(IngredientUnit::query()->where('name', 'karung')->value('factor'))->toBe(25000.0);
     expect(Ingredient::query()->where('name', 'Kopi')->exists())->toBeFalse();
 });
 

@@ -4,10 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Inventory\InventoryService;
 use App\Domain\Inventory\Models\Ingredient;
+use App\Domain\Inventory\Models\IngredientUnit;
 use App\Domain\Inventory\Models\Purchase;
+use App\Domain\Inventory\Models\RecipeLine;
 use App\Domain\Inventory\Models\StockCount;
 use App\Domain\Inventory\Models\StockMovement;
 use App\Domain\Inventory\StockCountService;
+use App\Domain\Inventory\Units;
+use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Settings\OutletContext;
 use App\Domain\Settings\SettingsRepository;
 use App\Http\Controllers\Controller;
@@ -31,9 +35,11 @@ class InventoryController extends Controller
 
         return Inertia::render('admin/inventory', [
             'enabled' => $this->inventory->enabled(),
-            'ingredients' => Ingredient::query()->where('outlet_id', $id)->orderBy('name')->get()->map(fn (Ingredient $i) => [
+            'baseUnits' => collect(Units::BASE)->map(fn (string $label, string $key) => ['key' => $key, 'label' => $label])->values()->all(),
+            'ingredients' => Ingredient::query()->where('outlet_id', $id)->with('packs')->orderBy('name')->get()->map(fn (Ingredient $i) => [
                 'id' => $i->id, 'name' => $i->name, 'unit' => $i->unit, 'stock' => $i->stock, 'avg_cost' => round($i->avg_cost, 2),
                 'min_stock' => $i->min_stock, 'value' => (int) round(max(0, $i->stock) * $i->avg_cost), 'is_active' => $i->is_active,
+                'packs' => $i->packs->map(fn ($u) => ['name' => $u->name, 'factor' => $u->factor])->values()->all(), 'choices' => Units::choices($i),
                 'low' => $i->is_active && $i->stock <= $i->min_stock,
             ])->all(),
             'purchases' => Purchase::query()->where('outlet_id', $id)->with('items')->orderByRaw("case when status = 'pending' then 0 else 1 end")->latest('purchased_on')->latest('id')->limit(40)->get()->map(function (Purchase $p) use ($users) {
@@ -69,13 +75,15 @@ class InventoryController extends Controller
         $outletId = $this->outlet->id();
         $data = $request->validate([
             'name' => ['required', 'string', 'max:80', Rule::unique('ingredients', 'name')->where('outlet_id', $outletId)],
-            'unit' => 'required|string|max:12', 'min_stock' => 'nullable|numeric|min:0',
+            'unit' => ['required', Rule::in(array_keys(Units::BASE))], 'min_stock' => 'nullable|numeric|min:0',
             'stock' => 'nullable|numeric|min:0', 'unit_cost' => 'nullable|numeric|min:0',
+            'packs' => 'nullable|array|max:6', 'packs.*.name' => 'required|string|max:20', 'packs.*.factor' => 'required|numeric|gt:0',
         ]);
         $ingredient = Ingredient::create([
             'outlet_id' => $outletId, 'name' => $data['name'], 'unit' => $data['unit'], 'min_stock' => $data['min_stock'] ?? 0,
             'avg_cost' => $data['unit_cost'] ?? 0,
         ]);
+        $this->syncPacks($ingredient, $data['packs'] ?? []);
         if (($data['stock'] ?? 0) > 0) {
             $this->inventory->count($ingredient, (float) $data['stock'], $this->actor($request), 'Stok awal');
         }
@@ -89,11 +97,44 @@ class InventoryController extends Controller
         abort_unless($ingredient->outlet_id === $this->outlet->id(), 404);
         $data = $request->validate([
             'name' => ['required', 'string', 'max:80', Rule::unique('ingredients', 'name')->where('outlet_id', $ingredient->outlet_id)->ignore($ingredient->id)],
-            'unit' => 'required|string|max:12', 'min_stock' => 'nullable|numeric|min:0', 'is_active' => 'boolean',
+            'unit' => ['required', Rule::in([...array_keys(Units::BASE), $ingredient->unit])], 'min_stock' => 'nullable|numeric|min:0', 'is_active' => 'boolean',
+            'packs' => 'nullable|array|max:6', 'packs.*.name' => 'required|string|max:20', 'packs.*.factor' => 'required|numeric|gt:0',
         ]);
+        if ($data['unit'] !== $ingredient->unit && ($ingredient->stock != 0 || $ingredient->movements()->exists() || RecipeLine::query()->where('ingredient_id', $ingredient->id)->exists())) {
+            return back()->with('error', 'Satuan dasar tidak bisa diubah setelah bahan punya stok, riwayat, atau resep. Buat bahan baru dengan satuan yang benar.');
+        }
         $ingredient->update(['name' => $data['name'], 'unit' => $data['unit'], 'min_stock' => $data['min_stock'] ?? 0, 'is_active' => (bool) ($data['is_active'] ?? true)]);
+        $this->syncPacks($ingredient, $data['packs'] ?? []);
 
         return back()->with('success', 'Bahan disimpan.');
+    }
+
+    /**
+     * Packagings an ingredient is bought in ("botol" = 750 ml). A name may not repeat a base unit.
+     *
+     * @param  array<int, array{name: string, factor: float|int|string}>  $packs
+     */
+    private function syncPacks(Ingredient $ingredient, array $packs): void
+    {
+        $reserved = [...array_keys(Units::BASE), 'kg', 'l', 'liter', 'gram', 'mililiter', 'buah'];
+        $seen = [];
+        $rows = [];
+        foreach ($packs as $pack) {
+            $name = trim((string) $pack['name']);
+            $key = mb_strtolower($name);
+            if ($name === '' || in_array($key, $reserved, true)) {
+                throw new OrderException("Nama kemasan \"{$name}\" tidak boleh sama dengan satuan dasar (g, ml, pcs, kg, l).");
+            }
+            if (isset($seen[$key])) {
+                throw new OrderException("Kemasan \"{$name}\" ditulis dua kali.");
+            }
+            $seen[$key] = true;
+            $rows[] = ['name' => $name, 'factor' => (float) $pack['factor']];
+        }
+        IngredientUnit::query()->where('ingredient_id', $ingredient->id)->delete();
+        foreach ($rows as $row) {
+            IngredientUnit::create(['ingredient_id' => $ingredient->id] + $row);
+        }
     }
 
     public function purchase(Request $request): RedirectResponse
@@ -103,8 +144,10 @@ class InventoryController extends Controller
             'supplier' => 'nullable|string|max:80', 'purchased_on' => 'required|date', 'note' => 'nullable|string|max:200',
             'items' => 'required|array|min:1|max:60',
             'items.*.ingredient_id' => ['required', 'integer', Rule::exists('ingredients', 'id')->where('outlet_id', $outletId)],
-            'items.*.qty' => 'required|numeric|gt:0', 'items.*.unit_cost' => 'required|numeric|min:0',
+            'items.*.qty' => 'required|numeric|gt:0', 'items.*.unit' => 'nullable|string|max:20',
+            'items.*.total' => 'nullable|numeric|min:0', 'items.*.unit_cost' => 'nullable|numeric|min:0',
         ]);
+        $data['items'] = $this->inventory->normalizePurchaseItems($outletId, $data['items']);
         $this->inventory->receive($outletId, $data, $this->actor($request));
 
         return back()->with('success', 'Pembelian dicatat, stok bertambah.');

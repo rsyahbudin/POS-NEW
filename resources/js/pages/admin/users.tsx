@@ -2,7 +2,12 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { Modal } from '@/components/pos/modal';
-import { Field, PageHeader, Select } from '@/components/pos/ui';
+import {
+    Field,
+    PageHeader,
+    ResponsiveTable,
+    Select,
+} from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -68,95 +73,119 @@ export default function UsersPage({
                         {Object.values(errors)[0]}
                     </p>
                 )}
-                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                    {users.map((u) => (
-                        <div
+                <ResponsiveTable
+                    headers={[
+                        'Nama',
+                        'Email',
+                        'Peran',
+                        'PIN',
+                        '2FA',
+                        'Status',
+                        'Aksi',
+                    ]}
+                    empty="Belum ada user."
+                    rows={users.map((u) => [
+                        <span
                             key={u.id}
-                            className={`rounded-xl border bg-card p-3 ${u.is_active ? '' : 'opacity-60'}`}
+                            className={
+                                u.is_active
+                                    ? 'font-medium'
+                                    : 'font-medium opacity-60'
+                            }
                         >
-                            <p className="font-medium">
-                                {u.name}{' '}
-                                <span className="rounded bg-muted px-1.5 py-0.5 text-xs">
-                                    {roles.find((r) => r.name === u.role)
-                                        ?.label ?? u.role}
-                                </span>
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                                {u.email}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                                {u.has_pin
-                                    ? 'PIN diset'
-                                    : u.pin_login
-                                      ? 'Belum ada PIN (belum bisa login)'
-                                      : 'Tanpa PIN'}{' '}
-                                · {u.has_2fa ? '2FA aktif' : '2FA belum'} ·{' '}
-                                {u.is_active ? 'aktif' : 'nonaktif'}
-                            </p>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-10"
-                                    onClick={() =>
-                                        setForm({
-                                            id: u.id,
-                                            name: u.name,
-                                            email: u.email,
-                                            role: u.role ?? 'cashier',
-                                            password: '',
-                                            pin: '',
-                                        })
-                                    }
-                                >
-                                    Ubah
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-10"
-                                    onClick={() =>
-                                        setSec({
-                                            user: u,
-                                            kind: 'password',
-                                            value: '',
-                                        })
-                                    }
-                                >
-                                    Reset password
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-10"
-                                    onClick={() =>
-                                        setSec({
-                                            user: u,
-                                            kind: 'pin',
-                                            value: '',
-                                        })
-                                    }
-                                >
-                                    Set PIN
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-10"
-                                    onClick={() =>
-                                        router.post(
-                                            `/admin/users/${u.id}/toggle`,
-                                            {},
-                                            { preserveScroll: true },
-                                        )
-                                    }
-                                >
-                                    {u.is_active ? 'Nonaktifkan' : 'Aktifkan'}
-                                </Button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                            {u.name}
+                        </span>,
+                        <span key="e" className="text-muted-foreground">
+                            {u.email}
+                        </span>,
+                        <span
+                            key="r"
+                            className="rounded bg-muted px-1.5 py-0.5 text-xs"
+                        >
+                            {roles.find((r) => r.name === u.role)?.label ??
+                                u.role}
+                        </span>,
+                        u.has_pin ? (
+                            'Sudah'
+                        ) : u.pin_login ? (
+                            <span key="p" className="text-amber-700">
+                                Belum (belum bisa login)
+                            </span>
+                        ) : (
+                            '-'
+                        ),
+                        u.has_2fa ? 'Aktif' : '-',
+                        u.is_active ? (
+                            <span key="s" className="text-emerald-700">
+                                Aktif
+                            </span>
+                        ) : (
+                            <span key="n" className="text-muted-foreground">
+                                Nonaktif
+                            </span>
+                        ),
+                        <span
+                            key="a"
+                            className="flex flex-wrap justify-end gap-1.5"
+                        >
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-9"
+                                onClick={() =>
+                                    setForm({
+                                        id: u.id,
+                                        name: u.name,
+                                        email: u.email,
+                                        role: u.role ?? 'cashier',
+                                        password: '',
+                                        pin: '',
+                                    })
+                                }
+                            >
+                                Ubah
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-9"
+                                onClick={() =>
+                                    setSec({
+                                        user: u,
+                                        kind: 'password',
+                                        value: '',
+                                    })
+                                }
+                            >
+                                Password
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-9"
+                                onClick={() =>
+                                    setSec({ user: u, kind: 'pin', value: '' })
+                                }
+                            >
+                                PIN
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-9"
+                                onClick={() =>
+                                    router.post(
+                                        `/admin/users/${u.id}/toggle`,
+                                        {},
+                                        { preserveScroll: true },
+                                    )
+                                }
+                            >
+                                {u.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+                            </Button>
+                        </span>,
+                    ])}
+                />
             </div>
 
             {form && (

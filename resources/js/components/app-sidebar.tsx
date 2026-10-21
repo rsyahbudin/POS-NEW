@@ -79,6 +79,12 @@ const top: Item[] = [
         permission: 'count-stock',
     },
     {
+        title: 'Belanja Bahan',
+        href: '/stock/purchase',
+        icon: ShoppingBasket,
+        permission: 'record-purchase',
+    },
+    {
         title: 'Stasiun Cetak',
         href: '/print-station',
         icon: Printer,

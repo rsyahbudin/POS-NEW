@@ -110,45 +110,68 @@ export default function StockCount({
                         <FileSpreadsheet /> Isi dari Excel
                     </Button>
                 </div>
-                <ul className="grid gap-2">
-                    {shown.map((i) => (
-                        <li
-                            key={i.id}
-                            className={cn(
-                                'flex items-center gap-3 rounded-xl border bg-card p-3',
-                                values[i.id] ? 'border-primary/40' : '',
-                            )}
-                        >
-                            <div className="min-w-0 flex-1">
-                                <p className="font-semibold">{i.name}</p>
-                                {i.system !== null && (
-                                    <p className="text-xs text-muted-foreground">
-                                        Di sistem {num(i.system)} {i.unit}
-                                    </p>
+                <div className="overflow-x-auto rounded-2xl border bg-card">
+                    <table className="w-full text-sm">
+                        <thead className="bg-muted/60 text-left">
+                            <tr>
+                                <th className="px-3 py-2 font-medium">Bahan</th>
+                                {!blind && (
+                                    <th className="px-3 py-2 text-right font-medium">
+                                        Di sistem
+                                    </th>
                                 )}
-                            </div>
-                            <Input
-                                className="h-12 w-28 text-right text-lg"
-                                inputMode="decimal"
-                                type="number"
-                                min={0}
-                                step="any"
-                                placeholder="0"
-                                aria-label={`Jumlah ${i.name}`}
-                                value={values[i.id] ?? ''}
-                                onChange={(e) =>
-                                    setValues({
-                                        ...values,
-                                        [i.id]: e.target.value,
-                                    })
-                                }
-                            />
-                            <span className="w-10 text-sm text-muted-foreground">
-                                {i.unit}
-                            </span>
-                        </li>
-                    ))}
-                </ul>
+                                <th className="w-44 px-3 py-2 font-medium">
+                                    Hitungan
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {shown.map((i) => (
+                                <tr
+                                    key={i.id}
+                                    className={cn(
+                                        'border-t',
+                                        values[i.id] ? 'bg-primary/5' : '',
+                                    )}
+                                >
+                                    <td className="px-3 py-2 font-medium">
+                                        {i.name}
+                                    </td>
+                                    {!blind && (
+                                        <td className="px-3 py-2 text-right text-muted-foreground tabular-nums">
+                                            {i.system !== null
+                                                ? `${num(i.system)} ${i.unit}`
+                                                : '-'}
+                                        </td>
+                                    )}
+                                    <td className="p-2">
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                className="h-11 text-right text-base"
+                                                inputMode="decimal"
+                                                type="number"
+                                                min={0}
+                                                step="any"
+                                                placeholder="0"
+                                                aria-label={`Jumlah ${i.name}`}
+                                                value={values[i.id] ?? ''}
+                                                onChange={(e) =>
+                                                    setValues({
+                                                        ...values,
+                                                        [i.id]: e.target.value,
+                                                    })
+                                                }
+                                            />
+                                            <span className="w-9 text-xs text-muted-foreground">
+                                                {i.unit}
+                                            </span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
                 <Input
                     className="h-11"
                     placeholder="Catatan (opsional)"

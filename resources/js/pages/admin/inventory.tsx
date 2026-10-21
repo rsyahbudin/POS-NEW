@@ -34,6 +34,15 @@ type Purchase = {
     total: number;
     items_count: number;
     user: string | null;
+    status: string;
+    review_note: string | null;
+    items: {
+        name: string;
+        unit: string;
+        qty: number;
+        unit_cost: number;
+        total: number;
+    }[];
 };
 type Movement = {
     id: number;
@@ -216,7 +225,14 @@ export default function InventoryPage({
                     onChange={setTab}
                     tabs={[
                         { id: 'stock', label: 'Bahan' },
-                        { id: 'purchases', label: 'Pembelian' },
+                        {
+                            id: 'purchases',
+                            label:
+                                purchases.filter((p) => p.status === 'pending')
+                                    .length > 0
+                                    ? `Pembelian (${purchases.filter((p) => p.status === 'pending').length} menunggu)`
+                                    : 'Pembelian',
+                        },
                         {
                             id: 'counts',
                             label:
@@ -255,38 +271,46 @@ export default function InventoryPage({
                                 <Plus /> Tambah bahan
                             </Button>
                         </div>
-                        <ul className="grid gap-2">
-                            {ingredients.map((i) => (
-                                <li
-                                    key={i.id}
-                                    className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3"
+                        <ResponsiveTable
+                            headers={[
+                                'Bahan',
+                                'Stok',
+                                'Biaya rata-rata',
+                                'Nilai stok',
+                                'Aksi',
+                            ]}
+                            numeric={[1, 2, 3]}
+                            empty="Belum ada bahan. Tambahkan bahan lalu isi resep di menu Resep & HPP."
+                            rows={ingredients.map((i) => [
+                                <span key={i.id} className="font-medium">
+                                    {i.name}
+                                    {!i.is_active && (
+                                        <span className="ml-1 text-xs font-normal text-muted-foreground">
+                                            (nonaktif)
+                                        </span>
+                                    )}
+                                </span>,
+                                <span
+                                    key="s"
+                                    className={
+                                        i.low
+                                            ? 'font-semibold text-destructive'
+                                            : ''
+                                    }
                                 >
-                                    <div className="min-w-0 flex-1">
-                                        <p className="font-semibold">
-                                            {i.name}{' '}
-                                            {!i.is_active && (
-                                                <span className="text-xs font-normal text-muted-foreground">
-                                                    (nonaktif)
-                                                </span>
-                                            )}
-                                        </p>
-                                        <p
-                                            className={
-                                                i.low
-                                                    ? 'text-sm font-medium text-destructive'
-                                                    : 'text-sm text-muted-foreground'
-                                            }
-                                        >
-                                            {num(i.stock)} {i.unit}
-                                            {i.low && ' · menipis'} ·{' '}
-                                            {rupiah(i.avg_cost)}/{i.unit} ·
-                                            nilai {rupiah(i.value)}
-                                        </p>
-                                    </div>
+                                    {num(i.stock)} {i.unit}
+                                    {i.low && ' · menipis'}
+                                </span>,
+                                `${rupiah(i.avg_cost)}/${i.unit}`,
+                                rupiah(i.value),
+                                <span
+                                    key="a"
+                                    className="flex flex-wrap justify-end gap-1.5"
+                                >
                                     <Button
                                         size="sm"
                                         variant="outline"
-                                        className="h-10"
+                                        className="h-9"
                                         onClick={() =>
                                             setCount({
                                                 ing: i,
@@ -295,12 +319,12 @@ export default function InventoryPage({
                                             })
                                         }
                                     >
-                                        Hitung stok
+                                        Hitung
                                     </Button>
                                     <Button
                                         size="sm"
                                         variant="outline"
-                                        className="h-10"
+                                        className="h-9"
                                         onClick={() =>
                                             setWaste({
                                                 ing: i,
@@ -314,7 +338,7 @@ export default function InventoryPage({
                                     <Button
                                         size="sm"
                                         variant="ghost"
-                                        className="h-10"
+                                        className="h-9"
                                         onClick={() =>
                                             setEdit({
                                                 id: i.id,
@@ -329,48 +353,103 @@ export default function InventoryPage({
                                     >
                                         Ubah
                                     </Button>
-                                </li>
-                            ))}
-                            {ingredients.length === 0 && (
-                                <li className="text-sm text-muted-foreground">
-                                    Belum ada bahan. Tambahkan bahan lalu isi
-                                    resep di menu Resep & HPP.
-                                </li>
-                            )}
-                        </ul>
+                                </span>,
+                            ])}
+                        />
                     </>
                 )}
 
                 {tab === 'purchases' && (
-                    <div>
-                        <Button
-                            variant="outline"
-                            className="h-11"
-                            onClick={() => setImporting('purchase')}
-                        >
-                            <FileSpreadsheet /> Impor pembelian (Excel)
-                        </Button>
-                    </div>
-                )}
+                    <>
+                        <div>
+                            <Button
+                                variant="outline"
+                                className="h-11"
+                                onClick={() => setImporting('purchase')}
+                            >
+                                <FileSpreadsheet /> Impor pembelian (Excel)
+                            </Button>
+                        </div>
+                        <ResponsiveTable
+                            headers={[
+                                'Tanggal',
+                                'Pemasok',
+                                'Dicatat oleh',
+                                'Bahan',
+                                'Total',
+                                'Status',
+                            ]}
+                            numeric={[4]}
+                            empty="Belum ada pembelian."
+                            rows={purchases.map((p) => [
+                                p.purchased_on,
+                                p.supplier ?? '-',
+                                p.user ?? '-',
+                                <span
+                                    key={p.id}
+                                    className="block text-xs leading-5"
+                                >
+                                    {p.items.map((i, n) => (
+                                        <span key={n} className="block">
+                                            {i.name} {num(i.qty)} {i.unit} ×{' '}
+                                            {rupiah(i.unit_cost)}
+                                        </span>
+                                    ))}
+                                </span>,
+                                rupiah(p.total),
+                                p.status === 'pending' ? (
+                                    <span
+                                        key="a"
+                                        className="flex flex-wrap justify-end gap-1.5"
+                                    >
+                                        <Button
+                                            size="sm"
+                                            className="h-9"
+                                            onClick={() =>
+                                                router.post(
+                                                    `/admin/inventory/purchases/${p.id}/approve`,
+                                                    {},
+                                                    opts,
+                                                )
+                                            }
+                                        >
+                                            Setujui
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-9"
+                                            onClick={() => {
+                                                const reason =
+                                                    prompt('Alasan menolak?');
 
-                {tab === 'purchases' && (
-                    <ResponsiveTable
-                        headers={[
-                            'Tanggal',
-                            'Pemasok',
-                            'Item',
-                            'Total',
-                            'Dicatat oleh',
-                        ]}
-                        numeric={[2, 3]}
-                        rows={purchases.map((p) => [
-                            p.purchased_on,
-                            p.supplier ?? '-',
-                            p.items_count,
-                            rupiah(p.total),
-                            p.user ?? '-',
-                        ])}
-                    />
+                                                if (reason) {
+                                                    router.post(
+                                                        `/admin/inventory/purchases/${p.id}/reject`,
+                                                        { reason },
+                                                        opts,
+                                                    );
+                                                }
+                                            }}
+                                        >
+                                            Tolak
+                                        </Button>
+                                    </span>
+                                ) : p.status === 'rejected' ? (
+                                    <span key="r" className="text-destructive">
+                                        Ditolak
+                                        {p.review_note
+                                            ? `: ${p.review_note}`
+                                            : ''}
+                                    </span>
+                                ) : (
+                                    <span key="o" className="text-emerald-700">
+                                        Masuk stok
+                                    </span>
+                                ),
+                            ])}
+                        />
+                    </>
                 )}
 
                 {tab === 'counts' && (

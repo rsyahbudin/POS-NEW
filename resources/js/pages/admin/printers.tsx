@@ -2,7 +2,12 @@ import { Head, Link, router } from '@inertiajs/react';
 import { Plus, Printer } from 'lucide-react';
 import { useState } from 'react';
 import { Modal } from '@/components/pos/modal';
-import { Field, PageHeader, Select } from '@/components/pos/ui';
+import {
+    Field,
+    PageHeader,
+    ResponsiveTable,
+    Select,
+} from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -83,44 +88,49 @@ export default function PrintersPage({
                     dan dicetak oleh perangkat yang membuka Stasiun Cetak.
                 </p>
 
-                <ul className="grid gap-2 md:grid-cols-2">
-                    {printers.map((p) => (
-                        <li
-                            key={p.id}
-                            className="flex items-center gap-3 rounded-xl border bg-card p-3"
-                        >
-                            <Printer className="size-6 text-primary" />
-                            <div className="min-w-0 flex-1">
-                                <p className="font-semibold">
-                                    {p.name}{' '}
-                                    {!p.is_active && (
-                                        <span className="text-xs font-normal text-muted-foreground">
-                                            (nonaktif)
-                                        </span>
-                                    )}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                    {label(p.kind)}
-                                    {p.kind === 'ticket' &&
-                                        ` · ${stationName(p.station_id) || 'semua station'}`}{' '}
-                                    · {p.paper_width} mm · {p.copies}×
-                                </p>
-                            </div>
+                <ResponsiveTable
+                    headers={[
+                        'Printer',
+                        'Mencetak',
+                        'Station',
+                        'Kertas',
+                        'Salinan',
+                        'Status',
+                        'Aksi',
+                    ]}
+                    numeric={[4]}
+                    empty="Belum ada printer."
+                    rows={printers.map((p) => [
+                        <span key={p.id} className="font-medium">
+                            {p.name}
+                        </span>,
+                        label(p.kind),
+                        p.kind === 'ticket'
+                            ? stationName(p.station_id) || 'Semua station'
+                            : '-',
+                        `${p.paper_width} mm`,
+                        `${p.copies}×`,
+                        p.is_active ? (
+                            <span key="a" className="text-emerald-700">
+                                Aktif
+                            </span>
+                        ) : (
+                            <span key="n" className="text-muted-foreground">
+                                Nonaktif
+                            </span>
+                        ),
+                        <span key="e" className="flex justify-end">
                             <Button
+                                size="sm"
                                 variant="outline"
-                                className="h-11"
+                                className="h-9"
                                 onClick={() => setForm({ ...p })}
                             >
                                 Ubah
                             </Button>
-                        </li>
-                    ))}
-                    {printers.length === 0 && (
-                        <li className="text-sm text-muted-foreground">
-                            Belum ada printer.
-                        </li>
-                    )}
-                </ul>
+                        </span>,
+                    ])}
+                />
             </div>
 
             {form && (

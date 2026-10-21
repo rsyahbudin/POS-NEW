@@ -1,6 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import { useState } from 'react';
-import { PageHeader } from '@/components/pos/ui';
+import { PageHeader, ResponsiveTable } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -67,42 +67,38 @@ export default function StockList({
                         Menipis ({lowCount})
                     </Button>
                 </div>
-                <ul className="grid gap-2 sm:grid-cols-2">
-                    {shown.map((i) => (
-                        <li
-                            key={i.id}
-                            className="flex items-center justify-between gap-3 rounded-xl border bg-card p-3"
+                <ResponsiveTable
+                    headers={['Bahan', 'Stok', 'Batas minimum', 'Status']}
+                    numeric={[1, 2]}
+                    empty="Tidak ada bahan."
+                    rows={shown.map((i) => [
+                        <span key={i.id} className="font-medium">
+                            {i.name}
+                        </span>,
+                        <span
+                            key="s"
+                            className={cn(
+                                'font-semibold',
+                                i.low && 'text-destructive',
+                            )}
                         >
-                            <div>
-                                <p className="font-semibold">{i.name}</p>
-                                <p className="text-xs text-muted-foreground">
-                                    Batas minimum {num(i.min_stock)} {i.unit}
-                                </p>
-                            </div>
-                            <p
-                                className={cn(
-                                    'text-lg font-bold tabular-nums',
-                                    i.low && 'text-destructive',
-                                )}
+                            {num(i.stock)} {i.unit}
+                        </span>,
+                        `${num(i.min_stock)} ${i.unit}`,
+                        i.low ? (
+                            <span
+                                key="l"
+                                className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900"
                             >
-                                {num(i.stock)}{' '}
-                                <span className="text-sm font-medium">
-                                    {i.unit}
-                                </span>
-                                {i.low && (
-                                    <span className="block text-right text-xs font-medium">
-                                        menipis
-                                    </span>
-                                )}
-                            </p>
-                        </li>
-                    ))}
-                    {shown.length === 0 && (
-                        <li className="text-sm text-muted-foreground">
-                            Tidak ada bahan.
-                        </li>
-                    )}
-                </ul>
+                                Menipis
+                            </span>
+                        ) : (
+                            <span key="o" className="text-emerald-700">
+                                Cukup
+                            </span>
+                        ),
+                    ])}
+                />
             </div>
         </>
     );

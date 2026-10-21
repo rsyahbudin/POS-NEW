@@ -8,6 +8,7 @@ import {
     Field,
     MoneyInput,
     PageHeader,
+    ResponsiveTable,
     Select,
     Tabs,
     TextArea,
@@ -203,115 +204,121 @@ export default function MenuPage({
                 )}
 
                 {tab === 'products' && (
-                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                        {products.map((p) => {
+                    <ResponsiveTable
+                        headers={[
+                            'Menu',
+                            'Kategori',
+                            'SKU',
+                            'Harga',
+                            'Stok porsi',
+                            'Status',
+                            'Aksi',
+                        ]}
+                        numeric={[3, 4]}
+                        empty="Belum ada menu."
+                        rows={products.map((p) => {
                             const on = local[p.id] ?? p.is_available;
 
-                            return (
-                                <div
+                            return [
+                                <span
                                     key={p.id}
-                                    className="flex gap-3 rounded-xl border bg-card p-3"
+                                    className="flex items-center gap-2"
                                 >
                                     {p.image && (
                                         <img
                                             src={p.image}
                                             alt=""
-                                            className="size-16 rounded-lg object-cover"
+                                            className="size-10 rounded-lg object-cover"
                                         />
                                     )}
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate font-medium">
+                                    <span>
+                                        <span className="font-medium">
                                             {p.name}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
-                                            {
-                                                categories.find(
-                                                    (c) =>
-                                                        c.id === p.category_id,
-                                                )?.name
-                                            }{' '}
-                                            · {p.sku ?? '-'}{' '}
-                                            {p.stock_qty !== null &&
-                                                `· stok ${p.stock_qty}`}
-                                        </p>
-                                        <p className="text-sm font-semibold tabular-nums">
-                                            {rupiah(p.base_price)}
-                                            {p.variants.length > 0 &&
-                                                ` · ${p.variants.length} varian`}
-                                        </p>
-                                        <div className="mt-2 flex gap-2">
-                                            <Button
-                                                size="sm"
-                                                variant={
-                                                    on
-                                                        ? 'outline'
-                                                        : 'destructive'
-                                                }
-                                                className="h-10"
-                                                aria-pressed={!on}
-                                                onClick={() => toggle(p)}
-                                            >
-                                                {on
-                                                    ? 'Tandai habis'
-                                                    : 'HABIS — aktifkan'}
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                className="h-10"
-                                                onClick={() =>
-                                                    setDraft({
-                                                        id: p.id,
-                                                        name: p.name,
-                                                        sku: p.sku ?? '',
-                                                        description:
-                                                            p.description ?? '',
-                                                        category_id:
-                                                            p.category_id,
-                                                        station_id:
-                                                            p.station_id ?? '',
-                                                        printer_ids:
-                                                            p.printer_ids,
-                                                        base_price:
-                                                            p.base_price,
-                                                        stock_qty:
-                                                            p.stock_qty ?? '',
-                                                        is_available:
-                                                            p.is_available,
-                                                        variants: p.variants,
-                                                        modifier_group_ids:
-                                                            p.modifier_group_ids,
-                                                        image: null,
-                                                    })
-                                                }
-                                            >
-                                                Ubah
-                                            </Button>
-                                            <Button
-                                                size="icon"
-                                                variant="ghost"
-                                                className="size-10"
-                                                aria-label={`Hapus ${p.name}`}
-                                                onClick={() =>
-                                                    confirm(
-                                                        `Hapus ${p.name}? Order lama tetap aman.`,
-                                                    ) &&
-                                                    router.delete(
-                                                        `/admin/products/${p.id}`,
-                                                        {
-                                                            preserveScroll: true,
-                                                        },
-                                                    )
-                                                }
-                                            >
-                                                <Trash2 />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
+                                        </span>
+                                        {p.variants.length > 0 && (
+                                            <span className="block text-xs text-muted-foreground">
+                                                {p.variants.length} varian
+                                            </span>
+                                        )}
+                                    </span>
+                                </span>,
+                                categories.find((c) => c.id === p.category_id)
+                                    ?.name ?? '-',
+                                p.sku ?? '-',
+                                rupiah(p.base_price),
+                                p.stock_qty ?? '∞',
+                                on ? (
+                                    <span key="s" className="text-emerald-700">
+                                        Tersedia
+                                    </span>
+                                ) : (
+                                    <span
+                                        key="h"
+                                        className="font-semibold text-destructive"
+                                    >
+                                        HABIS
+                                    </span>
+                                ),
+                                <span
+                                    key="a"
+                                    className="flex flex-wrap justify-end gap-1.5"
+                                >
+                                    <Button
+                                        size="sm"
+                                        variant={on ? 'outline' : 'destructive'}
+                                        className="h-9"
+                                        aria-pressed={!on}
+                                        onClick={() => toggle(p)}
+                                    >
+                                        {on ? 'Tandai habis' : 'Aktifkan'}
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-9"
+                                        onClick={() =>
+                                            setDraft({
+                                                id: p.id,
+                                                name: p.name,
+                                                sku: p.sku ?? '',
+                                                description:
+                                                    p.description ?? '',
+                                                category_id: p.category_id,
+                                                station_id: p.station_id ?? '',
+                                                printer_ids: p.printer_ids,
+                                                base_price: p.base_price,
+                                                stock_qty: p.stock_qty ?? '',
+                                                is_available: p.is_available,
+                                                variants: p.variants,
+                                                modifier_group_ids:
+                                                    p.modifier_group_ids,
+                                                image: null,
+                                            })
+                                        }
+                                    >
+                                        Ubah
+                                    </Button>
+                                    <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="size-9"
+                                        aria-label={`Hapus ${p.name}`}
+                                        onClick={() =>
+                                            confirm(
+                                                `Hapus ${p.name}? Order lama tetap aman.`,
+                                            ) &&
+                                            router.delete(
+                                                `/admin/products/${p.id}`,
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        <Trash2 />
+                                    </Button>
+                                </span>,
+                            ];
                         })}
-                    </div>
+                    />
                 )}
 
                 {tab === 'categories' && (

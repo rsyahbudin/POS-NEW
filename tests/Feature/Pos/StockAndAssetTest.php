@@ -1,12 +1,17 @@
 <?php
 
 use App\Domain\Asset\Models\Asset;
+use App\Domain\Inventory\InventoryService;
 use App\Domain\Inventory\Models\Ingredient;
+use App\Domain\Inventory\Models\Purchase;
 use App\Domain\Inventory\Models\StockCount;
 use App\Domain\Inventory\Models\StockMovement;
 use App\Domain\Inventory\StockCountService;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Settings\Models\Outlet;
+use App\Models\User;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 function stockItem(string $name, float $stock, float $cost = 100): Ingredient
 {
@@ -124,4 +129,89 @@ it('rejects a duplicate asset code and an unknown condition', function () {
     $this->actingAs($manager)->post('/assets', ['name' => 'A', 'code' => 'K-1', 'quantity' => 1, 'condition' => 'good'])->assertSessionHasNoErrors();
     $this->actingAs($manager)->post('/assets', ['name' => 'B', 'code' => 'K-1', 'quantity' => 1, 'condition' => 'good'])->assertSessionHasErrors('code');
     $this->actingAs($manager)->post('/assets', ['name' => 'C', 'quantity' => 1, 'condition' => 'weird'])->assertSessionHasErrors('condition');
+});
+
+// ---------------------------------------------------------------- staff shopping
+
+function shopper(): User
+{
+    $role = Role::findByName('cashier');
+    $role->givePermissionTo('record-purchase');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    return userWithRole('cashier');
+}
+
+it('lets a shopping employee record purchases, but stock and cost move only after a manager approves', function () {
+    $beans = stockItem('Biji kopi', 1000, 50);
+    $shopper = shopper();
+    $payload = ['purchased_on' => '2026-10-21', 'supplier' => 'Pasar', 'items' => [['ingredient_id' => $beans->id, 'qty' => 1000, 'unit_cost' => 70]]];
+
+    $this->actingAs($shopper)->post('/stock/purchase', $payload)->assertSessionHasNoErrors();
+    $purchase = Purchase::query()->first();
+    expect($purchase->status)->toBe('pending')->and($purchase->total)->toBe(70000)->and($beans->fresh()->stock)->toBe(1000.0)->and($beans->fresh()->avg_cost)->toBe(50.0);
+    expect(StockMovement::query()->where('type', 'purchase')->count())->toBe(0);
+
+    $this->actingAs($shopper)->post("/admin/inventory/purchases/{$purchase->id}/approve")->assertForbidden();
+    $this->actingAs(userWithRole('manager'))->post("/admin/inventory/purchases/{$purchase->id}/approve")->assertSessionHasNoErrors();
+    expect($purchase->fresh()->status)->toBe('approved')->and($beans->fresh()->stock)->toBe(2000.0)->and($beans->fresh()->avg_cost)->toBe(60.0);
+    $this->actingAs(userWithRole('manager'))->post("/admin/inventory/purchases/{$purchase->id}/approve")->assertSessionHas('error'); // not twice
+});
+
+it('keeps stock untouched when a manager rejects the shopping', function () {
+    $beans = stockItem('Biji kopi', 1000, 50);
+    $shopper = shopper();
+    $this->actingAs($shopper)->post('/stock/purchase', ['purchased_on' => '2026-10-21', 'items' => [['ingredient_id' => $beans->id, 'qty' => 5, 'unit_cost' => 99999]]])->assertSessionHasNoErrors();
+    $purchase = Purchase::query()->first();
+
+    $this->actingAs(userWithRole('manager'))->post("/admin/inventory/purchases/{$purchase->id}/reject", ['reason' => 'harga tidak wajar'])->assertSessionHasNoErrors();
+    expect($purchase->fresh()->status)->toBe('rejected')->and($beans->fresh()->stock)->toBe(1000.0)->and($beans->fresh()->avg_cost)->toBe(50.0);
+});
+
+it('applies staff shopping at once when approval is switched off, and managers always apply directly', function () {
+    $beans = stockItem('Biji kopi', 0, 0);
+    setting('inventory.purchase_needs_approval', false);
+    $this->actingAs(shopper())->post('/stock/purchase', ['purchased_on' => '2026-10-21', 'items' => [['ingredient_id' => $beans->id, 'qty' => 10, 'unit_cost' => 5]]])->assertSessionHasNoErrors();
+    expect($beans->fresh()->stock)->toBe(10.0);
+
+    setting('inventory.purchase_needs_approval', true);
+    $this->actingAs(userWithRole('manager'))->post('/stock/purchase', ['purchased_on' => '2026-10-21', 'items' => [['ingredient_id' => $beans->id, 'qty' => 10, 'unit_cost' => 5]]])->assertSessionHasNoErrors();
+    expect($beans->fresh()->stock)->toBe(20.0);
+});
+
+it('does not let anyone approve their own entry, except the owner', function () {
+    $beans = stockItem('Biji kopi', 100, 10);
+    $user = shopper();
+    $user->givePermissionTo('manage-inventory'); // can review, but this one is their own
+
+    $purchase = app(InventoryService::class)->submitPurchase((int) $beans->outlet_id, ['purchased_on' => '2026-10-21', 'items' => [['ingredient_id' => $beans->id, 'qty' => 5, 'unit_cost' => 10]]], userWithRole('waiter'));
+    $purchase->update(['user_id' => $user->id]);
+    expect(fn () => app(InventoryService::class)->approvePurchase($purchase, $user))->toThrow(OrderException::class, 'orang lain');
+    app(InventoryService::class)->approvePurchase($purchase, userWithRole('owner')); // owner may
+
+    $count = StockCount::create(['outlet_id' => $beans->outlet_id, 'user_id' => $user->id, 'status' => 'submitted']);
+    $count->lines()->create(['ingredient_id' => $beans->id, 'counted' => 90, 'system_qty' => 100]);
+    expect(fn () => app(StockCountService::class)->approve($count, $user))->toThrow(OrderException::class, 'orang lain');
+    expect(fn () => app(StockCountService::class)->reject($count, $user, 'x'))->toThrow(OrderException::class);
+});
+
+it('keeps costs and the shopping screen away from staff without the permission', function () {
+    $waiter = userWithRole('waiter');
+    $this->actingAs($waiter)->get('/stock/purchase')->assertForbidden();
+    $this->actingAs($waiter)->post('/stock/purchase', ['purchased_on' => '2026-10-21', 'items' => []])->assertForbidden();
+    $this->actingAs(shopper())->get('/stock/purchase')->assertOk()->assertInertia(fn ($p) => $p->component('stock/purchase')->where('needsApproval', true)->missing('ingredients.0.avg_cost'));
+    $this->actingAs(shopper())->get('/admin/inventory')->assertForbidden();
+});
+
+it('lets shopping staff import a purchase list but not create ingredients through it', function () {
+    stockItem('Gula', 10, 5);
+    $shopper = shopper();
+    $file = sheetFile([['Bahan *', 'Satuan', 'Jumlah *', 'Harga per satuan', 'Total harga'], ['Gula', 'g', '1.000', '', '15.000'], ['Teh', 'g', '10', '2', '']]);
+
+    $preview = previewOf($this, 'purchase', $file, $shopper)->assertOk()->json();
+    expect($preview['summary'])->toMatchArray(['ok' => 1, 'error' => 1]);
+    $this->actingAs($shopper)->postJson('/import/purchase/apply', ['rows' => $preview['payload'], 'extra' => ['purchased_on' => '2026-10-21']])->assertOk()->assertJsonPath('message', fn ($m) => str_contains($m, 'disetujui manager'));
+    $purchase = Purchase::query()->first();
+    expect($purchase->status)->toBe('pending')->and($purchase->total)->toBe(15000)->and(Ingredient::query()->where('name', 'Teh')->exists())->toBeFalse();
+    $this->actingAs(userWithRole('waiter'))->get('/import/purchase/template')->assertForbidden();
 });

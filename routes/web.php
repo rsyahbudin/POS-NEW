@@ -133,6 +133,12 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::post('apply', [ImportController::class, 'apply'])->name('apply');
     });
 
+    // Shopping for ingredients (staff)
+    Route::middleware('permission:record-purchase')->prefix('stock/purchase')->name('stock.')->group(function () {
+        Route::get('/', [StockController::class, 'purchase'])->name('purchase');
+        Route::post('/', [StockController::class, 'submitPurchase'])->name('purchase.submit');
+    });
+
     // Equipment register
     Route::get('assets', [AssetController::class, 'index'])->middleware('permission:view-assets')->name('assets.index');
     Route::get('assets/export', [AssetController::class, 'export'])->middleware('permission:view-assets')->name('assets.export');
@@ -177,6 +183,8 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::post('inventory/ingredients/{ingredient}/waste', [InventoryController::class, 'waste'])->name('inventory.waste');
             Route::post('inventory/counts/{count}/approve', [InventoryController::class, 'approveCount'])->name('inventory.counts.approve');
             Route::post('inventory/counts/{count}/reject', [InventoryController::class, 'rejectCount'])->name('inventory.counts.reject');
+            Route::post('inventory/purchases/{purchase}/approve', [InventoryController::class, 'approvePurchase'])->name('inventory.purchases.approve');
+            Route::post('inventory/purchases/{purchase}/reject', [InventoryController::class, 'rejectPurchase'])->name('inventory.purchases.reject');
             Route::post('inventory/purchases', [InventoryController::class, 'purchase'])->name('inventory.purchase');
             Route::get('recipes', [RecipeController::class, 'index'])->name('recipes');
             Route::post('recipes/products/{product}', [RecipeController::class, 'saveProduct'])->name('recipes.product');

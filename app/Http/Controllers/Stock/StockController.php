@@ -2,20 +2,24 @@
 
 namespace App\Http\Controllers\Stock;
 
+use App\Domain\Inventory\InventoryService;
 use App\Domain\Inventory\Models\Ingredient;
+use App\Domain\Inventory\Models\Purchase;
 use App\Domain\Inventory\Models\StockCount;
 use App\Domain\Inventory\StockCountService;
 use App\Domain\Settings\OutletContext;
+use App\Domain\Settings\SettingsRepository;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /** What staff see of the stock: a read-only list and the stock count form. Costs stay with managers. */
 class StockController extends Controller
 {
-    public function __construct(private OutletContext $outlet, private StockCountService $counts) {}
+    public function __construct(private OutletContext $outlet, private StockCountService $counts, private InventoryService $inventory, private SettingsRepository $settings) {}
 
     public function index(Request $request): Response
     {
@@ -48,6 +52,36 @@ class StockController extends Controller
                 'id' => $c->id, 'status' => $c->status, 'at' => $c->submitted_at?->setTimezone('Asia/Jakarta')->format('d M H:i'), 'lines' => $c->lines()->count(), 'review_note' => $c->review_note,
             ])->all(),
         ]);
+    }
+
+    /** Shopping staff record what they bought; stock and costs move only once a manager approves (unless the rule is off). */
+    public function purchase(Request $request): Response
+    {
+        $user = $this->actor($request);
+        $id = $this->outlet->id();
+
+        return Inertia::render('stock/purchase', [
+            'needsApproval' => ! $user->can('manage-inventory') && (bool) $this->settings->get('inventory.purchase_needs_approval', true),
+            'ingredients' => Ingredient::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'unit'])->all(),
+            'history' => Purchase::query()->where('outlet_id', $id)->where('user_id', $user->id)->with('items')->latest('id')->limit(15)->get()->map(fn (Purchase $p) => [
+                'id' => $p->id, 'purchased_on' => $p->purchased_on->toDateString(), 'supplier' => $p->supplier, 'total' => $p->total, 'status' => $p->status,
+                'items' => $p->items->count(), 'review_note' => $p->review_note,
+            ])->all(),
+        ]);
+    }
+
+    public function submitPurchase(Request $request): RedirectResponse
+    {
+        $outletId = $this->outlet->id();
+        $data = $request->validate([
+            'supplier' => 'nullable|string|max:80', 'purchased_on' => 'required|date', 'note' => 'nullable|string|max:200',
+            'items' => 'required|array|min:1|max:60',
+            'items.*.ingredient_id' => ['required', 'integer', Rule::exists('ingredients', 'id')->where('outlet_id', $outletId)],
+            'items.*.qty' => 'required|numeric|gt:0', 'items.*.unit_cost' => 'required|numeric|min:0',
+        ]);
+        $purchase = $this->inventory->submitPurchase($outletId, $data, $this->actor($request));
+
+        return redirect()->route('stock.purchase')->with('success', $purchase->status === 'approved' ? 'Belanja dicatat dan stok bertambah.' : 'Belanja dikirim. Stok bertambah setelah disetujui manager.');
     }
 
     public function save(Request $request): RedirectResponse

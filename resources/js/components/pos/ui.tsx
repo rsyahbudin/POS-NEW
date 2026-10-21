@@ -166,7 +166,8 @@ export function ResponsiveTable({
                                     key={h}
                                     className={cn(
                                         'px-3 py-2 text-left font-medium',
-                                        numeric.includes(i) && 'text-right',
+                                        (numeric.includes(i) || h === 'Aksi') &&
+                                            'text-right',
                                     )}
                                 >
                                     {h}

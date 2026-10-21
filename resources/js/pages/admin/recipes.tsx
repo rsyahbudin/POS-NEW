@@ -3,7 +3,7 @@ import { FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { ImportDialog } from '@/components/pos/import-dialog';
 import { Modal } from '@/components/pos/modal';
-import { PageHeader, Select, Tabs } from '@/components/pos/ui';
+import { PageHeader, ResponsiveTable, Select, Tabs } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { rupiah } from '@/lib/format';
@@ -162,34 +162,40 @@ export default function RecipesPage({
                             value={q}
                             onChange={(e) => setQ(e.target.value)}
                         />
-                        <ul className="grid gap-2">
-                            {shown.map((p) => (
-                                <li
-                                    key={p.id}
-                                    className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-3"
-                                >
-                                    <div className="min-w-0 flex-1">
-                                        <p className="font-semibold">
-                                            {p.name}
-                                        </p>
-                                        <p className="text-sm text-muted-foreground">
-                                            {p.category} · harga{' '}
-                                            {rupiah(p.price)}
-                                        </p>
-                                    </div>
-                                    {p.lines.length === 0 ? (
-                                        <span className="text-sm text-amber-700">
-                                            Belum ada resep
-                                        </span>
-                                    ) : (
-                                        <span className="text-sm tabular-nums">
-                                            HPP {rupiah(p.cost)} · margin{' '}
-                                            <b>{pct(p.price, p.cost)}</b>
-                                        </span>
-                                    )}
+                        <ResponsiveTable
+                            headers={[
+                                'Menu',
+                                'Kategori',
+                                'Harga',
+                                'HPP',
+                                'Margin',
+                                'Aksi',
+                            ]}
+                            numeric={[2, 3, 4]}
+                            empty="Tidak ada menu."
+                            rows={shown.map((p) => [
+                                <span key={p.id} className="font-medium">
+                                    {p.name}
+                                </span>,
+                                p.category,
+                                rupiah(p.price),
+                                p.lines.length === 0 ? (
+                                    <span key="n" className="text-amber-700">
+                                        Belum ada resep
+                                    </span>
+                                ) : (
+                                    rupiah(p.cost)
+                                ),
+                                p.lines.length === 0 ? (
+                                    '-'
+                                ) : (
+                                    <b key="m">{pct(p.price, p.cost)}</b>
+                                ),
+                                <span key="a" className="flex justify-end">
                                     <Button
+                                        size="sm"
                                         variant="outline"
-                                        className="h-10"
+                                        className="h-9"
                                         onClick={() =>
                                             setEdit({
                                                 kind: 'product',
@@ -204,30 +210,30 @@ export default function RecipesPage({
                                     >
                                         Atur resep
                                     </Button>
-                                </li>
-                            ))}
-                        </ul>
+                                </span>,
+                            ])}
+                        />
                     </>
                 )}
 
                 {tab === 'modifier' && (
-                    <ul className="grid gap-2">
-                        {modifiers.map((m) => (
-                            <li
-                                key={m.id}
-                                className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-3"
-                            >
-                                <div className="min-w-0 flex-1">
-                                    <p className="font-semibold">{m.name}</p>
-                                    <p className="text-sm text-muted-foreground">
-                                        {m.group}
-                                        {m.lines.length > 0 &&
-                                            ` · ${m.lines.length} bahan`}
-                                    </p>
-                                </div>
+                    <ResponsiveTable
+                        headers={['Modifier', 'Grup', 'Bahan tambahan', 'Aksi']}
+                        numeric={[2]}
+                        empty="Belum ada modifier."
+                        rows={modifiers.map((m) => [
+                            <span key={m.id} className="font-medium">
+                                {m.name}
+                            </span>,
+                            m.group,
+                            m.lines.length > 0
+                                ? `${m.lines.length} bahan`
+                                : '-',
+                            <span key="a" className="flex justify-end">
                                 <Button
+                                    size="sm"
                                     variant="outline"
-                                    className="h-10"
+                                    className="h-9"
                                     onClick={() =>
                                         setEdit({
                                             kind: 'modifier',
@@ -242,14 +248,9 @@ export default function RecipesPage({
                                 >
                                     Atur bahan
                                 </Button>
-                            </li>
-                        ))}
-                        {modifiers.length === 0 && (
-                            <li className="text-sm text-muted-foreground">
-                                Belum ada modifier.
-                            </li>
-                        )}
-                    </ul>
+                            </span>,
+                        ])}
+                    />
                 )}
             </div>
 

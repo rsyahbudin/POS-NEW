@@ -3,6 +3,7 @@
 namespace App\Domain\Import;
 
 use App\Domain\Inventory\Models\Ingredient;
+use App\Models\User;
 use Illuminate\Support\Collection;
 
 /**
@@ -18,6 +19,12 @@ abstract class Importer
     abstract public function title(): string;
 
     abstract public function permission(): string;
+
+    /** Who may use this import. */
+    public function allows(User $user): bool
+    {
+        return $user->can($this->permission()) && (! $this->needsImportPermission() || $user->can('import-data'));
+    }
 
     /** Bulk imports also need the "Impor dari Excel" permission; staff filling their own stock count do not. */
     public function needsImportPermission(): bool

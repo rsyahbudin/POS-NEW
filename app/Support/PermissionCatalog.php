@@ -42,6 +42,7 @@ final class PermissionCatalog
                 'manage-printers' => ['label' => 'Kelola printer', 'hint' => 'Daftar printer dan routing struk, bill, dan tiket per kategori/menu.'],
                 'view-stock' => ['label' => 'Lihat daftar stok', 'hint' => 'Daftar bahan dan jumlah stok (tanpa harga/biaya).'],
                 'count-stock' => ['label' => 'Stok opname', 'hint' => 'Menghitung stok bahan dan mengirim hasilnya. Persetujuan diatur di Pengaturan > Stok & HPP.'],
+                'record-purchase' => ['label' => 'Catat belanja bahan', 'hint' => 'Karyawan yang berbelanja mencatat bahan yang dibeli (jumlah dan harga). Persetujuan diatur di Pengaturan > Stok & HPP.'],
                 'view-assets' => ['label' => 'Lihat daftar aset & alat', 'hint' => 'Melihat daftar peralatan, kondisi, dan riwayat servis.'],
                 'manage-assets' => ['label' => 'Kelola aset & alat', 'hint' => 'Tambah/ubah/hapus aset, catat servis dan perbaikan.'],
                 'import-data' => ['label' => 'Impor dari Excel', 'hint' => 'Mengunggah template Excel untuk bahan, pembelian, resep, menu, dan aset. Tetap butuh izin kelola layar yang bersangkutan.'],

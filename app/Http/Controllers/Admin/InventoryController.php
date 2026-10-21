@@ -36,10 +36,15 @@ class InventoryController extends Controller
                 'min_stock' => $i->min_stock, 'value' => (int) round(max(0, $i->stock) * $i->avg_cost), 'is_active' => $i->is_active,
                 'low' => $i->is_active && $i->stock <= $i->min_stock,
             ])->all(),
-            'purchases' => Purchase::query()->where('outlet_id', $id)->withCount('items')->latest('purchased_on')->latest('id')->limit(30)->get()->map(fn (Purchase $p) => [
-                'id' => $p->id, 'supplier' => $p->supplier, 'purchased_on' => $p->purchased_on->toDateString(), 'note' => $p->note,
-                'total' => $p->total, 'items_count' => $p->items_count, 'user' => $users[$p->user_id] ?? null,
-            ])->all(),
+            'purchases' => Purchase::query()->where('outlet_id', $id)->with('items')->orderByRaw("case when status = 'pending' then 0 else 1 end")->latest('purchased_on')->latest('id')->limit(40)->get()->map(function (Purchase $p) use ($users) {
+                $names = Ingredient::query()->whereIn('id', $p->items->pluck('ingredient_id'))->get()->keyBy('id');
+
+                return [
+                    'id' => $p->id, 'supplier' => $p->supplier, 'purchased_on' => $p->purchased_on->toDateString(), 'note' => $p->note, 'total' => $p->total,
+                    'items_count' => $p->items->count(), 'user' => $users[$p->user_id] ?? null, 'status' => $p->status, 'review_note' => $p->review_note,
+                    'items' => $p->items->map(fn ($i) => ['name' => $names[$i->ingredient_id]->name ?? '-', 'unit' => $names[$i->ingredient_id]->unit ?? '', 'qty' => $i->qty, 'unit_cost' => round($i->unit_cost, 2), 'total' => $i->total])->values()->all(),
+                ];
+            })->all(),
             'counts' => StockCount::query()->where('outlet_id', $id)->where('status', '!=', 'draft')->with('lines')->latest('id')->limit(30)->get()->map(function (StockCount $c) use ($users) {
                 $costs = Ingredient::query()->whereIn('id', $c->lines->pluck('ingredient_id'))->get()->keyBy('id');
 
@@ -112,6 +117,23 @@ class InventoryController extends Controller
         $diff = $this->inventory->count($ingredient, (float) $data['counted'], $this->actor($request), $data['note'] ?? null);
 
         return back()->with('success', abs($diff) < 0.0005 ? 'Stok sudah sesuai.' : 'Stok disesuaikan ('.($diff > 0 ? '+' : '').round($diff, 3).' '.$ingredient->unit.').');
+    }
+
+    public function approvePurchase(Request $request, Purchase $purchase): RedirectResponse
+    {
+        abort_unless($purchase->outlet_id === $this->outlet->id(), 404);
+        $this->inventory->approvePurchase($purchase, $this->actor($request));
+
+        return back()->with('success', 'Pembelian disetujui, stok bertambah.');
+    }
+
+    public function rejectPurchase(Request $request, Purchase $purchase): RedirectResponse
+    {
+        abort_unless($purchase->outlet_id === $this->outlet->id(), 404);
+        $data = $request->validate(['reason' => 'required|string|max:200']);
+        $this->inventory->rejectPurchase($purchase, $this->actor($request), $data['reason']);
+
+        return back()->with('success', 'Pembelian ditolak.');
     }
 
     public function approveCount(Request $request, StockCount $count, StockCountService $counts): RedirectResponse

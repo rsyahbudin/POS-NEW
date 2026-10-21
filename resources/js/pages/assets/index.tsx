@@ -1,5 +1,5 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { ChevronDown, FileSpreadsheet, Plus } from 'lucide-react';
+import { FileSpreadsheet, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { ImportDialog } from '@/components/pos/import-dialog';
 import { Modal } from '@/components/pos/modal';
@@ -7,6 +7,7 @@ import {
     Field,
     MoneyInput,
     PageHeader,
+    ResponsiveTable,
     Select,
     Stat,
 } from '@/components/pos/ui';
@@ -97,7 +98,7 @@ export default function AssetsPage({
     const [q, setQ] = useState('');
     const [cat, setCat] = useState('');
     const [cond, setCond] = useState('');
-    const [open, setOpen] = useState<number | null>(null);
+    const [detail, setDetail] = useState<number | null>(null);
     const [importing, setImporting] = useState(false);
     const [form, setForm] = useState<Form | null>(null);
     const [log, setLog] = useState<{
@@ -213,222 +214,222 @@ export default function AssetsPage({
                     </Select>
                 </div>
 
-                <ul className="grid gap-2">
-                    {shown.map((a) => (
-                        <li key={a.id} className="rounded-xl border bg-card">
-                            <div className="flex flex-wrap items-center gap-3 p-3">
-                                <div className="min-w-0 flex-1">
-                                    <p className="font-semibold">
-                                        {a.name}{' '}
-                                        <span className="text-xs font-normal text-muted-foreground">
-                                            {a.code}
-                                        </span>
-                                    </p>
-                                    <p className="text-sm text-muted-foreground">
-                                        {[
-                                            a.category,
-                                            [a.brand, a.model]
-                                                .filter(Boolean)
-                                                .join(' '),
-                                            a.location && `di ${a.location}`,
-                                        ]
-                                            .filter(Boolean)
-                                            .join(' · ') || '-'}
-                                    </p>
+                <ResponsiveTable
+                    headers={[
+                        'Aset',
+                        'Kategori',
+                        'Merek / model',
+                        'Lokasi',
+                        'Jumlah',
+                        'Harga per unit',
+                        'Kondisi',
+                        'Aksi',
+                    ]}
+                    numeric={[4, 5]}
+                    empty={
+                        assets.length === 0
+                            ? 'Belum ada aset.'
+                            : 'Tidak ada aset yang cocok.'
+                    }
+                    rows={shown.map((a) => [
+                        <span key={a.id}>
+                            <span className="font-medium">{a.name}</span>
+                            <span className="ml-1.5 text-xs text-muted-foreground">
+                                {a.code}
+                            </span>
+                        </span>,
+                        a.category ?? '-',
+                        [a.brand, a.model].filter(Boolean).join(' ') || '-',
+                        a.location ?? '-',
+                        a.quantity,
+                        a.purchase_price > 0 ? rupiah(a.purchase_price) : '-',
+                        <span
+                            key="c"
+                            className={cn(
+                                'rounded px-2 py-0.5 text-xs font-medium',
+                                BADGE[a.condition],
+                            )}
+                        >
+                            {label(conditions, a.condition)}
+                        </span>,
+                        <span key="d" className="flex justify-end">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-9"
+                                onClick={() => setDetail(a.id)}
+                            >
+                                Detail
+                            </Button>
+                        </span>,
+                    ])}
+                />
+            </div>
+
+            {detail !== null &&
+                assets.find((x) => x.id === detail) &&
+                (() => {
+                    const a = assets.find((x) => x.id === detail) as Asset;
+
+                    return (
+                        <Modal
+                            open
+                            onClose={() => setDetail(null)}
+                            title={a.name}
+                            description={`${a.code} · ${label(conditions, a.condition)}`}
+                            className="sm:max-w-xl"
+                        >
+                            <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+                                <div>
+                                    <dt className="inline text-muted-foreground">
+                                        Kategori:{' '}
+                                    </dt>
+                                    <dd className="inline">
+                                        {a.category ?? '-'}
+                                    </dd>
                                 </div>
-                                <span className="text-sm tabular-nums">
-                                    {a.quantity} unit
-                                    {a.purchase_price > 0 &&
-                                        ` · ${rupiah(a.purchase_price)}`}
-                                </span>
-                                <span
-                                    className={cn(
-                                        'rounded px-2 py-0.5 text-xs font-medium',
-                                        BADGE[a.condition],
-                                    )}
-                                >
-                                    {label(conditions, a.condition)}
-                                </span>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-10"
-                                    aria-label="Riwayat dan detail"
-                                    aria-expanded={open === a.id}
-                                    onClick={() =>
-                                        setOpen(open === a.id ? null : a.id)
-                                    }
-                                >
-                                    <ChevronDown
-                                        className={cn(
-                                            'transition-transform',
-                                            open === a.id && 'rotate-180',
-                                        )}
-                                    />
-                                </Button>
-                            </div>
-                            {open === a.id && (
-                                <div className="grid gap-3 border-t p-3 text-sm">
-                                    <dl className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
-                                        <div>
-                                            <dt className="inline text-muted-foreground">
-                                                No. seri:{' '}
-                                            </dt>
-                                            <dd className="inline">
-                                                {a.serial ?? '-'}
-                                            </dd>
-                                        </div>
-                                        <div>
-                                            <dt className="inline text-muted-foreground">
-                                                Tanggal beli:{' '}
-                                            </dt>
-                                            <dd className="inline">
-                                                {a.purchased_on ?? '-'}
-                                            </dd>
-                                        </div>
-                                        <div>
-                                            <dt className="inline text-muted-foreground">
-                                                Nilai:{' '}
-                                            </dt>
-                                            <dd className="inline">
-                                                {rupiah(
-                                                    a.quantity *
-                                                        a.purchase_price,
-                                                )}
-                                            </dd>
-                                        </div>
-                                        {a.notes && (
-                                            <div className="sm:col-span-2">
-                                                <dt className="inline text-muted-foreground">
-                                                    Catatan:{' '}
-                                                </dt>
-                                                <dd className="inline">
-                                                    {a.notes}
-                                                </dd>
-                                            </div>
-                                        )}
-                                    </dl>
-                                    {can.manage && (
-                                        <div className="flex flex-wrap gap-2">
-                                            <Button
-                                                variant="outline"
-                                                className="h-10"
-                                                onClick={() =>
-                                                    setLog({
-                                                        asset: a,
-                                                        type: 'service',
-                                                        happened_on: new Date()
-                                                            .toISOString()
-                                                            .slice(0, 10),
-                                                        cost: '',
-                                                        note: '',
-                                                        condition: '',
-                                                        location: '',
-                                                    })
-                                                }
-                                            >
-                                                Catat servis / riwayat
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                className="h-10"
-                                                onClick={() =>
-                                                    setForm({
-                                                        id: a.id,
-                                                        code: a.code,
-                                                        name: a.name,
-                                                        category:
-                                                            a.category ?? '',
-                                                        brand: a.brand ?? '',
-                                                        model: a.model ?? '',
-                                                        serial: a.serial ?? '',
-                                                        quantity: a.quantity,
-                                                        purchased_on:
-                                                            a.purchased_on ??
-                                                            '',
-                                                        purchase_price:
-                                                            a.purchase_price,
-                                                        location:
-                                                            a.location ?? '',
-                                                        condition: a.condition,
-                                                        notes: a.notes ?? '',
-                                                    })
-                                                }
-                                            >
-                                                Ubah
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                className="h-10 text-destructive"
-                                                onClick={() =>
-                                                    confirm(
-                                                        `Hapus ${a.name}?`,
-                                                    ) &&
-                                                    router.delete(
-                                                        `/assets/${a.id}`,
-                                                        opts,
-                                                    )
-                                                }
-                                            >
-                                                Hapus
-                                            </Button>
-                                        </div>
-                                    )}
-                                    <div>
-                                        <p className="mb-1 font-medium">
-                                            Riwayat
-                                        </p>
-                                        {a.logs.length === 0 ? (
-                                            <p className="text-muted-foreground">
-                                                Belum ada riwayat.
-                                            </p>
-                                        ) : (
-                                            <ul className="grid gap-1">
-                                                {a.logs.map((l) => (
-                                                    <li
-                                                        key={l.id}
-                                                        className="flex flex-wrap justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2"
-                                                    >
-                                                        <span>
-                                                            {l.happened_on} ·{' '}
-                                                            <b>
-                                                                {label(
-                                                                    logTypes,
-                                                                    l.type,
-                                                                )}
-                                                            </b>
-                                                            {l.note &&
-                                                                ` · ${l.note}`}
-                                                            {l.user && (
-                                                                <span className="text-muted-foreground">
-                                                                    {' '}
-                                                                    ({l.user})
-                                                                </span>
-                                                            )}
-                                                        </span>
-                                                        {l.cost > 0 && (
-                                                            <span className="tabular-nums">
-                                                                {rupiah(l.cost)}
-                                                            </span>
-                                                        )}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        )}
+                                <div>
+                                    <dt className="inline text-muted-foreground">
+                                        Lokasi:{' '}
+                                    </dt>
+                                    <dd className="inline">
+                                        {a.location ?? '-'}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="inline text-muted-foreground">
+                                        Merek / model:{' '}
+                                    </dt>
+                                    <dd className="inline">
+                                        {[a.brand, a.model]
+                                            .filter(Boolean)
+                                            .join(' ') || '-'}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="inline text-muted-foreground">
+                                        No. seri:{' '}
+                                    </dt>
+                                    <dd className="inline">
+                                        {a.serial ?? '-'}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="inline text-muted-foreground">
+                                        Tanggal beli:{' '}
+                                    </dt>
+                                    <dd className="inline">
+                                        {a.purchased_on ?? '-'}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="inline text-muted-foreground">
+                                        Nilai:{' '}
+                                    </dt>
+                                    <dd className="inline">
+                                        {rupiah(a.quantity * a.purchase_price)}{' '}
+                                        ({a.quantity} unit)
+                                    </dd>
+                                </div>
+                                {a.notes && (
+                                    <div className="sm:col-span-2">
+                                        <dt className="inline text-muted-foreground">
+                                            Catatan:{' '}
+                                        </dt>
+                                        <dd className="inline">{a.notes}</dd>
                                     </div>
+                                )}
+                            </dl>
+                            {can.manage && (
+                                <div className="flex flex-wrap gap-2">
+                                    <Button
+                                        variant="outline"
+                                        className="h-10"
+                                        onClick={() => {
+                                            setDetail(null);
+                                            setLog({
+                                                asset: a,
+                                                type: 'service',
+                                                happened_on: new Date()
+                                                    .toISOString()
+                                                    .slice(0, 10),
+                                                cost: '',
+                                                note: '',
+                                                condition: '',
+                                                location: '',
+                                            });
+                                        }}
+                                    >
+                                        Catat servis / riwayat
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        className="h-10"
+                                        onClick={() => {
+                                            setDetail(null);
+                                            setForm({
+                                                id: a.id,
+                                                code: a.code,
+                                                name: a.name,
+                                                category: a.category ?? '',
+                                                brand: a.brand ?? '',
+                                                model: a.model ?? '',
+                                                serial: a.serial ?? '',
+                                                quantity: a.quantity,
+                                                purchased_on:
+                                                    a.purchased_on ?? '',
+                                                purchase_price:
+                                                    a.purchase_price,
+                                                location: a.location ?? '',
+                                                condition: a.condition,
+                                                notes: a.notes ?? '',
+                                            });
+                                        }}
+                                    >
+                                        Ubah
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        className="h-10 text-destructive"
+                                        onClick={() =>
+                                            confirm(`Hapus ${a.name}?`) &&
+                                            router.delete(`/assets/${a.id}`, {
+                                                ...opts,
+                                                onSuccess: () =>
+                                                    setDetail(null),
+                                            })
+                                        }
+                                    >
+                                        Hapus
+                                    </Button>
                                 </div>
                             )}
-                        </li>
-                    ))}
-                    {shown.length === 0 && (
-                        <li className="text-sm text-muted-foreground">
-                            {assets.length === 0
-                                ? 'Belum ada aset.'
-                                : 'Tidak ada aset yang cocok.'}
-                        </li>
-                    )}
-                </ul>
-            </div>
+                            <div>
+                                <p className="mb-1 text-sm font-medium">
+                                    Riwayat
+                                </p>
+                                <ResponsiveTable
+                                    headers={[
+                                        'Tanggal',
+                                        'Jenis',
+                                        'Catatan',
+                                        'Biaya',
+                                        'Oleh',
+                                    ]}
+                                    numeric={[3]}
+                                    empty="Belum ada riwayat."
+                                    rows={a.logs.map((l) => [
+                                        l.happened_on,
+                                        label(logTypes, l.type),
+                                        l.note ?? '-',
+                                        l.cost > 0 ? rupiah(l.cost) : '-',
+                                        l.user ?? '-',
+                                    ])}
+                                />
+                            </div>
+                        </Modal>
+                    );
+                })()}
 
             {importing && (
                 <ImportDialog

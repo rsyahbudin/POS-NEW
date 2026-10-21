@@ -118,37 +118,109 @@ class InventoryService
     }
 
     /**
-     * Goods received from a supplier: raises stock and re-averages the cost.
+     * Goods received, applied at once (managers). Raises stock and re-averages the cost.
      *
      * @param  array{supplier?: string|null, purchased_on: string, note?: string|null, items: list<array{ingredient_id: int, qty: float|int, unit_cost: float|int}>}  $data
      */
     public function receive(int $outletId, array $data, User $user): Purchase
     {
         return DB::transaction(function () use ($outletId, $data, $user) {
-            $purchase = Purchase::create([
-                'outlet_id' => $outletId, 'supplier' => $data['supplier'] ?? null, 'purchased_on' => $data['purchased_on'],
-                'note' => $data['note'] ?? null, 'user_id' => $user->id,
-            ]);
-            $sum = 0;
-            foreach ($data['items'] as $row) {
-                $ing = Ingredient::query()->where('outlet_id', $outletId)->lockForUpdate()->findOrFail($row['ingredient_id']);
-                $qty = (float) $row['qty'];
-                $cost = (float) $row['unit_cost'];
-                $avg = $ing->stock <= 0 ? $cost : (($ing->stock * $ing->avg_cost) + ($qty * $cost)) / ($ing->stock + $qty);
-                $ing->update(['stock' => $ing->stock + $qty, 'avg_cost' => $avg]);
-                $line = (int) round($qty * $cost);
-                $purchase->items()->create(['ingredient_id' => $ing->id, 'qty' => $qty, 'unit_cost' => $cost, 'total' => $line]);
-                StockMovement::create([
-                    'outlet_id' => $outletId, 'ingredient_id' => $ing->id, 'type' => 'purchase', 'qty' => $qty,
-                    'unit_cost' => $cost, 'user_id' => $user->id, 'purchase_id' => $purchase->id, 'note' => $data['supplier'] ?? null,
-                ]);
-                $sum += $line;
-            }
-            $purchase->update(['total' => $sum]);
-            Audit::log('inventory.purchase', $purchase, ['total' => $sum, 'items' => count($data['items'])], $user);
+            $purchase = $this->record($outletId, $data, $user);
+            $this->apply($purchase, $user);
+
+            return $purchase->refresh();
+        });
+    }
+
+    /**
+     * Staff shopping: applied at once when the user manages inventory or approval is off, otherwise saved as
+     * "pending" and applied only after a manager approves. Stock and costs do not move before that.
+     *
+     * @param  array{supplier?: string|null, purchased_on: string, note?: string|null, items: list<array{ingredient_id: int, qty: float|int, unit_cost: float|int}>}  $data
+     */
+    public function submitPurchase(int $outletId, array $data, User $user): Purchase
+    {
+        if ($user->can('manage-inventory') || ! (bool) $this->settings->get('inventory.purchase_needs_approval', true)) {
+            return $this->receive($outletId, $data, $user);
+        }
+
+        return DB::transaction(function () use ($outletId, $data, $user) {
+            $purchase = $this->record($outletId, $data, $user);
+            Audit::log('inventory.purchase_submitted', $purchase, ['total' => $purchase->total, 'items' => count($data['items'])], $user);
 
             return $purchase;
         });
+    }
+
+    public function approvePurchase(Purchase $purchase, User $reviewer): Purchase
+    {
+        return DB::transaction(function () use ($purchase, $reviewer) {
+            $purchase = Purchase::query()->lockForUpdate()->findOrFail($purchase->id);
+            $this->guardReview($purchase, $reviewer);
+            $this->apply($purchase, $reviewer);
+
+            return $purchase->refresh();
+        });
+    }
+
+    public function rejectPurchase(Purchase $purchase, User $reviewer, string $reason): Purchase
+    {
+        return DB::transaction(function () use ($purchase, $reviewer, $reason) {
+            $purchase = Purchase::query()->lockForUpdate()->findOrFail($purchase->id);
+            $this->guardReview($purchase, $reviewer);
+            $purchase->update(['status' => 'rejected', 'reviewed_by' => $reviewer->id, 'reviewed_at' => now(), 'review_note' => $reason]);
+            Audit::log('inventory.purchase_rejected', $purchase, ['reason' => $reason], $reviewer);
+
+            return $purchase;
+        });
+    }
+
+    /** Nobody but the owner signs off their own entry. */
+    private function guardReview(Purchase $purchase, User $reviewer): void
+    {
+        if ($purchase->status !== 'pending') {
+            throw new OrderException('Pembelian ini tidak menunggu persetujuan.');
+        }
+        if ($purchase->user_id === $reviewer->id && ! $reviewer->hasRole('owner')) {
+            throw new OrderException('Pembelian yang Anda catat sendiri harus disetujui orang lain.');
+        }
+    }
+
+    /**
+     * @param  array{supplier?: string|null, purchased_on: string, note?: string|null, items: list<array{ingredient_id: int, qty: float|int, unit_cost: float|int}>}  $data
+     */
+    private function record(int $outletId, array $data, User $user): Purchase
+    {
+        $purchase = Purchase::create([
+            'outlet_id' => $outletId, 'supplier' => $data['supplier'] ?? null, 'purchased_on' => $data['purchased_on'],
+            'note' => $data['note'] ?? null, 'user_id' => $user->id, 'status' => 'pending',
+        ]);
+        $sum = 0;
+        foreach ($data['items'] as $row) {
+            Ingredient::query()->where('outlet_id', $outletId)->findOrFail($row['ingredient_id']);
+            $line = (int) round((float) $row['qty'] * (float) $row['unit_cost']);
+            $purchase->items()->create(['ingredient_id' => $row['ingredient_id'], 'qty' => (float) $row['qty'], 'unit_cost' => (float) $row['unit_cost'], 'total' => $line]);
+            $sum += $line;
+        }
+        $purchase->update(['total' => $sum]);
+
+        return $purchase;
+    }
+
+    /** Puts a recorded purchase into stock and re-averages each ingredient's cost. */
+    private function apply(Purchase $purchase, User $reviewer): void
+    {
+        foreach ($purchase->items()->get() as $item) {
+            $ing = Ingredient::query()->lockForUpdate()->findOrFail($item->ingredient_id);
+            $avg = $ing->stock <= 0 ? $item->unit_cost : (($ing->stock * $ing->avg_cost) + ($item->qty * $item->unit_cost)) / ($ing->stock + $item->qty);
+            $ing->update(['stock' => $ing->stock + $item->qty, 'avg_cost' => $avg]);
+            StockMovement::create([
+                'outlet_id' => $purchase->outlet_id, 'ingredient_id' => $ing->id, 'type' => 'purchase', 'qty' => $item->qty,
+                'unit_cost' => $item->unit_cost, 'user_id' => $purchase->user_id, 'purchase_id' => $purchase->id, 'note' => $purchase->supplier,
+            ]);
+        }
+        $purchase->update(['status' => 'approved', 'reviewed_by' => $reviewer->id, 'reviewed_at' => now()]);
+        Audit::log('inventory.purchase', $purchase, ['total' => $purchase->total, 'items' => $purchase->items()->count()], $reviewer);
     }
 
     /** Stock count: sets the stock to what was actually counted and records the difference. */

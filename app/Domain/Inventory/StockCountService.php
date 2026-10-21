@@ -88,6 +88,9 @@ class StockCountService
             if ($count->status !== 'submitted') {
                 throw new OrderException('Hitungan ini tidak menunggu persetujuan.');
             }
+            if (! $auto && $count->user_id === $reviewer->id && ! $reviewer->hasRole('owner')) {
+                throw new OrderException('Hitungan yang Anda kirim sendiri harus disetujui orang lain.');
+            }
             $name = User::query()->whereKey($count->user_id)->value('name') ?? '-';
             foreach ($count->lines()->get() as $line) {
                 $delta = $line->counted - (float) $line->system_qty;
@@ -117,6 +120,9 @@ class StockCountService
             $count = StockCount::query()->lockForUpdate()->findOrFail($count->id);
             if ($count->status !== 'submitted') {
                 throw new OrderException('Hitungan ini tidak menunggu persetujuan.');
+            }
+            if ($count->user_id === $reviewer->id && ! $reviewer->hasRole('owner')) {
+                throw new OrderException('Hitungan yang Anda kirim sendiri harus ditinjau orang lain.');
             }
             $count->update(['status' => 'rejected', 'reviewed_by' => $reviewer->id, 'reviewed_at' => now(), 'review_note' => $reason]);
             Audit::log('stock.count_rejected', $count, ['reason' => $reason], $reviewer);

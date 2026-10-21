@@ -55,8 +55,7 @@ class ImportController extends Controller
     private function importer(Request $request, string $type): Importer
     {
         $importer = $this->imports->find($type);
-        $user = $this->actor($request);
-        abort_unless($user->can($importer->permission()) && (! $importer->needsImportPermission() || $user->can('import-data')), 403);
+        abort_unless($importer->allows($this->actor($request)), 403);
 
         return $importer;
     }

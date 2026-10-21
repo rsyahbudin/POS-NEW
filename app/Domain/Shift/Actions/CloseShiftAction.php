@@ -80,6 +80,7 @@ class CloseShiftAction
                 ], $shift, $user->id, false, $shift->outlet_id);
             }
 
+            Notifier::later(fn (Notifier $n) => $n->resolve($shift->outlet_id, "shift.open:{$shift->id}"));
             if ($difference !== 0) {
                 Notifier::later(fn (Notifier $n) => $n->notify(
                     $shift->outlet_id, 'shift.difference', 'Selisih kas shift '.($difference < 0 ? 'KURANG' : 'LEBIH').' Rp '.number_format(abs($difference), 0, ',', '.'),

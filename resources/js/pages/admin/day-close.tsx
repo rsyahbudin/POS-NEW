@@ -34,6 +34,13 @@ export default function DayClose({
         <>
             <Head title="Tutup Hari" />
             <div className="grid gap-4 p-4">
+                <p role="note" className="rounded-lg bg-muted p-3 text-sm">
+                    Laporan harian dibuat <b>otomatis</b> setelah hari bisnis
+                    berganti dan semua shift hari itu sudah ditutup, lalu
+                    dikirim ke Telegram (bisa dimatikan di Pengaturan &gt;
+                    Operasional). Menekan tombol di bawah hanya perlu kalau Anda
+                    ingin laporan hari ini lebih awal.
+                </p>
                 <PageHeader
                     title="Tutup hari (Z-report)"
                     subtitle={`Hari bisnis ${dateId(date)}`}

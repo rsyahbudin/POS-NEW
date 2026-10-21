@@ -14,6 +14,9 @@ Schedule::command('backup:monitor')->dailyAt('03:45')->onOneServer();
 // Queue metrics for Horizon's dashboard.
 Schedule::command('horizon:snapshot')->everyFiveMinutes();
 
+// Daily report (Z-report) without anyone pressing a button; checks every 30 minutes after the day changes.
+Schedule::command('days:auto-close')->everyThirtyMinutes()->withoutOverlapping();
+
 // Notifications: keep the bell light.
 Schedule::command('notifications:prune')->dailyAt('03:15');
 

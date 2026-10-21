@@ -16,7 +16,8 @@ class CloseBusinessDayAction
 {
     public function __construct(private ZReport $report, private OutletContext $outlet) {}
 
-    public function handle(User $user, string $date): BusinessDay
+    /** @param  User|null  $user  null when the system closes the day by itself */
+    public function handle(?User $user, string $date): BusinessDay
     {
         return DB::transaction(function () use ($user, $date) {
             $outletId = $this->outlet->id();
@@ -25,11 +26,11 @@ class CloseBusinessDayAction
             if ($day->closed_at) {
                 throw new OrderException('Hari bisnis ini sudah ditutup.');
             }
-            if (Shift::query()->where('outlet_id', $outletId)->whereNull('closed_at')->exists()) {
+            if (Shift::query()->where('outlet_id', $outletId)->whereNull('closed_at')->where('business_date', '<=', $date)->exists()) {
                 throw new OrderException('Masih ada shift yang terbuka. Tutup semua shift dulu.');
             }
 
-            $day->update(['closed_at' => now(), 'closed_by' => $user->id, 'summary' => $this->report->build($date)]);
+            $day->update(['closed_at' => now(), 'closed_by' => $user?->id, 'summary' => $this->report->build($date)]);
             Audit::log('day.closed', $day, ['date' => $date], $user);
             SendZReportJob::dispatch($day->id)->afterCommit();
 

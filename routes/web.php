@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Asset\AssetController;
 use App\Http\Controllers\Auth\PinLoginController;
+use App\Http\Controllers\Import\ImportController;
 use App\Http\Controllers\Kds\KdsController;
 use App\Http\Controllers\Pos\OrderController;
 use App\Http\Controllers\Pos\PosController;
@@ -122,6 +123,14 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::get('/', [StockController::class, 'count'])->name('count');
         Route::post('save', [StockController::class, 'save'])->name('count.save');
         Route::post('submit', [StockController::class, 'submit'])->name('count.submit');
+    });
+
+    // Excel imports and templates
+    Route::prefix('import/{type}')->name('import.')->group(function () {
+        Route::get('/', [ImportController::class, 'info'])->name('info');
+        Route::get('template', [ImportController::class, 'template'])->name('template');
+        Route::post('preview', [ImportController::class, 'preview'])->name('preview');
+        Route::post('apply', [ImportController::class, 'apply'])->name('apply');
     });
 
     // Equipment register

@@ -42,8 +42,12 @@ import { t } from '@/lang';
 import { api, ApiError } from '@/lib/api';
 import { rupiah } from '@/lib/format';
 import {
+    bluetoothPrinterName,
+    bluetoothSupported,
     getPrinterPrefs,
     listPrinters,
+    pairBluetoothPrinter,
+    printTest,
     printReceipt,
     savePrinterPrefs,
 } from '@/lib/print';
@@ -1495,36 +1499,110 @@ function PrinterDialog({ onClose }: { onClose: () => void }) {
                 'Pengaturan hanya berlaku di perangkat/browser ini.',
             )}
         >
-            <Button
-                type="button"
-                variant="outline"
-                className="h-11"
-                onClick={detect}
-            >
-                {t('Cari printer (QZ Tray)')}
-            </Button>
+            <Field label={t('Cara cetak')}>
+                <Select
+                    value={prefs.method}
+                    onChange={(e) =>
+                        setPrefs({
+                            ...prefs,
+                            method: e.target.value as PrinterPrefs['method'],
+                        })
+                    }
+                >
+                    <option value="bluetooth">
+                        {t('Bluetooth langsung (printer BLE)')}
+                    </option>
+                    <option value="rawbt">
+                        {t('Aplikasi RawBT (Android, printer Bluetooth biasa)')}
+                    </option>
+                    <option value="qz">{t('QZ Tray (komputer/laptop)')}</option>
+                </Select>
+            </Field>
+            {prefs.method === 'bluetooth' && (
+                <div className="grid gap-2 rounded-lg bg-muted p-3 text-sm">
+                    {bluetoothSupported() ? (
+                        <>
+                            <p>
+                                {t(
+                                    'Nyalakan printer, lalu tekan Hubungkan dan pilih printer dari daftar.',
+                                )}
+                            </p>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-11"
+                                onClick={async () => {
+                                    try {
+                                        const name =
+                                            await pairBluetoothPrinter();
+                                        setError('');
+                                        toast.success(
+                                            `${t('Terhubung')}: ${name}`,
+                                        );
+                                    } catch (e) {
+                                        setError(
+                                            e instanceof Error
+                                                ? e.message
+                                                : t('Gagal menghubungkan.'),
+                                        );
+                                    }
+                                }}
+                            >
+                                {bluetoothPrinterName()
+                                    ? `${t('Terhubung')}: ${bluetoothPrinterName()} · ${t('ganti')}`
+                                    : t('Hubungkan printer Bluetooth')}
+                            </Button>
+                        </>
+                    ) : (
+                        <p role="alert">
+                            {t(
+                                'Browser ini tidak mendukung Bluetooth langsung. Di iPhone pakai browser Bluefy; di Android pakai Chrome.',
+                            )}
+                        </p>
+                    )}
+                </div>
+            )}
+            {prefs.method === 'rawbt' && (
+                <p className="rounded-lg bg-muted p-3 text-sm">
+                    {t(
+                        'Pasang aplikasi RawBT dari Play Store, pasangkan printer lewat Bluetooth Android, lalu pilih printer itu di RawBT. Struk dikirim otomatis ke RawBT.',
+                    )}
+                </p>
+            )}
+            {prefs.method === 'qz' && (
+                <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11"
+                    onClick={detect}
+                >
+                    {t('Cari printer (QZ Tray)')}
+                </Button>
+            )}
             {error && (
                 <p className="text-sm text-destructive" role="alert">
                     {error}
                 </p>
             )}
-            <Field label="Printer">
-                <Select
-                    value={prefs.printer}
-                    onChange={(e) =>
-                        setPrefs({ ...prefs, printer: e.target.value })
-                    }
-                >
-                    <option value="">{t('— pilih —')}</option>
-                    {[
-                        ...new Set(
-                            [prefs.printer, ...printers].filter(Boolean),
-                        ),
-                    ].map((p) => (
-                        <option key={p}>{p}</option>
-                    ))}
-                </Select>
-            </Field>
+            {prefs.method === 'qz' && (
+                <Field label="Printer">
+                    <Select
+                        value={prefs.printer}
+                        onChange={(e) =>
+                            setPrefs({ ...prefs, printer: e.target.value })
+                        }
+                    >
+                        <option value="">{t('— pilih —')}</option>
+                        {[
+                            ...new Set(
+                                [prefs.printer, ...printers].filter(Boolean),
+                            ),
+                        ].map((p) => (
+                            <option key={p}>{p}</option>
+                        ))}
+                    </Select>
+                </Field>
+            )}
             <Field label={t('Lebar kertas')}>
                 <Select
                     value={prefs.paper}
@@ -1550,6 +1628,25 @@ function PrinterDialog({ onClose }: { onClose: () => void }) {
                 />
                 {t('Cetak langsung tanpa dialog browser')}
             </label>
+            <Button
+                type="button"
+                variant="outline"
+                className="h-11"
+                onClick={async () => {
+                    try {
+                        await printTest(prefs);
+                        setError('');
+                    } catch (e) {
+                        setError(
+                            e instanceof Error
+                                ? e.message
+                                : t('Gagal mencetak.'),
+                        );
+                    }
+                }}
+            >
+                {t('Cetak tes')}
+            </Button>
             <Button
                 type="button"
                 className="h-12"

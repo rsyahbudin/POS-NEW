@@ -1,17 +1,30 @@
+import { ChevronDown } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
-/** Native select styled like the inputs: reliable on tablets, easy 44px touch target. */
-export function Select({ className, ...props }: ComponentProps<'select'>) {
+/** Native select styled like the inputs: reliable on tablets, 44px touch target, with our own chevron. */
+export function Select({
+    className,
+    children,
+    ...props
+}: ComponentProps<'select'>) {
     return (
-        <select
-            {...props}
-            className={cn(
-                'h-11 w-full rounded-xl border border-input bg-card px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50',
-                className,
-            )}
-        />
+        <div className="relative w-full">
+            <select
+                {...props}
+                className={cn(
+                    'h-11 w-full appearance-none rounded-xl border border-input bg-card pr-9 pl-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50',
+                    className,
+                )}
+            >
+                {children}
+            </select>
+            <ChevronDown
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+        </div>
     );
 }
 
@@ -27,7 +40,7 @@ export function Field({
     error?: string;
 }) {
     return (
-        <div className="grid gap-1.5">
+        <div className="grid gap-2">
             <Label>{label}</Label>
             {children}
             {hint && <p className="text-xs text-muted-foreground">{hint}</p>}

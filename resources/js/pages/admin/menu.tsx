@@ -334,7 +334,7 @@ export default function MenuPage({
                                 {printers.map((pr) => (
                                     <label
                                         key={pr.id}
-                                        className="flex items-center gap-2 text-sm"
+                                        className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm"
                                     >
                                         <input
                                             type="checkbox"
@@ -489,11 +489,11 @@ export default function MenuPage({
                                 label="Cetak tiket di printer"
                                 hint="Kosong = ikut printer kategori. Pilih lebih dari satu untuk mencetak di beberapa printer."
                             >
-                                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                                <div className="flex flex-wrap gap-2">
                                     {printers.map((pr) => (
                                         <label
                                             key={pr.id}
-                                            className="flex items-center gap-2 text-sm"
+                                            className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm"
                                         >
                                             <input
                                                 type="checkbox"
@@ -666,14 +666,14 @@ export default function MenuPage({
                         </Button>
                     </fieldset>
 
-                    <fieldset className="grid gap-1">
-                        <legend className="text-sm font-medium">
+                    <fieldset className="grid gap-2 sm:grid-cols-2">
+                        <legend className="mb-2 text-sm font-medium">
                             Grup modifier
                         </legend>
                         {modifierGroups.map((g) => (
                             <label
                                 key={g.id}
-                                className="flex items-center gap-2 text-sm"
+                                className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm"
                             >
                                 <input
                                     type="checkbox"
@@ -699,7 +699,7 @@ export default function MenuPage({
                             </label>
                         ))}
                     </fieldset>
-                    <label className="flex items-center gap-2 text-sm">
+                    <label className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm">
                         <input
                             type="checkbox"
                             className="size-5"
@@ -766,7 +766,7 @@ export default function MenuPage({
                             />
                         </Field>
                     </div>
-                    <label className="flex items-center gap-2 text-sm">
+                    <label className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm">
                         <input
                             type="checkbox"
                             className="size-5"

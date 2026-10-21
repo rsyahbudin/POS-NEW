@@ -168,7 +168,7 @@ export default function InventoryPage({
                     </p>
                 )}
 
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                     <Stat label="Jumlah bahan" value={ingredients.length} />
                     <Stat
                         label="Nilai stok"
@@ -624,7 +624,7 @@ export default function InventoryPage({
                         return (
                             <div
                                 key={idx}
-                                className="grid grid-cols-[1fr_5rem_6rem_auto] items-end gap-2"
+                                className="grid grid-cols-[1fr_6rem_7.5rem_2.75rem] items-end gap-2"
                             >
                                 <Field label={idx === 0 ? 'Bahan' : ''}>
                                     <Select

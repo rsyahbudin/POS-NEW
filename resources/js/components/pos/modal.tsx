@@ -27,7 +27,7 @@ export function Modal({
         <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
             <DialogContent
                 className={cn(
-                    'max-h-[92dvh] gap-3 overflow-y-auto sm:max-w-lg',
+                    'max-h-[92dvh] gap-4 overflow-y-auto sm:max-w-lg',
                     className,
                 )}
             >

@@ -262,8 +262,8 @@ export default function RecipesPage({
                             className={
                                 edit.kind === 'product' &&
                                 edit.variants.length > 0
-                                    ? 'grid grid-cols-[7rem_1fr_5rem_auto] items-center gap-2'
-                                    : 'grid grid-cols-[1fr_6rem_auto] items-center gap-2'
+                                    ? 'grid grid-cols-[7rem_1fr_6.5rem_2.75rem] items-center gap-2'
+                                    : 'grid grid-cols-[1fr_6.5rem_2.75rem] items-center gap-2'
                             }
                         >
                             {edit.kind === 'product' &&
@@ -331,6 +331,7 @@ export default function RecipesPage({
                             <Input
                                 className="h-11"
                                 aria-label="Jumlah"
+                                placeholder="Jumlah"
                                 type="number"
                                 min={0}
                                 step="any"

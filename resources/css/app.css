@@ -140,4 +140,18 @@
     body {
         @apply bg-background text-foreground;
     }
+
+    /* Native controls follow the brand colour and the input look. */
+    input[type='checkbox'],
+    input[type='radio'] {
+        accent-color: var(--primary);
+    }
+
+    input[type='file'] {
+        @apply h-11 w-full rounded-xl border border-input bg-card px-2 py-1.5 text-sm text-muted-foreground;
+    }
+
+    input[type='file']::file-selector-button {
+        @apply mr-3 cursor-pointer rounded-lg border-0 bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary;
+    }
 }

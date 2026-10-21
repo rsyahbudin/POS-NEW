@@ -10,6 +10,7 @@ use App\Domain\Expense\Models\Expense;
 use App\Domain\Expense\Models\ExpenseCategory;
 use App\Domain\Settings\OutletContext;
 use App\Models\User;
+use App\Support\Audit;
 use Illuminate\Support\Facades\DB;
 
 class RecordExpenseAction
@@ -36,6 +37,8 @@ class RecordExpenseAction
                 ['account_id' => $category->account_id, 'debit' => $amount],
                 ['account_id' => $source->id, 'credit' => $amount],
             ], $expense, $user->id, false, $outletId);
+
+            Audit::log('expense.recorded', $expense, ['category' => $category->name, 'amount' => $amount, 'note' => $note], $user);
 
             return $expense;
         });

@@ -111,7 +111,7 @@ class SplitBillAction
         $this->bills->clearBills($order);
         $created = [];
         foreach ($parts as $i => $part) {
-            $bill = $order->bills()->create(['label' => $part['label'] ?? 'Tamu '.($i + 1), 'split_mode' => 'item', 'status' => BillStatus::Unpaid]);
+            $bill = $order->bills()->create(['label' => $part['label'] ?? 'Tamu '.($i + 1), 'split_mode' => 'item', 'status' => BillStatus::Unpaid, 'created_by' => auth()->id()]);
             $this->bills->writeBill($bill, $this->bills->subsetTotals($order, $perBill[$i], $fixedShares[$i]), $perBill[$i]);
             $created[] = $bill;
         }
@@ -177,7 +177,7 @@ class SplitBillAction
         $this->bills->clearBills($order);
         $created = [];
         foreach ($grands as $i => $grand) {
-            $bill = $order->bills()->create(['label' => $labels[$i] ?? 'Tamu '.($i + 1), 'split_mode' => $mode, 'status' => BillStatus::Unpaid]);
+            $bill = $order->bills()->create(['label' => $labels[$i] ?? 'Tamu '.($i + 1), 'split_mode' => $mode, 'status' => BillStatus::Unpaid, 'created_by' => auth()->id()]);
 
             $charges = [];
             $exclusive = 0;

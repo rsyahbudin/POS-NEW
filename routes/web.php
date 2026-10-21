@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AccountingController;
+use App\Http\Controllers\Admin\ActivityController;
 use App\Http\Controllers\Admin\DayCloseController;
 use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\FloorController;
@@ -250,6 +251,11 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::get('expenses', [ExpenseController::class, 'index'])->name('expenses');
             Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store');
             Route::get('expenses/export', [ExpenseController::class, 'export'])->name('expenses.export');
+        });
+
+        Route::middleware('permission:view-activity-log')->group(function () {
+            Route::get('activity', [ActivityController::class, 'index'])->name('activity');
+            Route::get('activity/export', [ActivityController::class, 'export'])->name('activity.export');
         });
 
         Route::middleware('permission:view-margin-report')->group(function () {

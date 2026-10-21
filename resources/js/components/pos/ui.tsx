@@ -183,6 +183,18 @@ function numberOf(text: string): number | null {
 
 type Sort = { col: number; dir: 'asc' | 'desc' } | null;
 
+/** Columns holding free text or timestamps never become drop-down filters (use the search box). */
+const FREE_TEXT = [
+    'Detail',
+    'Catatan',
+    'Keterangan',
+    'Alasan',
+    'Waktu',
+    'Tanggal',
+    'Pemasok',
+    'Toko / pemasok',
+];
+
 /**
  * Data table for lists and reports: search box, drop-down filters for columns with few distinct values, and
  * sorting by clicking a column header. Collapses to cards on phones (first column is the card title), where a
@@ -225,7 +237,11 @@ export function ResponsiveTable({
         const out: { col: number; values: string[] }[] = [];
 
         headers.forEach((_, i) => {
-            if (isAction(i) || numeric.includes(i)) {
+            if (
+                isAction(i) ||
+                numeric.includes(i) ||
+                FREE_TEXT.includes(headers[i])
+            ) {
                 return;
             }
 

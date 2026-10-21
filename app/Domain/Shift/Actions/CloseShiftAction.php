@@ -61,7 +61,7 @@ class CloseShiftAction
                 'expected_cash' => $expected, 'counted_cash' => $counted,
                 'cash_left' => $cashLeft, 'cash_deposited' => $deposit, 'deposit_account_id' => $depositAccountId,
                 'difference' => $difference, 'difference_reason' => $differenceReason,
-                'closed_at' => now(), 'close_key' => $closeKey,
+                'closed_at' => now(), 'closed_by' => $user->id, 'close_key' => $closeKey,
             ]);
 
             $date = BusinessDate::for();

@@ -21,6 +21,7 @@ use App\Domain\Pricing\Actions\RecalculateOrderAction;
 use App\Domain\Printing\PrintDispatcher;
 use App\Domain\Settings\OutletContext;
 use App\Models\User;
+use App\Support\Audit;
 use App\Support\BusinessDate;
 use App\Support\Realtime;
 use Carbon\CarbonImmutable;
@@ -79,6 +80,10 @@ class PlaceOrderAction
                 $this->stock->reserve($item);
             }
 
+            Audit::log('order.placed', $order, [
+                'order' => $order->number, 'new' => $order->wasRecentlyCreated, 'where' => $order->table->name ?? $order->call_number ?? $order->platform,
+                'items' => collect($rows)->map(fn ($r) => $r['qty'].'× '.$r['name_snapshot'])->implode(', '),
+            ], $user);
             $this->promotions->handle($order);
             $this->recalculate->handle($order);
             $this->syncTable->handle($order->table_id);

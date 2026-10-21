@@ -12,7 +12,7 @@ class OrderPresenter
     /** @return array<string, mixed> */
     public static function full(Order $order): array
     {
-        $order->loadMissing(['table.area', 'rounds.items', 'charges', 'discounts', 'bills.items', 'bills.charges.orderCharge', 'payments.method', 'opener']);
+        $order->loadMissing(['table.area', 'rounds.items', 'charges', 'discounts', 'bills.items', 'bills.charges.orderCharge', 'payments.method', 'payments.receiver', 'opener', 'billRequester', 'rounds.creator', 'rounds.confirmer']);
 
         return [
             'id' => $order->id,
@@ -26,6 +26,7 @@ class OrderPresenter
             'customer_name' => $order->customer_name,
             'call_number' => $order->call_number,
             'cashier' => $order->opener?->name,
+            'bill_requested_by' => $order->billRequester?->name,
             'subtotal' => $order->subtotal,
             'discount_total' => $order->discount_total,
             'charge_total' => $order->charge_total,
@@ -51,7 +52,7 @@ class OrderPresenter
             'payments' => $order->payments->map(fn ($p) => [
                 'id' => $p->id, 'bill_id' => $p->bill_id, 'method' => $p->method->name, 'method_type' => $p->method->type->value,
                 'amount' => $p->amount, 'tendered' => $p->tendered, 'change' => $p->change, 'reference' => $p->reference,
-                'refunded_total' => $p->refunded_total, 'created_at' => $p->created_at?->toIso8601String(),
+                'refunded_total' => $p->refunded_total, 'created_at' => $p->created_at?->toIso8601String(), 'by' => $p->receiver?->name,
             ])->all(),
         ];
     }
@@ -65,6 +66,8 @@ class OrderPresenter
             'status' => $r->status->value,
             'customer_name' => $r->customer_name,
             'reject_reason' => $r->reject_reason,
+            'by' => $r->creator?->name,
+            'confirmed_by' => $r->confirmer?->name,
             'created_at' => $r->created_at?->toIso8601String(),
             'items' => $r->items->map(fn (OrderItem $i) => self::item($i))->values()->all(),
         ];

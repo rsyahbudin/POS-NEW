@@ -60,36 +60,61 @@ class Notifier
         AppNotification::query()->where('outlet_id', $outletId)->where('dedupe_key', $dedupeKey)->whereNull('resolved_at')->update(['resolved_at' => now()]);
     }
 
-    /** @return Builder<AppNotification> */
+    /** Notifications older than this are gone from the bell (and deleted by the nightly prune). */
+    public const WINDOW_DAYS = 30;
+
+    /**
+     * What this user may see: addressed to them, or targeted at a permission they hold. One jsonb "any of"
+     * check instead of one condition per permission, and only the recent window.
+     *
+     * @return Builder<AppNotification>
+     */
     public function visibleTo(User $user): Builder
     {
-        $permissions = $user->getAllPermissions()->pluck('name')->all();
+        $permissions = array_values($user->getAllPermissions()->pluck('name')->all());
 
-        return AppNotification::query()->where('outlet_id', $user->outlet_id)->whereNull('resolved_at')->where(function (Builder $q) use ($user, $permissions) {
-            $q->where('user_id', $user->id)->orWhere(function (Builder $q2) use ($permissions) {
-                $q2->whereNull('user_id')->where(function (Builder $q3) use ($permissions) {
-                    $q3->whereNull('permissions');
-                    foreach ($permissions as $permission) {
-                        $q3->orWhereJsonContains('permissions', $permission);
-                    }
+        return AppNotification::query()->where('app_notifications.outlet_id', $user->outlet_id)->whereNull('app_notifications.resolved_at')
+            ->where('app_notifications.created_at', '>=', now()->subDays(self::WINDOW_DAYS))
+            ->where(function (Builder $q) use ($user, $permissions) {
+                $q->where('app_notifications.user_id', $user->id)->orWhere(function (Builder $q2) use ($permissions) {
+                    $q2->whereNull('app_notifications.user_id')->where(function (Builder $q3) use ($permissions) {
+                        $q3->whereNull('app_notifications.permissions');
+                        if ($permissions !== []) {
+                            $q3->orWhereRaw('jsonb_exists_any(app_notifications.permissions, ARRAY['.implode(',', array_fill(0, count($permissions), '?')).']::text[])', $permissions);
+                        }
+                    });
                 });
             });
-        });
     }
 
     /** @return array<string, mixed> */
     public function feed(User $user, int $limit = 30): array
     {
-        $read = DB::table('notification_reads')->where('user_id', $user->id)->pluck('notification_id')->flip();
-        $items = $this->visibleTo($user)->latest('id')->limit($limit)->get();
+        $rows = $this->visibleTo($user)
+            ->leftJoin('notification_reads as r', fn ($j) => $j->on('r.notification_id', '=', 'app_notifications.id')->where('r.user_id', '=', $user->id))
+            ->select('app_notifications.*', 'r.read_at')
+            ->orderByDesc('app_notifications.id')->limit($limit)->get();
+        $unread = $this->visibleTo($user)->whereNotExists(
+            fn ($q) => $q->selectRaw('1')->from('notification_reads as r')->whereColumn('r.notification_id', 'app_notifications.id')->where('r.user_id', $user->id),
+        )->count();
 
         return [
-            'unread' => $this->visibleTo($user)->whereNotIn('id', DB::table('notification_reads')->where('user_id', $user->id)->select('notification_id'))->count(),
-            'items' => $items->map(fn (AppNotification $n) => [
+            'unread' => $unread,
+            'items' => $rows->map(fn (AppNotification $n) => [
                 'id' => $n->id, 'kind' => $n->kind, 'title' => $n->title, 'body' => $n->body, 'url' => $n->url, 'level' => $n->level,
-                'at' => $n->created_at?->toIso8601String(), 'read' => $read->has($n->id),
+                'at' => $n->created_at?->toIso8601String(), 'read' => $n->getAttribute('read_at') !== null,
             ])->values()->all(),
         ];
+    }
+
+    /** Deletes what nobody needs any more; returns how many rows went. */
+    public function prune(): int
+    {
+        return AppNotification::query()->where(function (Builder $q) {
+            $q->where('resolved_at', '<', now()->subDays(3))
+                ->orWhere('created_at', '<', now()->subDays(self::WINDOW_DAYS))
+                ->orWhere(fn (Builder $i) => $i->where('level', 'info')->where('created_at', '<', now()->subDays(7)));
+        })->delete();
     }
 
     public function markRead(User $user, int $id): void

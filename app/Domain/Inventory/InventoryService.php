@@ -90,7 +90,7 @@ class InventoryService
             $ing->update(['stock' => $ing->stock - $need]);
             StockMovement::create([
                 'outlet_id' => $ing->outlet_id, 'ingredient_id' => $ing->id, 'type' => 'sale', 'qty' => -$need,
-                'unit_cost' => $ing->avg_cost, 'order_item_id' => $item->id,
+                'unit_cost' => $ing->avg_cost, 'order_item_id' => $item->id, 'user_id' => auth()->id(),
             ]);
             $total += $need * $ing->avg_cost;
         }

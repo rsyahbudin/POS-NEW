@@ -31,6 +31,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Presenters\OrderPresenter;
 use App\Http\Requests\PayRequest;
 use App\Http\Requests\PlaceOrderRequest;
+use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -177,6 +178,7 @@ class OrderController extends Controller
     {
         abort_unless($this->actor($request)->can('receive-payment'), 403);
         $action->handle($order);
+        Audit::log('bill.split_cancelled', $order, ['order' => $order->number], $this->actor($request));
 
         return $this->respond($order);
     }

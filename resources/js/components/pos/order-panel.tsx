@@ -105,6 +105,14 @@ export function OrderPanel({
                             {subtitle}
                         </p>
                     )}
+                    {order && (order.cashier || order.bill_requested_by) && (
+                        <p className="text-xs text-muted-foreground">
+                            {order.cashier &&
+                                `${t('Dibuka oleh')} ${order.cashier}`}
+                            {order.bill_requested_by &&
+                                ` · ${t('bill diminta')} ${order.bill_requested_by}`}
+                        </p>
+                    )}
                 </div>
                 {order && (
                     <span className="rounded bg-muted px-2 py-1 text-xs font-medium">
@@ -118,6 +126,16 @@ export function OrderPanel({
                     <div key={round.id}>
                         <p className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
                             {t('Ronde')} {idx + 1} · {timeId(round.created_at)}
+                            {round.source === 'pos' && round.by && (
+                                <span>
+                                    · {t('oleh')} {round.by}
+                                </span>
+                            )}
+                            {round.source === 'qr' && round.confirmed_by && (
+                                <span>
+                                    · {t('dikonfirmasi')} {round.confirmed_by}
+                                </span>
+                            )}
                             {round.source === 'qr' && (
                                 <span className="rounded bg-violet-600 px-1.5 text-[10px] font-bold text-white">
                                     QR{' '}
@@ -431,6 +449,12 @@ export function OrderPanel({
                                 <span>
                                     {p.method}
                                     {p.reference ? ` · ${p.reference}` : ''}
+                                    {p.by && (
+                                        <span className="ml-1 text-xs text-muted-foreground">
+                                            · {t('diterima')} {p.by}{' '}
+                                            {timeId(p.created_at)}
+                                        </span>
+                                    )}
                                     {p.refunded_total > 0 && (
                                         <em className="ml-1 text-xs text-destructive">
                                             (refund {rupiah(p.refunded_total)})

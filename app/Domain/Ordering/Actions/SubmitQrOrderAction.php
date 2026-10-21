@@ -14,6 +14,7 @@ use App\Domain\Ordering\ItemBuilder;
 use App\Domain\Ordering\Models\Order;
 use App\Domain\Ordering\Models\OrderRound;
 use App\Domain\Settings\SettingsRepository;
+use App\Support\Audit;
 use App\Support\BusinessDate;
 use App\Support\Realtime;
 use Carbon\CarbonImmutable;
@@ -87,6 +88,8 @@ class SubmitQrOrderAction
             foreach ($rows as $row) {
                 $round->items()->create($row + ['order_id' => $order->id, 'status' => 'pending']);
             }
+
+            Audit::log('qr.submitted', $round, ['order' => $order->number, 'table' => $table->name, 'customer' => $name, 'items' => collect($rows)->map(fn ($r) => $r['qty'].'× '.$r['name_snapshot'])->implode(', ')], null);
 
             return $round;
         });

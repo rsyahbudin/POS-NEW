@@ -33,6 +33,7 @@ final class PermissionCatalog
                 'view-sales-reports' => ['label' => 'Laporan penjualan & dashboard', 'hint' => 'Dashboard, laporan penjualan, laporan diskon/void/refund.'],
                 'view-kitchen-report' => ['label' => 'Laporan kinerja dapur', 'hint' => 'Berapa menit dapur menyelesaikan pesanan.'],
                 'view-margin-report' => ['label' => 'Laporan margin & HPP', 'hint' => 'Biaya bahan, laba kotor, dan nilai stok. Data sensitif, batasi ke owner/manager.'],
+                'view-activity-log' => ['label' => 'Lihat jejak aktivitas', 'hint' => 'Siapa melakukan apa dan kapan: pesanan, pembayaran, shift, stok, pengaturan.'],
                 'view-accounting' => ['label' => 'Lihat laporan akuntansi', 'hint' => 'Laba rugi, neraca, arus kas, buku besar, jurnal (hanya baca).'],
                 'manage-accounting' => ['label' => 'Kelola akuntansi', 'hint' => 'Jurnal manual, jurnal pembalik, tutup buku, ubah akun.'],
             ]],

@@ -70,8 +70,17 @@ export function NotificationBell() {
     const [feed, setFeed] = useState<Feed>({ unread: 0, items: [] });
     const [open, setOpen] = useState(false);
     const known = useRef<number | null>(null);
+    const last = useRef(0);
 
-    const load = useCallback(async () => {
+    // Gentle on the server: a poll is skipped while the tab is hidden or a fetch happened in the last 45 s;
+    // a realtime nudge (force) always fetches.
+    const load = useCallback(async (force = false) => {
+        if (!force && (document.hidden || Date.now() - last.current < 45000)) {
+            return;
+        }
+
+        last.current = Date.now();
+
         try {
             const next = await api<Feed>('GET', '/notifications');
 
@@ -93,10 +102,19 @@ export function NotificationBell() {
     }, []);
 
     useEffect(() => {
-        void load();
+        void load(true);
         const id = window.setInterval(() => void load(), 60000);
+        const visible = () => {
+            if (!document.hidden) {
+                void load();
+            }
+        };
+        document.addEventListener('visibilitychange', visible);
 
-        return () => window.clearInterval(id);
+        return () => {
+            window.clearInterval(id);
+            document.removeEventListener('visibilitychange', visible);
+        };
     }, [load]);
 
     useRealtime(
@@ -108,7 +126,7 @@ export function NotificationBell() {
                   },
               ]
             : [],
-        () => void load(),
+        () => void load(true),
         () => void load(),
     );
 
@@ -120,7 +138,7 @@ export function NotificationBell() {
         }
 
         setOpen(false);
-        await load();
+        await load(true);
 
         if (n.url) {
             router.visit(n.url);
@@ -159,7 +177,7 @@ export function NotificationBell() {
                                     'POST',
                                     '/notifications/read-all',
                                 ).catch(() => undefined);
-                                await load();
+                                await load(true);
                             }}
                         >
                             <CheckCheck className="size-3.5" /> Tandai semua

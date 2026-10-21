@@ -5,6 +5,7 @@ import {
     ClipboardCheck,
     ChefHat,
     Coins,
+    History,
     FileBarChart,
     LayoutGrid,
     Monitor,
@@ -151,6 +152,12 @@ const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 icon: Timer,
                 permission: 'view-kitchen-report',
                 feature: 'kds',
+            },
+            {
+                title: 'Jejak Aktivitas',
+                href: '/admin/activity',
+                icon: History,
+                permission: 'view-activity-log',
             },
             {
                 title: 'Diskon/Void/Refund',

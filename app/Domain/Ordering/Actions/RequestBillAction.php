@@ -6,6 +6,7 @@ use App\Domain\Floor\Actions\SyncTableStatusAction;
 use App\Domain\Ordering\Models\Order;
 use App\Domain\Printing\PrintDispatcher;
 use App\Models\User;
+use App\Support\Audit;
 use Illuminate\Support\Facades\DB;
 
 /** Pre-bill: guest asks for the bill, table turns "Menunggu Bayar". */
@@ -15,10 +16,11 @@ class RequestBillAction
 
     public function handle(Order $order, User $user): Order
     {
-        return DB::transaction(function () use ($order) {
+        return DB::transaction(function () use ($order, $user) {
             $order = Order::query()->lockForUpdate()->findOrFail($order->id);
             if ($order->status->isEditable() && $order->bill_requested_at === null) {
-                $order->update(['bill_requested_at' => now()]);
+                $order->update(['bill_requested_at' => now(), 'bill_requested_by' => $user->id]);
+                Audit::log('bill.requested', $order, ['order' => $order->number], $user);
                 $this->syncTable->handle($order->table_id);
             }
             if ($order->status->isEditable()) {

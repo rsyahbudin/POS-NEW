@@ -27,6 +27,8 @@ export type Round = {
     status: 'pending' | 'confirmed' | 'rejected';
     customer_name: string | null;
     reject_reason: string | null;
+    by: string | null;
+    confirmed_by: string | null;
     created_at: string;
     items: OrderItem[];
 };
@@ -58,6 +60,8 @@ export type Payment = {
     change: number;
     reference: string | null;
     refunded_total: number;
+    by: string | null;
+    created_at: string;
 };
 
 export type Order = {
@@ -72,6 +76,7 @@ export type Order = {
     customer_name: string | null;
     call_number: string | null;
     cashier: string | null;
+    bill_requested_by: string | null;
     subtotal: number;
     discount_total: number;
     charge_total: number;

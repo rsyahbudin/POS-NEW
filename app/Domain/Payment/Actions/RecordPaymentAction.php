@@ -18,6 +18,7 @@ use App\Domain\Printing\PrintDispatcher;
 use App\Domain\Shift\Models\Shift;
 use App\Domain\Shift\ShiftResolver;
 use App\Models\User;
+use App\Support\Audit;
 use App\Support\BusinessDate;
 use App\Support\Realtime;
 use Illuminate\Support\Facades\DB;
@@ -98,6 +99,7 @@ class RecordPaymentAction
                 'received_by' => $user->id,
             ]);
 
+            Audit::log('payment.received', $payment, ['order' => $order->number, 'bill' => $bill->label, 'method' => $method->name, 'amount' => $applied, 'tendered' => $amount, 'change' => max(0, $amount - $applied)], $user);
             $bill->paid_total += $applied;
             $fullyPaid = $bill->paid_total >= $bill->grand_total;
             $bill->update([

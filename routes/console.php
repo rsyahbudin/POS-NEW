@@ -14,5 +14,8 @@ Schedule::command('backup:monitor')->dailyAt('03:45')->onOneServer();
 // Queue metrics for Horizon's dashboard.
 Schedule::command('horizon:snapshot')->everyFiveMinutes();
 
+// Notifications: keep the bell light.
+Schedule::command('notifications:prune')->dailyAt('03:15');
+
 // Housekeeping.
 Schedule::command('queue:prune-batches --hours=48')->daily();

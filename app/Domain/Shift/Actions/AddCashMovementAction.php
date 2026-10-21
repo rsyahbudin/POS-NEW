@@ -8,6 +8,7 @@ use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Shift\Models\CashMovement;
 use App\Domain\Shift\Models\Shift;
 use App\Models\User;
+use App\Support\Audit;
 use App\Support\BusinessDate;
 use Illuminate\Support\Facades\DB;
 
@@ -31,6 +32,8 @@ class AddCashMovementAction
             $move = $shift->movements()->create([
                 'direction' => $direction, 'amount' => $amount, 'reason' => $reason, 'account_id' => $accountId, 'created_by' => $user->id,
             ]);
+
+            Audit::log('cash.movement', $move, ['direction' => $direction, 'amount' => $amount, 'reason' => $reason], $user);
 
             $cash = SystemAccount::CashDrawer->resolve($shift->outlet_id)->id;
             $lines = $direction === 'out'

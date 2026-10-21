@@ -63,8 +63,8 @@ class CarveBillAction
                 }
 
                 $this->bills->clearBills($order);
-                $new = $order->bills()->create(['label' => $label ?: 'Pilihan 1', 'split_mode' => 'item', 'status' => BillStatus::Unpaid]);
-                $rest = $order->bills()->create(['label' => 'Sisa', 'split_mode' => 'item', 'status' => BillStatus::Unpaid]);
+                $new = $order->bills()->create(['label' => $label ?: 'Pilihan 1', 'split_mode' => 'item', 'status' => BillStatus::Unpaid, 'created_by' => $actor->id]);
+                $rest = $order->bills()->create(['label' => 'Sisa', 'split_mode' => 'item', 'status' => BillStatus::Unpaid, 'created_by' => $actor->id]);
                 $this->reprice($order, [$new->id => $selected, $rest->id => $remaining], [$new->id => $new, $rest->id => $rest]);
             } else {
                 $unpaid = $bills->filter(fn (Bill $b) => $b->status === BillStatus::Unpaid && $b->paid_total === 0)->values();
@@ -98,7 +98,7 @@ class CarveBillAction
                     }
                 }
 
-                $new = $order->bills()->create(['label' => $label ?: 'Pilihan '.($bills->where('split_mode', 'item')->count() + 1), 'split_mode' => 'item', 'status' => BillStatus::Unpaid]);
+                $new = $order->bills()->create(['label' => $label ?: 'Pilihan '.($bills->where('split_mode', 'item')->count() + 1), 'split_mode' => 'item', 'status' => BillStatus::Unpaid, 'created_by' => $actor->id]);
                 $targets = [$new->id => $selected];
                 $models = [$new->id => $new];
                 foreach (array_keys($touched) as $billId) {

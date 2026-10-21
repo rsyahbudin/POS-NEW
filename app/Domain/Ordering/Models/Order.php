@@ -72,6 +72,12 @@ class Order extends Model
     }
 
     /** @return BelongsTo<User, $this> */
+    public function billRequester(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'bill_requested_by');
+    }
+
+    /** @return BelongsTo<User, $this> */
     public function opener(): BelongsTo
     {
         return $this->belongsTo(User::class, 'opened_by');

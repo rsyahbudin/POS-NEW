@@ -7,4 +7,6 @@ Broadcast::channel('outlet.{outletId}.orders', fn (User $user, int $outletId) =>
 
 Broadcast::channel('outlet.{outletId}.print', fn (User $user, int $outletId) => $user->is_active && $user->can('use-print-station'));
 
+Broadcast::channel('outlet.{outletId}.notify', fn (User $user, int $outletId) => $user->is_active && (int) $user->outlet_id === $outletId);
+
 Broadcast::channel('outlet.{outletId}.kitchen.{stationId}', fn (User $user, int $outletId, int $stationId) => $user->is_active && $user->can('update-kitchen-status'));

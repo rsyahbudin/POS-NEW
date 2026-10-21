@@ -2,6 +2,8 @@
 
 namespace App\Domain\Asset\Models;
 
+use App\Domain\Notification\Alerts;
+use App\Domain\Notification\Notifier;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
@@ -35,6 +37,15 @@ class Asset extends Model
     protected function casts(): array
     {
         return ['purchased_on' => 'date'];
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(function (Asset $a) {
+            if ($a->wasRecentlyCreated || $a->wasChanged('condition')) {
+                Notifier::later(fn () => Alerts::asset($a->refresh()));
+            }
+        });
     }
 
     /** @return HasMany<AssetLog, $this> */

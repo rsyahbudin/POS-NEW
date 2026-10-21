@@ -4,6 +4,7 @@ namespace App\Domain\Payment\Actions;
 
 use App\Domain\Accounting\Actions\PostJournalAction;
 use App\Domain\Accounting\Models\JournalEntry;
+use App\Domain\Notification\Notifier;
 use App\Domain\Ordering\Enums\OrderStatus;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Ordering\Models\Order;
@@ -69,6 +70,10 @@ class RefundPaymentAction
                 'status' => $order->refunded_total >= $order->paid_total ? OrderStatus::Refunded : $order->status,
             ]);
 
+            Notifier::later(fn (Notifier $n) => $n->notify(
+                $order->outlet_id, 'payment.refunded', 'Refund Rp '.number_format($amount, 0, ',', '.')." untuk {$order->number}",
+                "{$actor->name}: {$reason}", '/admin/reports/adjustments', 'info', ['refund'],
+            ));
             Audit::log('payment.refunded', $refund, [
                 'order' => $order->number, 'amount' => $amount, 'reason' => $reason,
             ], $actor);

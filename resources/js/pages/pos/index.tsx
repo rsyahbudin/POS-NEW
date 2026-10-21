@@ -53,6 +53,7 @@ import {
 } from '@/lib/print';
 import type { PrinterPrefs } from '@/lib/print';
 import { cn } from '@/lib/utils';
+import { NotificationBell } from '@/components/notification-bell';
 import type {
     Bill,
     CartLine,
@@ -778,6 +779,7 @@ export default function PosPage(props: Props) {
                                 )}
                             </Button>
                         )}
+                        <NotificationBell />
                         <Button
                             type="button"
                             variant="outline"

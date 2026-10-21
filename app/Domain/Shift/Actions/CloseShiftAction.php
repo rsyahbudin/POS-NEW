@@ -4,6 +4,7 @@ namespace App\Domain\Shift\Actions;
 
 use App\Domain\Accounting\Actions\PostJournalAction;
 use App\Domain\Accounting\SystemAccount;
+use App\Domain\Notification\Notifier;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Shift\Models\Shift;
 use App\Domain\Shift\ShiftCash;
@@ -79,6 +80,12 @@ class CloseShiftAction
                 ], $shift, $user->id, false, $shift->outlet_id);
             }
 
+            if ($difference !== 0) {
+                Notifier::later(fn (Notifier $n) => $n->notify(
+                    $shift->outlet_id, 'shift.difference', 'Selisih kas shift '.($difference < 0 ? 'KURANG' : 'LEBIH').' Rp '.number_format(abs($difference), 0, ',', '.'),
+                    "{$user->name}: ".(string) $differenceReason, '/admin/day-close', 'warning', ['manage-shifts-any'],
+                ));
+            }
             Audit::log('shift.closed', $shift, ['expected' => $expected, 'counted' => $counted, 'difference' => $difference, 'deposit' => $deposit], $user);
 
             return $shift;

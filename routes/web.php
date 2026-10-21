@@ -16,6 +16,7 @@ use App\Http\Controllers\Asset\AssetController;
 use App\Http\Controllers\Auth\PinLoginController;
 use App\Http\Controllers\Import\ImportController;
 use App\Http\Controllers\Kds\KdsController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Pos\OrderController;
 use App\Http\Controllers\Pos\PosController;
 use App\Http\Controllers\Pos\QzTrayController;
@@ -124,6 +125,11 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::post('save', [StockController::class, 'save'])->name('count.save');
         Route::post('submit', [StockController::class, 'submit'])->name('count.submit');
     });
+
+    // In-app notifications
+    Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
+    Route::post('notifications/{id}/read', [NotificationController::class, 'read'])->whereNumber('id')->name('notifications.read');
 
     // Excel imports and templates
     Route::prefix('import/{type}')->name('import.')->group(function () {

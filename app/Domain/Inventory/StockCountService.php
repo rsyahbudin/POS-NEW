@@ -5,6 +5,7 @@ namespace App\Domain\Inventory;
 use App\Domain\Inventory\Models\Ingredient;
 use App\Domain\Inventory\Models\StockCount;
 use App\Domain\Inventory\Models\StockMovement;
+use App\Domain\Notification\Notifier;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Settings\SettingsRepository;
 use App\Models\User;
@@ -77,7 +78,15 @@ class StockCountService
             $count->update(['status' => 'submitted', 'submitted_at' => now()]);
             Audit::log('stock.count_submitted', $count, ['lines' => $lines->count()], $user);
 
-            return $this->needsApproval() ? $count : $this->approve($count, $user, true);
+            if (! $this->needsApproval()) {
+                return $this->approve($count, $user, true);
+            }
+            Notifier::later(fn (Notifier $n) => $n->notify(
+                $count->outlet_id, 'count.pending', 'Hitungan stok menunggu persetujuan', "{$user->name} · {$lines->count()} bahan",
+                '/admin/inventory?tab=counts', 'warning', ['manage-inventory'], null, "count:{$count->id}",
+            ));
+
+            return $count;
         });
     }
 
@@ -109,6 +118,12 @@ class StockCountService
             }
             $count->update(['status' => 'approved', 'reviewed_by' => $reviewer->id, 'reviewed_at' => now(), 'review_note' => $auto ? 'Otomatis' : null]);
             Audit::log('stock.count_approved', $count, ['auto' => $auto], $reviewer);
+            Notifier::later(function (Notifier $n) use ($count, $reviewer, $auto) {
+                $n->resolve($count->outlet_id, "count:{$count->id}");
+                if (! $auto && $count->user_id !== null && $count->user_id !== $reviewer->id) {
+                    $n->notify($count->outlet_id, 'count.approved', 'Hitungan stok Anda disetujui', "Disetujui oleh {$reviewer->name}. Stok sudah disesuaikan.", '/stock/count', 'info', null, $count->user_id);
+                }
+            });
 
             return $count;
         });
@@ -126,6 +141,12 @@ class StockCountService
             }
             $count->update(['status' => 'rejected', 'reviewed_by' => $reviewer->id, 'reviewed_at' => now(), 'review_note' => $reason]);
             Audit::log('stock.count_rejected', $count, ['reason' => $reason], $reviewer);
+            Notifier::later(function (Notifier $n) use ($count, $reviewer, $reason) {
+                $n->resolve($count->outlet_id, "count:{$count->id}");
+                if ($count->user_id !== null) {
+                    $n->notify($count->outlet_id, 'count.rejected', 'Hitungan stok Anda ditolak', "{$reviewer->name}: {$reason}", '/stock/count', 'warning', null, $count->user_id);
+                }
+            });
 
             return $count;
         });

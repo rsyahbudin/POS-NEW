@@ -7,6 +7,7 @@ use App\Domain\Inventory\Models\ModifierIngredient;
 use App\Domain\Inventory\Models\Purchase;
 use App\Domain\Inventory\Models\RecipeLine;
 use App\Domain\Inventory\Models\StockMovement;
+use App\Domain\Notification\Notifier;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Ordering\Models\OrderItem;
 use App\Domain\Settings\SettingsRepository;
@@ -179,6 +180,10 @@ class InventoryService
         return DB::transaction(function () use ($outletId, $data, $user) {
             $purchase = $this->record($outletId, $data, $user);
             Audit::log('inventory.purchase_submitted', $purchase, ['total' => $purchase->total, 'items' => count($data['items'])], $user);
+            Notifier::later(fn (Notifier $n) => $n->notify(
+                $outletId, 'purchase.pending', 'Belanja bahan menunggu persetujuan', "{$user->name} · {$purchase->items()->count()} bahan · Rp ".number_format($purchase->total, 0, ',', '.'),
+                '/admin/inventory?tab=purchases', 'warning', ['manage-inventory'], null, "purchase:{$purchase->id}",
+            ));
 
             return $purchase;
         });
@@ -190,6 +195,12 @@ class InventoryService
             $purchase = Purchase::query()->lockForUpdate()->findOrFail($purchase->id);
             $this->guardReview($purchase, $reviewer);
             $this->apply($purchase, $reviewer);
+            Notifier::later(function (Notifier $n) use ($purchase, $reviewer) {
+                $n->resolve($purchase->outlet_id, "purchase:{$purchase->id}");
+                if ($purchase->user_id !== null && $purchase->user_id !== $reviewer->id) {
+                    $n->notify($purchase->outlet_id, 'purchase.approved', 'Belanja Anda disetujui', "Disetujui oleh {$reviewer->name}. Stok bertambah.", '/stock/purchase', 'info', null, $purchase->user_id);
+                }
+            });
 
             return $purchase->refresh();
         });
@@ -202,6 +213,12 @@ class InventoryService
             $this->guardReview($purchase, $reviewer);
             $purchase->update(['status' => 'rejected', 'reviewed_by' => $reviewer->id, 'reviewed_at' => now(), 'review_note' => $reason]);
             Audit::log('inventory.purchase_rejected', $purchase, ['reason' => $reason], $reviewer);
+            Notifier::later(function (Notifier $n) use ($purchase, $reviewer, $reason) {
+                $n->resolve($purchase->outlet_id, "purchase:{$purchase->id}");
+                if ($purchase->user_id !== null) {
+                    $n->notify($purchase->outlet_id, 'purchase.rejected', 'Belanja Anda ditolak', "{$reviewer->name}: {$reason}", '/stock/purchase', 'warning', null, $purchase->user_id);
+                }
+            });
 
             return $purchase;
         });

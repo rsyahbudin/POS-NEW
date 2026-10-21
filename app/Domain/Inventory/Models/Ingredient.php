@@ -2,6 +2,8 @@
 
 namespace App\Domain\Inventory\Models;
 
+use App\Domain\Notification\Alerts;
+use App\Domain\Notification\Notifier;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
@@ -21,6 +23,15 @@ use Illuminate\Support\Carbon;
 class Ingredient extends Model
 {
     protected $guarded = [];
+
+    protected static function booted(): void
+    {
+        static::saved(function (Ingredient $i) {
+            if ($i->wasRecentlyCreated || $i->wasChanged(['stock', 'min_stock', 'is_active'])) {
+                Notifier::later(fn () => Alerts::ingredient($i->refresh()));
+            }
+        });
+    }
 
     /** @return HasMany<StockMovement, $this> */
     public function movements(): HasMany

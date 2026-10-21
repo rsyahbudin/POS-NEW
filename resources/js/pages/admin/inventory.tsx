@@ -110,7 +110,13 @@ export default function InventoryPage({
     const errors = usePage().props.errors as Record<string, string>;
     const [tab, setTab] = useState<
         'stock' | 'purchases' | 'counts' | 'history'
-    >('stock');
+    >(() => {
+        const t = new URLSearchParams(window.location.search).get('tab');
+
+        return t === 'purchases' || t === 'counts' || t === 'history'
+            ? t
+            : 'stock';
+    });
     const pendingCounts = counts.filter((c) => c.status === 'submitted').length;
     const [importing, setImporting] = useState<string | null>(null);
     const [edit, setEdit] = useState<{

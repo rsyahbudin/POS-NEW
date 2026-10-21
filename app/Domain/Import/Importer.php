@@ -19,6 +19,12 @@ abstract class Importer
 
     abstract public function permission(): string;
 
+    /** Bulk imports also need the "Impor dari Excel" permission; staff filling their own stock count do not. */
+    public function needsImportPermission(): bool
+    {
+        return true;
+    }
+
     /** @return array<string, array{label: string, aliases: list<string>, required?: bool}> */
     abstract public function columns(): array;
 

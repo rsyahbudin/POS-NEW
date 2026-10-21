@@ -1,6 +1,7 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { ChevronDown, Plus } from 'lucide-react';
+import { ChevronDown, FileSpreadsheet, Plus } from 'lucide-react';
 import { useState } from 'react';
+import { ImportDialog } from '@/components/pos/import-dialog';
 import { Modal } from '@/components/pos/modal';
 import {
     Field,
@@ -97,6 +98,7 @@ export default function AssetsPage({
     const [cat, setCat] = useState('');
     const [cond, setCond] = useState('');
     const [open, setOpen] = useState<number | null>(null);
+    const [importing, setImporting] = useState(false);
     const [form, setForm] = useState<Form | null>(null);
     const [log, setLog] = useState<{
         asset: Asset;
@@ -138,6 +140,15 @@ export default function AssetsPage({
                                     Unduh PDF
                                 </a>
                             </Button>
+                            {can.manage && (
+                                <Button
+                                    variant="outline"
+                                    className="h-11"
+                                    onClick={() => setImporting(true)}
+                                >
+                                    <FileSpreadsheet /> Impor Excel
+                                </Button>
+                            )}
                             {can.manage && (
                                 <Button
                                     className="h-11"
@@ -418,6 +429,14 @@ export default function AssetsPage({
                     )}
                 </ul>
             </div>
+
+            {importing && (
+                <ImportDialog
+                    type="assets"
+                    onClose={() => setImporting(false)}
+                    onDone={() => router.reload()}
+                />
+            )}
 
             {form && (
                 <Modal

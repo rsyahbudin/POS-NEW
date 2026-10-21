@@ -44,6 +44,7 @@ final class PermissionCatalog
                 'count-stock' => ['label' => 'Stok opname', 'hint' => 'Menghitung stok bahan dan mengirim hasilnya. Persetujuan diatur di Pengaturan > Stok & HPP.'],
                 'view-assets' => ['label' => 'Lihat daftar aset & alat', 'hint' => 'Melihat daftar peralatan, kondisi, dan riwayat servis.'],
                 'manage-assets' => ['label' => 'Kelola aset & alat', 'hint' => 'Tambah/ubah/hapus aset, catat servis dan perbaikan.'],
+                'import-data' => ['label' => 'Impor dari Excel', 'hint' => 'Mengunggah template Excel untuk bahan, pembelian, resep, menu, dan aset. Tetap butuh izin kelola layar yang bersangkutan.'],
                 'manage-tables' => ['label' => 'Kelola meja & QR', 'hint' => 'Area, meja, token QR, cetak QR.'],
                 'manage-pricing' => ['label' => 'Harga & pajak', 'hint' => 'Cadangan untuk kontrol harga/pajak terpisah.'],
                 'manage-settings' => ['label' => 'Pengaturan outlet', 'hint' => 'Profil outlet, metode bayar, pajak, promo, notifikasi.'],

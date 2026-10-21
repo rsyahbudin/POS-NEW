@@ -10,11 +10,14 @@ use App\Domain\Inventory\Models\Purchase;
 use App\Domain\Inventory\Models\RecipeLine;
 use App\Domain\Inventory\Models\StockCount;
 use App\Domain\Settings\Models\Outlet;
+use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 function sheetFile(array $matrix): UploadedFile
 {
@@ -248,4 +251,17 @@ it('finds the header row below a title block and refuses files without the neede
     previewOf($this, 'purchase', $bad, $manager)->assertStatus(422);
     $missing = sheetFile([['Bahan', 'Satuan'], ['Telur', 'pcs']]);
     previewOf($this, 'purchase', $missing, $manager)->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'Kolom wajib'));
+});
+
+it('needs the import permission on top of the screen permission', function () {
+    $role = Role::findOrCreate('stok-saja', 'web')->syncPermissions(['manage-inventory', 'count-stock']);
+    $user = User::factory()->create(['is_active' => true, 'outlet_id' => userWithRole('owner')->outlet_id]);
+    $user->assignRole($role);
+
+    $this->actingAs($user)->get('/import/purchase/template')->assertForbidden();
+    $this->actingAs($user)->get('/import/count/template')->assertOk(); // staff filling their own count
+    $role->givePermissionTo('import-data');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+    $this->actingAs($user->fresh())->get('/import/purchase/template')->assertOk();
+    $this->actingAs($user->fresh())->get('/import/products/template')->assertForbidden(); // lacks manage-menu
 });

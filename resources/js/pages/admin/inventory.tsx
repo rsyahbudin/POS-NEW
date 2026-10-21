@@ -1,6 +1,7 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Plus, Trash2 } from 'lucide-react';
+import { FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { ImportDialog } from '@/components/pos/import-dialog';
 import { Modal } from '@/components/pos/modal';
 import {
     Field,
@@ -96,6 +97,7 @@ export default function InventoryPage({
         'stock' | 'purchases' | 'counts' | 'history'
     >('stock');
     const pendingCounts = counts.filter((c) => c.status === 'submitted').length;
+    const [importing, setImporting] = useState<string | null>(null);
     const [edit, setEdit] = useState<{
         id?: number;
         name: string;
@@ -228,7 +230,14 @@ export default function InventoryPage({
 
                 {tab === 'stock' && (
                     <>
-                        <div>
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                variant="outline"
+                                className="h-11"
+                                onClick={() => setImporting('ingredients')}
+                            >
+                                <FileSpreadsheet /> Impor bahan (Excel)
+                            </Button>
                             <Button
                                 variant="outline"
                                 className="h-11"
@@ -330,6 +339,18 @@ export default function InventoryPage({
                             )}
                         </ul>
                     </>
+                )}
+
+                {tab === 'purchases' && (
+                    <div>
+                        <Button
+                            variant="outline"
+                            className="h-11"
+                            onClick={() => setImporting('purchase')}
+                        >
+                            <FileSpreadsheet /> Impor pembelian (Excel)
+                        </Button>
+                    </div>
                 )}
 
                 {tab === 'purchases' && (
@@ -462,6 +483,14 @@ export default function InventoryPage({
                     />
                 )}
             </div>
+
+            {importing && (
+                <ImportDialog
+                    type={importing}
+                    onClose={() => setImporting(null)}
+                    onDone={() => router.reload()}
+                />
+            )}
 
             {edit && (
                 <Modal

@@ -19,6 +19,11 @@ class CountImporter extends Importer
         return 'count';
     }
 
+    public function needsImportPermission(): bool
+    {
+        return false;
+    }
+
     public function title(): string
     {
         return 'Hasil stok opname';

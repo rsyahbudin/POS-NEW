@@ -8,7 +8,7 @@ export class ApiError extends Error {
     }
 }
 
-function xsrf(): string {
+export function xsrf(): string {
     const m = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/);
 
     return m ? decodeURIComponent(m[1]) : '';

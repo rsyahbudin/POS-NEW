@@ -1,7 +1,8 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { Plus, Trash2 } from 'lucide-react';
+import { FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { ImportDialog } from '@/components/pos/import-dialog';
 import { Modal } from '@/components/pos/modal';
 import {
     Field,
@@ -91,6 +92,7 @@ export default function MenuPage({
         'products' | 'categories' | 'modifiers' | 'stations'
     >('products');
     const [draft, setDraft] = useState<Draft | null>(null);
+    const [importing, setImporting] = useState(false);
     const [group, setGroup] = useState<Group | null>(null);
     const errors = usePage().props.errors as Record<string, string>;
     const [local, setLocal] = useState<Record<number, boolean>>({});
@@ -146,14 +148,23 @@ export default function MenuPage({
                     title="Menu"
                     actions={
                         tab === 'products' ? (
-                            <Button
-                                className="h-11"
-                                onClick={() =>
-                                    setDraft(blank(categories[0]?.id))
-                                }
-                            >
-                                <Plus /> Produk
-                            </Button>
+                            <>
+                                <Button
+                                    variant="outline"
+                                    className="h-11"
+                                    onClick={() => setImporting(true)}
+                                >
+                                    <FileSpreadsheet /> Impor Excel
+                                </Button>
+                                <Button
+                                    className="h-11"
+                                    onClick={() =>
+                                        setDraft(blank(categories[0]?.id))
+                                    }
+                                >
+                                    <Plus /> Produk
+                                </Button>
+                            </>
                         ) : tab === 'modifiers' ? (
                             <Button
                                 className="h-11"
@@ -893,6 +904,13 @@ export default function MenuPage({
                         Simpan
                     </Button>
                 </Modal>
+            )}
+            {importing && (
+                <ImportDialog
+                    type="products"
+                    onClose={() => setImporting(false)}
+                    onDone={() => router.reload()}
+                />
             )}
         </>
     );

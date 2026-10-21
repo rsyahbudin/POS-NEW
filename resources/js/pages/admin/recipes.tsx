@@ -1,6 +1,7 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Plus, Trash2 } from 'lucide-react';
+import { FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { ImportDialog } from '@/components/pos/import-dialog';
 import { Modal } from '@/components/pos/modal';
 import { PageHeader, Select, Tabs } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
@@ -47,6 +48,7 @@ export default function RecipesPage({
     const errors = usePage().props.errors as Record<string, string>;
     const [tab, setTab] = useState<'menu' | 'modifier'>('menu');
     const [q, setQ] = useState('');
+    const [importing, setImporting] = useState(false);
     const [edit, setEdit] = useState<{
         kind: 'product' | 'modifier';
         id: number;
@@ -106,9 +108,20 @@ export default function RecipesPage({
                     title="Resep & HPP"
                     subtitle="Bahan yang dipakai tiap porsi. HPP dihitung dari biaya rata-rata bahan."
                     actions={
-                        <Button asChild variant="outline" className="h-11">
-                            <Link href="/admin/inventory">Stok & bahan</Link>
-                        </Button>
+                        <>
+                            <Button
+                                variant="outline"
+                                className="h-11"
+                                onClick={() => setImporting(true)}
+                            >
+                                <FileSpreadsheet /> Impor resep (Excel)
+                            </Button>
+                            <Button asChild variant="outline" className="h-11">
+                                <Link href="/admin/inventory">
+                                    Stok & bahan
+                                </Link>
+                            </Button>
+                        </>
                     }
                 />
                 {!enabled && (
@@ -239,6 +252,14 @@ export default function RecipesPage({
                     </ul>
                 )}
             </div>
+
+            {importing && (
+                <ImportDialog
+                    type="recipes"
+                    onClose={() => setImporting(false)}
+                    onDone={() => router.reload()}
+                />
+            )}
 
             {edit && (
                 <Modal

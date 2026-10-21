@@ -1,5 +1,7 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
+import { FileSpreadsheet } from 'lucide-react';
 import { useState } from 'react';
+import { ImportDialog } from '@/components/pos/import-dialog';
 import { PageHeader } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,6 +57,7 @@ export default function StockCount({
     );
     const [note, setNote] = useState(draft.note ?? '');
     const [q, setQ] = useState('');
+    const [importing, setImporting] = useState(false);
     const filled = Object.values(values).filter((v) => v !== '').length;
     const shown = ingredients.filter((i) =>
         i.name.toLowerCase().includes(q.toLowerCase()),
@@ -92,12 +95,21 @@ export default function StockCount({
                         {Object.values(errors)[0]}
                     </p>
                 )}
-                <Input
-                    className="h-11 max-w-xs"
-                    placeholder="Cari bahan…"
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                />
+                <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                        className="h-11 max-w-xs"
+                        placeholder="Cari bahan…"
+                        value={q}
+                        onChange={(e) => setQ(e.target.value)}
+                    />
+                    <Button
+                        variant="outline"
+                        className="h-11"
+                        onClick={() => setImporting(true)}
+                    >
+                        <FileSpreadsheet /> Isi dari Excel
+                    </Button>
+                </div>
                 <ul className="grid gap-2">
                     {shown.map((i) => (
                         <li
@@ -210,6 +222,13 @@ export default function StockCount({
                     </Button>
                 </div>
             </div>
+            {importing && (
+                <ImportDialog
+                    type="count"
+                    onClose={() => setImporting(false)}
+                    onDone={() => window.location.reload()}
+                />
+            )}
         </>
     );
 }

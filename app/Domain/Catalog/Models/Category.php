@@ -2,7 +2,9 @@
 
 namespace App\Domain\Catalog\Models;
 
+use App\Domain\Printing\Models\Printer;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
@@ -17,6 +19,12 @@ use Illuminate\Support\Carbon;
 class Category extends Model
 {
     protected $guarded = [];
+
+    /** @return BelongsToMany<Printer, $this> */
+    public function printers(): BelongsToMany
+    {
+        return $this->belongsToMany(Printer::class, 'category_printer');
+    }
 
     /** @return HasMany<Product, $this> */
     public function products(): HasMany

@@ -8,6 +8,7 @@ use App\Domain\Catalog\Models\ModifierGroup;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\Station;
 use App\Domain\Ordering\Events\ProductAvailabilityChanged;
+use App\Domain\Printing\Models\Printer;
 use App\Domain\Settings\OutletContext;
 use App\Http\Controllers\Controller;
 use App\Support\Audit;
@@ -32,14 +33,16 @@ class MenuController extends Controller
         $id = $this->outlet->id();
 
         return Inertia::render('admin/menu', [
-            'categories' => Category::query()->where('outlet_id', $id)->orderBy('sort')->get(['id', 'name', 'sort']),
+            'categories' => Category::query()->where('outlet_id', $id)->with('printers:id')->orderBy('sort')->get()->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'sort' => $c->sort, 'printer_ids' => $c->printers->pluck('id')->all()]),
+            'printers' => Printer::query()->where('outlet_id', $id)->where('kind', 'ticket')->orderBy('id')->get(['id', 'name']),
             'stations' => Station::query()->where('outlet_id', $id)->orderBy('sort')->get(['id', 'name', 'is_active']),
-            'products' => Product::query()->where('outlet_id', $id)->with(['variants', 'modifierGroups:id'])->orderBy('category_id')->orderBy('sort')->get()->map(fn ($p) => [
+            'products' => Product::query()->where('outlet_id', $id)->with(['variants', 'modifierGroups:id', 'printers:id'])->orderBy('category_id')->orderBy('sort')->get()->map(fn ($p) => [
                 'id' => $p->id, 'name' => $p->name, 'sku' => $p->sku, 'description' => $p->description, 'category_id' => $p->category_id, 'station_id' => $p->station_id,
                 'base_price' => $p->base_price, 'is_available' => $p->is_available, 'stock_qty' => $p->stock_qty, 'sort' => $p->sort,
                 'image' => MediaUrl::public($p->image_path),
                 'variants' => $p->variants->map(fn ($v) => ['id' => $v->id, 'name' => $v->name, 'price' => $v->price])->all(),
                 'modifier_group_ids' => $p->modifierGroups->pluck('id')->all(),
+                'printer_ids' => $p->printers->pluck('id')->all(),
             ]),
             'modifierGroups' => ModifierGroup::query()->where('outlet_id', $id)->with('modifiers')->get()->map(fn ($g) => [
                 'id' => $g->id, 'name' => $g->name, 'min_select' => $g->min_select, 'max_select' => $g->max_select, 'is_required' => $g->is_required,
@@ -54,6 +57,17 @@ class MenuController extends Controller
         $category ? $category->update($data) : Category::create($data + ['outlet_id' => $this->outlet->id()]);
 
         return back()->with('success', 'Kategori disimpan.');
+    }
+
+    /** Default ticket printers for every item of the category (an item can override them). */
+    public function saveCategoryPrinters(Request $request, Category $category): RedirectResponse
+    {
+        abort_unless($category->outlet_id === $this->outlet->id(), 404);
+        $data = $request->validate(['printer_ids' => 'nullable|array', 'printer_ids.*' => ['integer', Rule::exists('printers', 'id')->where('outlet_id', $this->outlet->id())->where('kind', 'ticket')]]);
+        $category->printers()->sync($data['printer_ids'] ?? []);
+        Audit::log('category.printers_changed', $category, ['category' => $category->name, 'printers' => $data['printer_ids'] ?? []]);
+
+        return back()->with('success', 'Printer kategori disimpan.');
     }
 
     public function deleteCategory(Category $category): RedirectResponse
@@ -90,10 +104,11 @@ class MenuController extends Controller
             'image' => 'nullable|image|max:8192',
             'variants' => 'nullable|array', 'variants.*.name' => 'required|string|max:40', 'variants.*.price' => 'required|integer|min:0',
             'modifier_group_ids' => 'nullable|array', 'modifier_group_ids.*' => 'integer',
+            'printer_ids' => 'nullable|array', 'printer_ids.*' => ['integer', Rule::exists('printers', 'id')->where('outlet_id', $outletId)->where('kind', 'ticket')],
         ]);
 
         DB::transaction(function () use ($request, $images, $product, $data, $outletId) {
-            $fields = Arr::except($data, ['image', 'variants', 'modifier_group_ids']);
+            $fields = Arr::except($data, ['image', 'variants', 'modifier_group_ids', 'printer_ids']);
             if ($request->hasFile('image')) {
                 $fields['image_path'] = $images->store($request->file('image'));
             }
@@ -109,6 +124,7 @@ class MenuController extends Controller
                 $product->variants()->create($v + ['sort' => $i]);
             }
             $product->modifierGroups()->sync($data['modifier_group_ids'] ?? []);
+            $product->printers()->sync($data['printer_ids'] ?? []);
         });
 
         return back()->with('success', 'Produk disimpan.');

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Printing;
 
+use App\Domain\Catalog\Models\Product;
 use App\Domain\Ordering\Models\Order;
 use App\Domain\Ordering\Models\OrderRound;
 use App\Domain\Payment\Enums\BillStatus;
@@ -71,29 +72,57 @@ class PrintDispatcher
         return $count;
     }
 
-    /** One ticket per station that has items in the round. */
+    /**
+     * Tickets for a confirmed round. An item prints on the printers chosen for the item itself, else on those
+     * chosen for its category, else on the ticket printers of its station (or of every station).
+     * Each printer gets one ticket with all the items routed to it.
+     */
     public function tickets(OrderRound $round): int
     {
         $round->loadMissing('order.table', 'items');
         $order = $round->order;
         $items = $round->items->filter(fn ($i) => in_array($i->status->value, ['new', 'preparing'], true));
-        $count = 0;
+        $ticketPrinters = $this->printers($order->outlet_id, 'ticket')->keyBy('id');
+        if ($items->isEmpty() || $ticketPrinters->isEmpty()) {
+            return 0;
+        }
 
-        foreach ($items->groupBy(fn ($i) => $i->station_id ?? 0) as $stationId => $group) {
-            $printers = $this->printers($order->outlet_id, 'ticket')->filter(fn (Printer $p) => $p->station_id === null || $p->station_id === (int) $stationId);
+        $products = Product::withTrashed()->whereIn('id', $items->pluck('product_id'))->with(['printers:id', 'category.printers:id'])->get()->keyBy('id');
+        $byPrinter = [];
+        foreach ($items as $item) {
+            $product = $products->get($item->product_id);
+            $ids = $this->activeIds($product?->printers, $ticketPrinters)
+                ?: $this->activeIds($product?->category?->printers, $ticketPrinters)
+                ?: $ticketPrinters->filter(fn (Printer $p) => $p->station_id === null || $p->station_id === $item->station_id)->keys()->all();
+            foreach ($ids as $id) {
+                $byPrinter[$id][] = $item;
+            }
+        }
+
+        $label = $order->table->name ?? ($order->call_number ? ($order->type->value === 'dine_in' ? "Dine-in {$order->call_number}" : "Takeaway {$order->call_number}") : ($order->platform ? "Online {$order->platform}" : $order->number));
+        $count = 0;
+        foreach ($byPrinter as $printerId => $group) {
             $payload = [
-                'label' => $order->table->name ?? ($order->call_number ? ($order->type->value === 'dine_in' ? "Dine-in {$order->call_number}" : "Takeaway {$order->call_number}") : ($order->platform ? "Online {$order->platform}" : $order->number)),
-                'number' => $order->number,
-                'time' => now()->setTimezone('Asia/Jakarta')->format('H:i'),
-                'items' => $group->map(fn ($i) => [
+                'label' => $label, 'number' => $order->number, 'time' => now()->setTimezone('Asia/Jakarta')->format('H:i'),
+                'items' => collect($group)->map(fn ($i) => [
                     'qty' => $i->qty, 'name' => $i->name_snapshot, 'note' => $i->note,
                     'modifiers' => collect($i->modifiers_snapshot ?? [])->map(fn ($m) => (string) $m['name'])->all(),
                 ])->values()->all(),
             ];
-            $count += $this->queue($order->outlet_id, 'ticket', $order->number, $payload, $printers);
+            $count += $this->queue($order->outlet_id, 'ticket', $order->number, $payload, $ticketPrinters->only([$printerId])->values());
         }
 
         return $count;
+    }
+
+    /**
+     * @param  Collection<int, Printer>|null  $chosen
+     * @param  Collection<int, Printer>  $active
+     * @return array<int, int>
+     */
+    private function activeIds(?Collection $chosen, Collection $active): array
+    {
+        return $chosen === null ? [] : $chosen->pluck('id')->filter(fn ($id) => $active->has($id))->values()->all();
     }
 
     /** @return Collection<int, Printer> */

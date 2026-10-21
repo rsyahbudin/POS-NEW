@@ -2,6 +2,7 @@
 
 namespace App\Domain\Catalog\Models;
 
+use App\Domain\Printing\Models\Printer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -54,6 +55,12 @@ class Product extends Model
     public function variants(): HasMany
     {
         return $this->hasMany(ProductVariant::class)->orderBy('sort');
+    }
+
+    /** @return BelongsToMany<Printer, $this> */
+    public function printers(): BelongsToMany
+    {
+        return $this->belongsToMany(Printer::class, 'product_printer');
     }
 
     /** @return BelongsToMany<ModifierGroup, $this> */

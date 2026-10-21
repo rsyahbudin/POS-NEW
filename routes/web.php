@@ -126,6 +126,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::get('menu', [MenuController::class, 'index'])->name('menu');
             Route::post('categories', [MenuController::class, 'saveCategory'])->name('categories.store');
             Route::put('categories/{category}', [MenuController::class, 'saveCategory'])->name('categories.update');
+            Route::post('categories/{category}/printers', [MenuController::class, 'saveCategoryPrinters'])->name('categories.printers');
             Route::delete('categories/{category}', [MenuController::class, 'deleteCategory'])->name('categories.destroy');
             Route::post('stations', [MenuController::class, 'saveStation'])->name('stations.store');
             Route::put('stations/{station}', [MenuController::class, 'saveStation'])->name('stations.update');

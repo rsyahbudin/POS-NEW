@@ -24,6 +24,7 @@ type Product = {
     description: string | null;
     category_id: number;
     station_id: number | null;
+    printer_ids: number[];
     base_price: number;
     is_available: boolean;
     stock_qty: number | null;
@@ -41,7 +42,8 @@ type Group = {
     modifiers: { id?: number; name: string; price_delta: number }[];
 };
 type Props = {
-    categories: { id: number; name: string }[];
+    categories: { id: number; name: string; printer_ids: number[] }[];
+    printers: { id: number; name: string }[];
     stations: { id: number; name: string; is_active: boolean }[];
     products: Product[];
     modifierGroups: Group[];
@@ -54,6 +56,7 @@ type Draft = {
     description: string;
     category_id: number | '';
     station_id: number | '';
+    printer_ids: number[];
     base_price: number | '';
     stock_qty: number | '';
     is_available: boolean;
@@ -68,6 +71,7 @@ const blank = (cat?: number): Draft => ({
     description: '',
     category_id: cat ?? '',
     station_id: '',
+    printer_ids: [],
     base_price: '',
     stock_qty: '',
     is_available: true,
@@ -78,6 +82,7 @@ const blank = (cat?: number): Draft => ({
 
 export default function MenuPage({
     categories,
+    printers,
     stations,
     products,
     modifierGroups,
@@ -106,6 +111,7 @@ export default function MenuPage({
             is_available: draft.is_available ? 1 : 0,
             variants: draft.variants,
             modifier_group_ids: draft.modifier_group_ids,
+            printer_ids: draft.printer_ids,
         };
         if (draft.image) body.image = draft.image;
         router.post(
@@ -253,6 +259,8 @@ export default function MenuPage({
                                                             p.category_id,
                                                         station_id:
                                                             p.station_id ?? '',
+                                                        printer_ids:
+                                                            p.printer_ids,
                                                         base_price:
                                                             p.base_price,
                                                         stock_qty:
@@ -303,6 +311,63 @@ export default function MenuPage({
                         delUrl={(id) => `/admin/categories/${id}`}
                         label="Kategori"
                     />
+                )}
+                {tab === 'categories' && printers.length > 0 && (
+                    <section className="grid gap-2 rounded-xl border bg-card p-3">
+                        <h2 className="font-semibold">
+                            Printer tiket per kategori
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                            Pilih printer yang mencetak pesanan kategori ini.
+                            Boleh lebih dari satu (mis. minuman tercetak di Bar
+                            dan Kasir). Kosong = ikut printer station produk.
+                            Satu menu bisa menimpa ini di form menu.
+                        </p>
+                        {categories.map((c) => (
+                            <div
+                                key={c.id}
+                                className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2"
+                            >
+                                <span className="w-40 font-medium">
+                                    {c.name}
+                                </span>
+                                {printers.map((pr) => (
+                                    <label
+                                        key={pr.id}
+                                        className="flex items-center gap-2 text-sm"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            className="size-5"
+                                            checked={c.printer_ids.includes(
+                                                pr.id,
+                                            )}
+                                            onChange={(e) =>
+                                                router.post(
+                                                    `/admin/categories/${c.id}/printers`,
+                                                    {
+                                                        printer_ids: e.target
+                                                            .checked
+                                                            ? [
+                                                                  ...c.printer_ids,
+                                                                  pr.id,
+                                                              ]
+                                                            : c.printer_ids.filter(
+                                                                  (x) =>
+                                                                      x !==
+                                                                      pr.id,
+                                                              ),
+                                                    },
+                                                    { preserveScroll: true },
+                                                )
+                                            }
+                                        />
+                                        {pr.name}
+                                    </label>
+                                ))}
+                            </div>
+                        ))}
+                    </section>
                 )}
                 {tab === 'stations' && (
                     <Simple
@@ -419,6 +484,46 @@ export default function MenuPage({
                                 ))}
                             </Select>
                         </Field>
+                        {printers.length > 0 && (
+                            <Field
+                                label="Cetak tiket di printer"
+                                hint="Kosong = ikut printer kategori. Pilih lebih dari satu untuk mencetak di beberapa printer."
+                            >
+                                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                                    {printers.map((pr) => (
+                                        <label
+                                            key={pr.id}
+                                            className="flex items-center gap-2 text-sm"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                className="size-5"
+                                                checked={draft.printer_ids.includes(
+                                                    pr.id,
+                                                )}
+                                                onChange={(e) =>
+                                                    setDraft({
+                                                        ...draft,
+                                                        printer_ids: e.target
+                                                            .checked
+                                                            ? [
+                                                                  ...draft.printer_ids,
+                                                                  pr.id,
+                                                              ]
+                                                            : draft.printer_ids.filter(
+                                                                  (x) =>
+                                                                      x !==
+                                                                      pr.id,
+                                                              ),
+                                                    })
+                                                }
+                                            />
+                                            {pr.name}
+                                        </label>
+                                    ))}
+                                </div>
+                            </Field>
+                        )}
                         <Field label="Harga dasar">
                             <MoneyInput
                                 value={draft.base_price}

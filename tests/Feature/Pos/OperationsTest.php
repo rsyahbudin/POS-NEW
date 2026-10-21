@@ -392,3 +392,39 @@ it('reprints a receipt to the printer as a COPY and manages printers from the ad
     $this->actingAs($cashier)->get('/admin/printers')->assertForbidden();
     $this->actingAs($owner)->delete('/admin/printers/'.$receipt->id)->assertSessionHasNoErrors();
 });
+
+it('routes tickets by menu item, then category, then station, and can print on several printers', function () {
+    $bar = printer('ticket');
+    $kitchen = printer('ticket');
+    $drinks = product('Americano');
+    $food = product('Nasi Goreng');
+
+    // category default: drinks print on both printers
+    $drinks->category->printers()->sync([$bar->id, $kitchen->id]);
+    placeOrder(items: [['product_id' => $drinks->id, 'qty' => 1]]);
+    expect(PrintJob::query()->where('kind', 'ticket')->pluck('printer_id')->sort()->values()->all())->toBe(collect([$bar->id, $kitchen->id])->sort()->values()->all());
+
+    // a single item overrides its category
+    PrintJob::query()->delete();
+    $drinks->printers()->sync([$bar->id]);
+    placeOrder(items: [['product_id' => $drinks->id, 'qty' => 1]], tableId: Table::query()->skip(1)->value('id'));
+    expect(PrintJob::query()->where('kind', 'ticket')->pluck('printer_id')->all())->toBe([$bar->id]);
+
+    // nothing chosen: falls back to the station's printers (here both printers take every station)
+    PrintJob::query()->delete();
+    $food->category->printers()->sync([]);
+    $food->printers()->sync([]);
+    placeOrder(items: [['product_id' => $food->id, 'qty' => 1]], tableId: Table::query()->skip(2)->value('id'));
+    expect(PrintJob::query()->where('kind', 'ticket')->count())->toBe(2);
+});
+
+it('saves category and item printer choices from the menu admin', function () {
+    $p = printer('ticket');
+    $cat = product('Americano')->category;
+    $owner = userWithRole('owner');
+
+    $this->actingAs($owner)->post("/admin/categories/{$cat->id}/printers", ['printer_ids' => [$p->id]])->assertSessionHasNoErrors();
+    expect($cat->printers()->pluck('printers.id')->all())->toBe([$p->id]);
+    $this->actingAs($owner)->get('/admin/menu')->assertInertia(fn ($page) => $page->has('printers', 1)->where('categories.0.printer_ids', fn ($ids) => count($ids) <= 1));
+    $this->actingAs($owner)->post("/admin/categories/{$cat->id}/printers", ['printer_ids' => [999999]])->assertSessionHasErrors('printer_ids.0');
+});

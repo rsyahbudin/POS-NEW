@@ -3,6 +3,7 @@
 namespace App\Domain\Ordering;
 
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Inventory\InventoryService;
 use App\Domain\Ordering\Events\ProductAvailabilityChanged;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Ordering\Models\OrderItem;
@@ -11,8 +12,12 @@ use App\Support\Realtime;
 /** Portion stock: decremented on confirmation, restored on void. Null stock = unlimited. */
 class StockService
 {
+    public function __construct(private InventoryService $inventory) {}
+
     public function reserve(OrderItem $item): void
     {
+        $this->inventory->consume($item);
+
         if ($item->stock_reserved) {
             return;
         }
@@ -35,6 +40,8 @@ class StockService
 
     public function release(OrderItem $item): void
     {
+        $this->inventory->restore($item);
+
         if (! $item->stock_reserved) {
             return;
         }

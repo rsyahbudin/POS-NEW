@@ -14,14 +14,14 @@ class RolesAndPermissionsSeeder extends Seeder
         'create-order', 'receive-payment', 'discount-within-limit', 'discount-over-limit', 'void', 'refund',
         'open-close-shift', 'manage-shifts-any', 'update-kitchen-status', 'input-expense',
         'view-sales-reports', 'view-own-shift-recap', 'view-accounting', 'manage-accounting',
-        'manage-menu', 'manage-pricing', 'manage-users', 'manage-settings', 'manage-tables', 'manage-roles',
+        'manage-menu', 'manage-inventory', 'manage-pricing', 'manage-users', 'manage-settings', 'manage-tables', 'manage-roles',
     ];
 
     public const ROLES = [
         'manager' => [
             'create-order', 'receive-payment', 'discount-within-limit', 'discount-over-limit', 'void', 'refund',
             'open-close-shift', 'manage-shifts-any', 'update-kitchen-status', 'input-expense',
-            'view-sales-reports', 'view-own-shift-recap', 'view-accounting', 'manage-menu', 'manage-tables',
+            'view-sales-reports', 'view-own-shift-recap', 'view-accounting', 'manage-menu', 'manage-inventory', 'manage-tables',
         ],
         'cashier' => ['create-order', 'receive-payment', 'discount-within-limit', 'open-close-shift', 'update-kitchen-status', 'view-own-shift-recap'],
         'waiter' => ['create-order'],

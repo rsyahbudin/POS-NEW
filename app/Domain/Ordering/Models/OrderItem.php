@@ -28,6 +28,10 @@ use Illuminate\Support\Carbon;
  * @property string|null $void_reason
  * @property Carbon|null $voided_at
  * @property bool $stock_reserved
+ * @property int|null $variant_id
+ * @property array<int, int>|null $modifier_ids
+ * @property int $cogs
+ * @property bool $inventory_consumed
  * @property CompType|null $comp_type
  * @property string|null $comp_reason
  * @property int|null $comp_approved_by
@@ -53,6 +57,8 @@ class OrderItem extends Model
             'preparing_at' => 'datetime',
             'ready_at' => 'datetime',
             'stock_reserved' => 'boolean',
+            'modifier_ids' => 'array',
+            'inventory_consumed' => 'boolean',
         ];
     }
 

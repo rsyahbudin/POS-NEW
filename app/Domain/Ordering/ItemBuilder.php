@@ -63,6 +63,7 @@ class ItemBuilder
 
             $selected = is_array($req['modifier_ids'] ?? null) ? array_map('intval', $req['modifier_ids']) : [];
             $snapshot = [];
+            $pickedIds = [];
             foreach ($product->modifierGroups as $group) {
                 $picked = $group->modifiers->whereIn('id', $selected);
                 $count = $picked->count();
@@ -75,6 +76,7 @@ class ItemBuilder
                 }
                 foreach ($picked as $m) {
                     $price += $m->price_delta;
+                    $pickedIds[] = $m->id;
                     $snapshot[] = ['group' => $group->name, 'name' => $m->name, 'price_delta' => $m->price_delta];
                 }
             }
@@ -94,6 +96,8 @@ class ItemBuilder
                 'name_snapshot' => $name,
                 'unit_price' => $price,
                 'qty' => $qty,
+                'variant_id' => ! empty($req['variant_id']) ? (int) $req['variant_id'] : null,
+                'modifier_ids' => $pickedIds,
                 'modifiers_snapshot' => $snapshot,
                 'note' => isset($req['note']) && is_string($req['note']) ? mb_substr($req['note'], 0, 200) : null,
                 'line_total' => $price * $qty,

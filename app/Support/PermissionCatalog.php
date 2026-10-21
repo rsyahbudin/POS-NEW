@@ -34,6 +34,7 @@ final class PermissionCatalog
             ]],
             'admin' => ['label' => 'Pengaturan', 'items' => [
                 'manage-menu' => ['label' => 'Kelola menu', 'hint' => 'Produk, kategori, modifier, stasiun dapur.'],
+                'manage-inventory' => ['label' => 'Kelola stok, bahan & resep', 'hint' => 'Bahan baku, pembelian, opname, resep, dan pengaturan HPP.'],
                 'manage-tables' => ['label' => 'Kelola meja & QR', 'hint' => 'Area, meja, token QR, cetak QR.'],
                 'manage-pricing' => ['label' => 'Harga & pajak', 'hint' => 'Cadangan untuk kontrol harga/pajak terpisah.'],
                 'manage-settings' => ['label' => 'Pengaturan outlet', 'hint' => 'Profil outlet, metode bayar, pajak, promo, notifikasi.'],

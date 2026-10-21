@@ -37,6 +37,13 @@ final class SettingsCatalog
                     ['key' => 'qr.window_minutes', 'type' => 'int', 'label' => 'Rentang waktu anti-spam (menit)', 'hint' => 'Contoh: 5 kiriman per 10 menit.', 'default' => 10, 'min' => 1, 'max' => 120],
                 ],
             ]]],
+            ['key' => 'inventory', 'label' => 'Stok & HPP', 'groups' => [[
+                'title' => 'Stok bahan dan harga pokok',
+                'fields' => [
+                    ['key' => 'inventory.enabled', 'type' => 'bool', 'label' => 'Pakai stok bahan, resep, dan HPP', 'hint' => 'Aktif: tiap penjualan memakai bahan sesuai resep, stok berkurang otomatis, dan laporan margin menghitung keuntungan per menu. Nonaktif: menu dan laporan stok disembunyikan dan penjualan tidak menyentuh stok bahan.', 'default' => false],
+                    ['key' => 'inventory.block_when_empty', 'type' => 'bool', 'label' => 'Tolak pesanan jika bahan tidak cukup', 'hint' => 'Aktif: pesanan gagal bila stok bahan kurang dari resep. Nonaktif (disarankan di awal, saat stok belum rapi): pesanan tetap jalan dan stok bisa minus sebagai tanda perlu opname.', 'default' => false],
+                ],
+            ]]],
             ['key' => 'kitchen', 'label' => 'Dapur (KDS)', 'groups' => [[
                 'title' => 'Aktifkan layar dapur',
                 'fields' => [

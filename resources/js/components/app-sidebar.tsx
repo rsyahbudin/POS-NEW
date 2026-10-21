@@ -2,6 +2,7 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     BookOpenCheck,
     CalendarCheck,
+    ClipboardCheck,
     ChefHat,
     Coins,
     FileBarChart,
@@ -17,6 +18,7 @@ import {
     ShoppingBasket,
     Users,
     UtensilsCrossed,
+    Wrench,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
@@ -65,6 +67,18 @@ const top: Item[] = [
         feature: 'kds',
     },
     {
+        title: 'Daftar Stok',
+        href: '/stock',
+        icon: Package,
+        permission: 'view-stock',
+    },
+    {
+        title: 'Stok Opname',
+        href: '/stock/count',
+        icon: ClipboardCheck,
+        permission: 'count-stock',
+    },
+    {
         title: 'Stasiun Cetak',
         href: '/print-station',
         icon: Printer,
@@ -74,7 +88,7 @@ const top: Item[] = [
 
 const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
     {
-        title: 'Menu & Stok',
+        title: 'Menu, Stok & Aset',
         icon: UtensilsCrossed,
         items: [
             {
@@ -94,6 +108,12 @@ const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 href: '/admin/recipes',
                 icon: BookOpenCheck,
                 permission: 'manage-inventory',
+            },
+            {
+                title: 'Aset & Alat',
+                href: '/assets',
+                icon: Wrench,
+                permission: 'view-assets',
             },
             {
                 title: 'Meja & QR',

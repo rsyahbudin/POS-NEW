@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Inventory\InventoryService;
 use App\Domain\Inventory\Models\Ingredient;
 use App\Domain\Inventory\Models\Purchase;
+use App\Domain\Inventory\Models\StockCount;
 use App\Domain\Inventory\Models\StockMovement;
+use App\Domain\Inventory\StockCountService;
 use App\Domain\Settings\OutletContext;
 use App\Domain\Settings\SettingsRepository;
 use App\Http\Controllers\Controller;
@@ -38,6 +40,18 @@ class InventoryController extends Controller
                 'id' => $p->id, 'supplier' => $p->supplier, 'purchased_on' => $p->purchased_on->toDateString(), 'note' => $p->note,
                 'total' => $p->total, 'items_count' => $p->items_count, 'user' => $users[$p->user_id] ?? null,
             ])->all(),
+            'counts' => StockCount::query()->where('outlet_id', $id)->where('status', '!=', 'draft')->with('lines')->latest('id')->limit(30)->get()->map(function (StockCount $c) use ($users) {
+                $costs = Ingredient::query()->whereIn('id', $c->lines->pluck('ingredient_id'))->get()->keyBy('id');
+
+                return [
+                    'id' => $c->id, 'status' => $c->status, 'user' => $users[$c->user_id] ?? null, 'at' => $c->submitted_at?->setTimezone('Asia/Jakarta')->format('d M H:i'),
+                    'review_note' => $c->review_note, 'reviewer' => $users[$c->reviewed_by] ?? null,
+                    'lines' => $c->lines->map(fn ($l) => [
+                        'ingredient' => $costs[$l->ingredient_id]->name ?? '-', 'unit' => $costs[$l->ingredient_id]->unit ?? '', 'system' => $l->system_qty, 'counted' => $l->counted,
+                        'diff' => round($l->counted - (float) $l->system_qty, 3), 'value' => (int) round(($l->counted - (float) $l->system_qty) * (float) ($costs[$l->ingredient_id]->avg_cost ?? 0)),
+                    ])->values()->all(),
+                ];
+            })->all(),
             'movements' => StockMovement::query()->where('outlet_id', $id)->latest('id')->limit(100)->get()->map(fn (StockMovement $m) => [
                 'id' => $m->id, 'ingredient_id' => $m->ingredient_id, 'type' => $m->type, 'qty' => $m->qty, 'unit_cost' => round($m->unit_cost, 2),
                 'note' => $m->note, 'user' => $users[$m->user_id] ?? null, 'at' => $m->created_at?->setTimezone('Asia/Jakarta')->format('d M H:i'),
@@ -98,6 +112,23 @@ class InventoryController extends Controller
         $diff = $this->inventory->count($ingredient, (float) $data['counted'], $this->actor($request), $data['note'] ?? null);
 
         return back()->with('success', abs($diff) < 0.0005 ? 'Stok sudah sesuai.' : 'Stok disesuaikan ('.($diff > 0 ? '+' : '').round($diff, 3).' '.$ingredient->unit.').');
+    }
+
+    public function approveCount(Request $request, StockCount $count, StockCountService $counts): RedirectResponse
+    {
+        abort_unless($count->outlet_id === $this->outlet->id(), 404);
+        $counts->approve($count, $this->actor($request));
+
+        return back()->with('success', 'Hitungan disetujui, stok disesuaikan.');
+    }
+
+    public function rejectCount(Request $request, StockCount $count, StockCountService $counts): RedirectResponse
+    {
+        abort_unless($count->outlet_id === $this->outlet->id(), 404);
+        $data = $request->validate(['reason' => 'required|string|max:200']);
+        $counts->reject($count, $this->actor($request), $data['reason']);
+
+        return back()->with('success', 'Hitungan ditolak.');
     }
 
     public function waste(Request $request, Ingredient $ingredient): RedirectResponse

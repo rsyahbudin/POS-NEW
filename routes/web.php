@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Asset\AssetController;
 use App\Http\Controllers\Auth\PinLoginController;
 use App\Http\Controllers\Kds\KdsController;
 use App\Http\Controllers\Pos\OrderController;
@@ -21,6 +22,7 @@ use App\Http\Controllers\Print\PrintStationController;
 use App\Http\Controllers\Qr\QrMenuController;
 use App\Http\Controllers\Receipt\ReceiptController;
 use App\Http\Controllers\Shift\ShiftController;
+use App\Http\Controllers\Stock\StockController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -114,6 +116,24 @@ Route::middleware(['auth', 'staff'])->group(function () {
     Route::post('pos/bills/{bill}/print', [PrintStationController::class, 'reprintReceipt'])->name('pos.bills.print');
     Route::post('pos/orders/{order}/print-bill', [PrintStationController::class, 'printBill'])->name('pos.orders.print-bill');
 
+    // Stock list and counting for staff
+    Route::get('stock', [StockController::class, 'index'])->middleware('permission:view-stock')->name('stock.index');
+    Route::middleware('permission:count-stock')->prefix('stock/count')->name('stock.')->group(function () {
+        Route::get('/', [StockController::class, 'count'])->name('count');
+        Route::post('save', [StockController::class, 'save'])->name('count.save');
+        Route::post('submit', [StockController::class, 'submit'])->name('count.submit');
+    });
+
+    // Equipment register
+    Route::get('assets', [AssetController::class, 'index'])->middleware('permission:view-assets')->name('assets.index');
+    Route::get('assets/export', [AssetController::class, 'export'])->middleware('permission:view-assets')->name('assets.export');
+    Route::middleware('permission:manage-assets')->prefix('assets')->name('assets.')->group(function () {
+        Route::post('/', [AssetController::class, 'store'])->name('store');
+        Route::put('{asset}', [AssetController::class, 'update'])->name('update');
+        Route::delete('{asset}', [AssetController::class, 'destroy'])->name('destroy');
+        Route::post('{asset}/logs', [AssetController::class, 'log'])->name('log');
+    });
+
     // Kitchen display
     Route::prefix('kds')->name('kds.')->middleware(['permission:update-kitchen-status', 'kitchen'])->group(function () {
         Route::get('/', [KdsController::class, 'index'])->name('index');
@@ -146,6 +166,8 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::put('inventory/ingredients/{ingredient}', [InventoryController::class, 'updateIngredient'])->name('inventory.ingredients.update');
             Route::post('inventory/ingredients/{ingredient}/count', [InventoryController::class, 'count'])->name('inventory.count');
             Route::post('inventory/ingredients/{ingredient}/waste', [InventoryController::class, 'waste'])->name('inventory.waste');
+            Route::post('inventory/counts/{count}/approve', [InventoryController::class, 'approveCount'])->name('inventory.counts.approve');
+            Route::post('inventory/counts/{count}/reject', [InventoryController::class, 'rejectCount'])->name('inventory.counts.reject');
             Route::post('inventory/purchases', [InventoryController::class, 'purchase'])->name('inventory.purchase');
             Route::get('recipes', [RecipeController::class, 'index'])->name('recipes');
             Route::post('recipes/products/{product}', [RecipeController::class, 'saveProduct'])->name('recipes.product');

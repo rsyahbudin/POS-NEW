@@ -15,6 +15,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'open-close-shift', 'manage-shifts-any', 'update-kitchen-status', 'input-expense',
         'view-sales-reports', 'view-own-shift-recap', 'view-accounting', 'manage-accounting',
         'cancel-order', 'use-print-station', 'view-kitchen-report', 'view-margin-report', 'manage-printers',
+        'view-stock', 'count-stock', 'view-assets', 'manage-assets',
         'manage-menu', 'manage-inventory', 'manage-pricing', 'manage-users', 'manage-settings', 'manage-tables', 'manage-roles',
     ];
 
@@ -24,10 +25,11 @@ class RolesAndPermissionsSeeder extends Seeder
             'open-close-shift', 'manage-shifts-any', 'update-kitchen-status', 'input-expense',
             'view-sales-reports', 'view-own-shift-recap', 'view-accounting', 'manage-menu', 'manage-inventory', 'manage-tables',
             'cancel-order', 'use-print-station', 'view-kitchen-report', 'view-margin-report',
+            'view-stock', 'count-stock', 'view-assets', 'manage-assets',
         ],
-        'cashier' => ['create-order', 'receive-payment', 'discount-within-limit', 'open-close-shift', 'update-kitchen-status', 'view-own-shift-recap', 'cancel-order', 'use-print-station'],
-        'waiter' => ['create-order', 'cancel-order', 'use-print-station'],
-        'kitchen' => ['update-kitchen-status', 'use-print-station'],
+        'cashier' => ['create-order', 'receive-payment', 'discount-within-limit', 'open-close-shift', 'update-kitchen-status', 'view-own-shift-recap', 'cancel-order', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
+        'waiter' => ['create-order', 'cancel-order', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
+        'kitchen' => ['update-kitchen-status', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
     ];
 
     public function run(): void

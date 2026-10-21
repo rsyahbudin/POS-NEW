@@ -44,8 +44,26 @@ type Movement = {
     user: string | null;
     at: string | null;
 };
+type CountLine = {
+    ingredient: string;
+    unit: string;
+    system: number | null;
+    counted: number;
+    diff: number;
+    value: number;
+};
+type Count = {
+    id: number;
+    status: string;
+    user: string | null;
+    at: string | null;
+    review_note: string | null;
+    reviewer: string | null;
+    lines: CountLine[];
+};
 type Props = {
     enabled: boolean;
+    counts: Count[];
     ingredients: Ingredient[];
     purchases: Purchase[];
     movements: Movement[];
@@ -68,12 +86,16 @@ const num = (n: number) =>
 
 export default function InventoryPage({
     enabled,
+    counts,
     ingredients,
     purchases,
     movements,
 }: Props) {
     const errors = usePage().props.errors as Record<string, string>;
-    const [tab, setTab] = useState<'stock' | 'purchases' | 'history'>('stock');
+    const [tab, setTab] = useState<
+        'stock' | 'purchases' | 'counts' | 'history'
+    >('stock');
+    const pendingCounts = counts.filter((c) => c.status === 'submitted').length;
     const [edit, setEdit] = useState<{
         id?: number;
         name: string;
@@ -193,6 +215,13 @@ export default function InventoryPage({
                     tabs={[
                         { id: 'stock', label: 'Bahan' },
                         { id: 'purchases', label: 'Pembelian' },
+                        {
+                            id: 'counts',
+                            label:
+                                pendingCounts > 0
+                                    ? `Opname staf (${pendingCounts})`
+                                    : 'Opname staf',
+                        },
                         { id: 'history', label: 'Riwayat stok' },
                     ]}
                 />
@@ -321,6 +350,96 @@ export default function InventoryPage({
                             p.user ?? '-',
                         ])}
                     />
+                )}
+
+                {tab === 'counts' && (
+                    <ul className="grid gap-3">
+                        {counts.map((c) => (
+                            <li
+                                key={c.id}
+                                className="grid gap-2 rounded-xl border bg-card p-3"
+                            >
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <p className="font-semibold">
+                                        {c.user ?? '-'} · {c.at}
+                                    </p>
+                                    <span
+                                        className={
+                                            c.status === 'submitted'
+                                                ? 'rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900'
+                                                : c.status === 'approved'
+                                                  ? 'rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900'
+                                                  : 'rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900'
+                                        }
+                                    >
+                                        {c.status === 'submitted'
+                                            ? 'Menunggu persetujuan'
+                                            : c.status === 'approved'
+                                              ? `Disetujui${c.reviewer ? ` oleh ${c.reviewer}` : ''}`
+                                              : `Ditolak${c.review_note ? `: ${c.review_note}` : ''}`}
+                                    </span>
+                                </div>
+                                <ResponsiveTable
+                                    headers={[
+                                        'Bahan',
+                                        'Sistem',
+                                        'Hitungan',
+                                        'Selisih',
+                                        'Nilai selisih',
+                                    ]}
+                                    numeric={[1, 2, 3, 4]}
+                                    rows={c.lines.map((l) => [
+                                        l.ingredient,
+                                        l.system === null
+                                            ? '-'
+                                            : `${num(l.system)} ${l.unit}`,
+                                        `${num(l.counted)} ${l.unit}`,
+                                        `${l.diff > 0 ? '+' : ''}${num(l.diff)} ${l.unit}`,
+                                        rupiah(l.value),
+                                    ])}
+                                />
+                                {c.status === 'submitted' && (
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button
+                                            className="h-11"
+                                            onClick={() =>
+                                                router.post(
+                                                    `/admin/inventory/counts/${c.id}/approve`,
+                                                    {},
+                                                    opts,
+                                                )
+                                            }
+                                        >
+                                            Setujui & sesuaikan stok
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            className="h-11"
+                                            onClick={() => {
+                                                const reason =
+                                                    prompt('Alasan menolak?');
+
+                                                if (reason) {
+                                                    router.post(
+                                                        `/admin/inventory/counts/${c.id}/reject`,
+                                                        { reason },
+                                                        opts,
+                                                    );
+                                                }
+                                            }}
+                                        >
+                                            Tolak
+                                        </Button>
+                                    </div>
+                                )}
+                            </li>
+                        ))}
+                        {counts.length === 0 && (
+                            <li className="text-sm text-muted-foreground">
+                                Belum ada hitungan dari staf.
+                            </li>
+                        )}
+                    </ul>
                 )}
 
                 {tab === 'history' && (

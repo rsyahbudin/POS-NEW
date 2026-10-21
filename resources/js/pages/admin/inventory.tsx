@@ -4,6 +4,13 @@ import { useState } from 'react';
 import { ImportDialog } from '@/components/pos/import-dialog';
 import { Modal } from '@/components/pos/modal';
 import {
+    PurchaseLines,
+    blankLine,
+    purchaseItems,
+    readyLines,
+} from '@/components/pos/purchase-lines';
+import type { PLine } from '@/components/pos/purchase-lines';
+import {
     Field,
     PageHeader,
     ResponsiveTable,
@@ -25,6 +32,8 @@ type Ingredient = {
     value: number;
     is_active: boolean;
     low: boolean;
+    packs: { name: string; factor: number }[];
+    choices: { name: string; factor: number }[];
 };
 type Purchase = {
     id: number;
@@ -73,15 +82,11 @@ type Count = {
 };
 type Props = {
     enabled: boolean;
+    baseUnits: { key: string; label: string }[];
     counts: Count[];
     ingredients: Ingredient[];
     purchases: Purchase[];
     movements: Movement[];
-};
-type Line = {
-    ingredient_id: number | '';
-    qty: number | '';
-    unit_cost: number | '';
 };
 
 const TYPE: Record<string, string> = {
@@ -96,6 +101,7 @@ const num = (n: number) =>
 
 export default function InventoryPage({
     enabled,
+    baseUnits,
     counts,
     ingredients,
     purchases,
@@ -115,6 +121,7 @@ export default function InventoryPage({
         stock: number | '';
         unit_cost: number | '';
         is_active: boolean;
+        packs: { name: string; factor: number | '' }[];
     } | null>(null);
     const [count, setCount] = useState<{
         ing: Ingredient;
@@ -130,18 +137,13 @@ export default function InventoryPage({
         supplier: string;
         purchased_on: string;
         note: string;
-        items: Line[];
+        items: PLine[];
     } | null>(null);
     const nameOf = (id: number) =>
         ingredients.find((i) => i.id === id)?.name ?? '';
     const opts = { preserveScroll: true };
     const totalValue = ingredients.reduce((s, i) => s + i.value, 0);
     const low = ingredients.filter((i) => i.low);
-    const buyTotal =
-        buy?.items.reduce(
-            (s, l) => s + Number(l.qty || 0) * Number(l.unit_cost || 0),
-            0,
-        ) ?? 0;
 
     return (
         <>
@@ -164,13 +166,7 @@ export default function InventoryPage({
                                             .toISOString()
                                             .slice(0, 10),
                                         note: '',
-                                        items: [
-                                            {
-                                                ingredient_id: '',
-                                                qty: '',
-                                                unit_cost: '',
-                                            },
-                                        ],
+                                        items: [blankLine()],
                                     })
                                 }
                             >
@@ -265,6 +261,7 @@ export default function InventoryPage({
                                         stock: '',
                                         unit_cost: '',
                                         is_active: true,
+                                        packs: [],
                                     })
                                 }
                             >
@@ -348,6 +345,9 @@ export default function InventoryPage({
                                                 stock: '',
                                                 unit_cost: '',
                                                 is_active: i.is_active,
+                                                packs: i.packs.map((u) => ({
+                                                    ...u,
+                                                })),
                                             })
                                         }
                                     >
@@ -588,15 +588,30 @@ export default function InventoryPage({
                         />
                     </Field>
                     <div className="grid grid-cols-2 gap-2">
-                        <Field label="Satuan" hint="g, ml, pcs, ...">
-                            <Input
-                                className="h-11"
+                        <Field
+                            label="Satuan dasar"
+                            hint="Dipakai stok dan resep. Pilih satuan terkecil (sirup = ml)."
+                        >
+                            <Select
                                 value={edit.unit}
-                                maxLength={12}
                                 onChange={(e) =>
                                     setEdit({ ...edit, unit: e.target.value })
                                 }
-                            />
+                            >
+                                {[
+                                    ...baseUnits.map((u) => u.key),
+                                    ...(baseUnits.some(
+                                        (u) => u.key === edit.unit,
+                                    )
+                                        ? []
+                                        : [edit.unit]),
+                                ].map((k) => (
+                                    <option key={k} value={k}>
+                                        {baseUnits.find((u) => u.key === k)
+                                            ?.label ?? k}
+                                    </option>
+                                ))}
+                            </Select>
                         </Field>
                         <Field label="Batas stok menipis">
                             <Input
@@ -655,6 +670,116 @@ export default function InventoryPage({
                             </Field>
                         </div>
                     )}
+                    <div className="grid gap-2 rounded-lg border p-3">
+                        <p className="text-sm font-medium">
+                            Kemasan beli (opsional)
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            Kemasan saat membeli atau menghitung, mis. botol =
+                            750 {edit.unit}. Orang bisa memilih "botol" dan
+                            sistem mengubahnya ke {edit.unit}.
+                        </p>
+                        {edit.packs.map((pk, idx) => (
+                            <div
+                                key={idx}
+                                className="grid grid-cols-[1fr_8rem_auto] items-center gap-2"
+                            >
+                                <Input
+                                    className="h-11"
+                                    aria-label="Nama kemasan"
+                                    placeholder="mis. botol, dus, karung"
+                                    maxLength={20}
+                                    value={pk.name}
+                                    onChange={(e) =>
+                                        setEdit({
+                                            ...edit,
+                                            packs: edit.packs.map((x, j) =>
+                                                j === idx
+                                                    ? {
+                                                          ...x,
+                                                          name: e.target.value,
+                                                      }
+                                                    : x,
+                                            ),
+                                        })
+                                    }
+                                />
+                                <div className="flex items-center gap-1.5">
+                                    <Input
+                                        className="h-11"
+                                        aria-label={`Isi dalam ${edit.unit}`}
+                                        type="number"
+                                        min={0}
+                                        step="any"
+                                        placeholder="isi"
+                                        value={pk.factor}
+                                        onChange={(e) =>
+                                            setEdit({
+                                                ...edit,
+                                                packs: edit.packs.map((x, j) =>
+                                                    j === idx
+                                                        ? {
+                                                              ...x,
+                                                              factor:
+                                                                  e.target
+                                                                      .value ===
+                                                                  ''
+                                                                      ? ''
+                                                                      : Number(
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        ),
+                                                          }
+                                                        : x,
+                                                ),
+                                            })
+                                        }
+                                    />
+                                    <span className="text-xs text-muted-foreground">
+                                        {edit.unit}
+                                    </span>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-11"
+                                    aria-label="Hapus kemasan"
+                                    onClick={() =>
+                                        setEdit({
+                                            ...edit,
+                                            packs: edit.packs.filter(
+                                                (_, j) => j !== idx,
+                                            ),
+                                        })
+                                    }
+                                >
+                                    <Trash2 />
+                                </Button>
+                            </div>
+                        ))}
+                        {edit.packs.length < 6 && (
+                            <div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="h-10"
+                                    onClick={() =>
+                                        setEdit({
+                                            ...edit,
+                                            packs: [
+                                                ...edit.packs,
+                                                { name: '', factor: '' },
+                                            ],
+                                        })
+                                    }
+                                >
+                                    <Plus /> Tambah kemasan
+                                </Button>
+                            </div>
+                        )}
+                    </div>
                     {edit.id && (
                         <label className="flex items-center gap-2 text-sm">
                             <input
@@ -680,6 +805,11 @@ export default function InventoryPage({
                             const body = {
                                 ...edit,
                                 min_stock: edit.min_stock || 0,
+                                packs: edit.packs.filter(
+                                    (pk) =>
+                                        pk.name.trim() !== '' &&
+                                        Number(pk.factor) > 0,
+                                ),
                             };
                             const o = {
                                 ...opts,
@@ -817,9 +947,9 @@ export default function InventoryPage({
                     onClose={() => setBuy(null)}
                     title="Catat pembelian"
                     description="Stok bertambah dan biaya rata-rata bahan dihitung ulang."
-                    className="sm:max-w-2xl"
+                    className="sm:max-w-3xl"
                 >
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-3">
                         <Field label="Tanggal">
                             <Input
                                 className="h-11"
@@ -843,176 +973,22 @@ export default function InventoryPage({
                             />
                         </Field>
                     </div>
-                    {buy.items.map((l, idx) => {
-                        const unit = ingredients.find(
-                            (i) => i.id === l.ingredient_id,
-                        )?.unit;
-
-                        return (
-                            <div
-                                key={idx}
-                                className="grid grid-cols-[1fr_6rem_7.5rem_2.75rem] items-end gap-2"
-                            >
-                                <Field label={idx === 0 ? 'Bahan' : ''}>
-                                    <Select
-                                        value={l.ingredient_id}
-                                        onChange={(e) =>
-                                            setBuy({
-                                                ...buy,
-                                                items: buy.items.map((x, j) =>
-                                                    j === idx
-                                                        ? {
-                                                              ...x,
-                                                              ingredient_id: e
-                                                                  .target.value
-                                                                  ? Number(
-                                                                        e.target
-                                                                            .value,
-                                                                    )
-                                                                  : '',
-                                                          }
-                                                        : x,
-                                                ),
-                                            })
-                                        }
-                                    >
-                                        <option value="">Pilih…</option>
-                                        {ingredients
-                                            .filter((i) => i.is_active)
-                                            .map((i) => (
-                                                <option key={i.id} value={i.id}>
-                                                    {i.name}
-                                                </option>
-                                            ))}
-                                    </Select>
-                                </Field>
-                                <Field
-                                    label={
-                                        idx === 0
-                                            ? `Jumlah${unit ? ` (${unit})` : ''}`
-                                            : ''
-                                    }
-                                >
-                                    <Input
-                                        className="h-11"
-                                        type="number"
-                                        min={0}
-                                        step="any"
-                                        value={l.qty}
-                                        onChange={(e) =>
-                                            setBuy({
-                                                ...buy,
-                                                items: buy.items.map((x, j) =>
-                                                    j === idx
-                                                        ? {
-                                                              ...x,
-                                                              qty:
-                                                                  e.target
-                                                                      .value ===
-                                                                  ''
-                                                                      ? ''
-                                                                      : Number(
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        ),
-                                                          }
-                                                        : x,
-                                                ),
-                                            })
-                                        }
-                                    />
-                                </Field>
-                                <Field label={idx === 0 ? 'Harga/satuan' : ''}>
-                                    <Input
-                                        className="h-11"
-                                        type="number"
-                                        min={0}
-                                        step="any"
-                                        value={l.unit_cost}
-                                        onChange={(e) =>
-                                            setBuy({
-                                                ...buy,
-                                                items: buy.items.map((x, j) =>
-                                                    j === idx
-                                                        ? {
-                                                              ...x,
-                                                              unit_cost:
-                                                                  e.target
-                                                                      .value ===
-                                                                  ''
-                                                                      ? ''
-                                                                      : Number(
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        ),
-                                                          }
-                                                        : x,
-                                                ),
-                                            })
-                                        }
-                                    />
-                                </Field>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-11"
-                                    aria-label="Hapus baris"
-                                    disabled={buy.items.length === 1}
-                                    onClick={() =>
-                                        setBuy({
-                                            ...buy,
-                                            items: buy.items.filter(
-                                                (_, j) => j !== idx,
-                                            ),
-                                        })
-                                    }
-                                >
-                                    <Trash2 />
-                                </Button>
-                            </div>
-                        );
-                    })}
-                    <Button
-                        type="button"
-                        variant="outline"
-                        className="h-10"
-                        onClick={() =>
-                            setBuy({
-                                ...buy,
-                                items: [
-                                    ...buy.items,
-                                    {
-                                        ingredient_id: '',
-                                        qty: '',
-                                        unit_cost: '',
-                                    },
-                                ],
-                            })
-                        }
-                    >
-                        <Plus /> Tambah baris
-                    </Button>
-                    <p className="text-right text-lg font-bold tabular-nums">
-                        Total {rupiah(Math.round(buyTotal))}
-                    </p>
+                    <PurchaseLines
+                        ingredients={ingredients.filter((i) => i.is_active)}
+                        lines={buy.items}
+                        onChange={(items) => setBuy({ ...buy, items })}
+                    />
                     <Button
                         className="h-12"
-                        disabled={buy.items.some(
-                            (l) =>
-                                l.ingredient_id === '' ||
-                                !l.qty ||
-                                l.unit_cost === '',
-                        )}
+                        disabled={readyLines(buy.items).length === 0}
                         onClick={() =>
                             router.post(
                                 '/admin/inventory/purchases',
                                 {
-                                    ...buy,
+                                    purchased_on: buy.purchased_on,
                                     supplier: buy.supplier || null,
                                     note: buy.note || null,
+                                    items: purchaseItems(buy.items),
                                 },
                                 { ...opts, onSuccess: () => setBuy(null) },
                             )

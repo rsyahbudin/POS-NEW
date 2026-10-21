@@ -1,20 +1,20 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
+import { FileSpreadsheet } from 'lucide-react';
 import { useState } from 'react';
 import { ImportDialog } from '@/components/pos/import-dialog';
 import {
-    Field,
-    MoneyInput,
-    PageHeader,
-    ResponsiveTable,
-    Select,
-} from '@/components/pos/ui';
+    PurchaseLines,
+    blankLine,
+    purchaseItems,
+    readyLines,
+} from '@/components/pos/purchase-lines';
+import type { PIngredient, PLine } from '@/components/pos/purchase-lines';
+import { Field, PageHeader, ResponsiveTable } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { rupiah } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
-type Ingredient = { id: number; name: string; unit: string };
 type History = {
     id: number;
     purchased_on: string;
@@ -23,11 +23,6 @@ type History = {
     status: string;
     items: number;
     review_note: string | null;
-};
-type Line = {
-    ingredient_id: number | '';
-    qty: number | '';
-    total: number | '';
 };
 
 const STATUS: Record<string, { label: string; cls: string }> = {
@@ -38,7 +33,6 @@ const STATUS: Record<string, { label: string; cls: string }> = {
     approved: { label: 'Masuk stok', cls: 'bg-emerald-100 text-emerald-900' },
     rejected: { label: 'Ditolak', cls: 'bg-red-100 text-red-900' },
 };
-const blankLine = (): Line => ({ ingredient_id: '', qty: '', total: '' });
 
 export default function PurchasePage({
     needsApproval,
@@ -46,33 +40,22 @@ export default function PurchasePage({
     history,
 }: {
     needsApproval: boolean;
-    ingredients: Ingredient[];
+    ingredients: PIngredient[];
     history: History[];
 }) {
     const errors = usePage().props.errors as Record<string, string>;
     const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
     const [supplier, setSupplier] = useState('');
-    const [lines, setLines] = useState<Line[]>([blankLine()]);
+    const [lines, setLines] = useState<PLine[]>([blankLine()]);
     const [importing, setImporting] = useState(false);
-    const unit = (id: number | '') =>
-        ingredients.find((i) => i.id === id)?.unit ?? '';
-    const patch = (idx: number, p: Partial<Line>) =>
-        setLines((ls) => ls.map((l, i) => (i === idx ? { ...l, ...p } : l)));
-    const total = lines.reduce((s, l) => s + Number(l.total || 0), 0);
-    const ready = lines.filter(
-        (l) => l.ingredient_id !== '' && Number(l.qty) > 0 && l.total !== '',
-    );
+    const ready = readyLines(lines);
     const submit = () =>
         router.post(
             '/stock/purchase',
             {
                 purchased_on: date,
                 supplier: supplier || null,
-                items: ready.map((l) => ({
-                    ingredient_id: l.ingredient_id,
-                    qty: l.qty,
-                    unit_cost: Number(l.total) / Number(l.qty),
-                })),
+                items: purchaseItems(lines),
             },
             { preserveScroll: true, onSuccess: () => setLines([blankLine()]) },
         );
@@ -83,7 +66,7 @@ export default function PurchasePage({
             <div className="grid gap-4 p-4">
                 <PageHeader
                     title="Belanja bahan"
-                    subtitle="Catat bahan yang dibeli: jumlah dan total harga yang dibayar."
+                    subtitle="Catat bahan yang dibeli: jumlah, satuan, dan total harga yang dibayar."
                     actions={
                         <>
                             <Button
@@ -133,130 +116,11 @@ export default function PurchasePage({
                     </Field>
                 </div>
 
-                <div className="overflow-x-auto rounded-2xl border bg-card">
-                    <table className="w-full text-sm">
-                        <thead className="bg-muted/60 text-left">
-                            <tr>
-                                <th className="px-3 py-2 font-medium">Bahan</th>
-                                <th className="w-32 px-3 py-2 font-medium">
-                                    Jumlah
-                                </th>
-                                <th className="w-44 px-3 py-2 font-medium">
-                                    Total harga
-                                </th>
-                                <th className="w-12 px-1 py-2" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {lines.map((l, idx) => (
-                                <tr key={idx} className="border-t align-top">
-                                    <td className="min-w-48 p-2">
-                                        <Select
-                                            aria-label="Bahan"
-                                            value={l.ingredient_id}
-                                            onChange={(e) =>
-                                                patch(idx, {
-                                                    ingredient_id: e.target
-                                                        .value
-                                                        ? Number(e.target.value)
-                                                        : '',
-                                                })
-                                            }
-                                        >
-                                            <option value="">
-                                                Pilih bahan…
-                                            </option>
-                                            {ingredients.map((i) => (
-                                                <option key={i.id} value={i.id}>
-                                                    {i.name} ({i.unit})
-                                                </option>
-                                            ))}
-                                        </Select>
-                                    </td>
-                                    <td className="p-2">
-                                        <div className="flex items-center gap-1.5">
-                                            <Input
-                                                className="h-11"
-                                                aria-label="Jumlah"
-                                                type="number"
-                                                min={0}
-                                                step="any"
-                                                inputMode="decimal"
-                                                value={l.qty}
-                                                onChange={(e) =>
-                                                    patch(idx, {
-                                                        qty:
-                                                            e.target.value ===
-                                                            ''
-                                                                ? ''
-                                                                : Number(
-                                                                      e.target
-                                                                          .value,
-                                                                  ),
-                                                    })
-                                                }
-                                            />
-                                            <span className="w-8 text-xs text-muted-foreground">
-                                                {unit(l.ingredient_id)}
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td className="p-2">
-                                        <MoneyInput
-                                            value={l.total}
-                                            onChange={(v) =>
-                                                patch(idx, { total: v })
-                                            }
-                                        />
-                                    </td>
-                                    <td className="p-1 text-center">
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="size-11"
-                                            aria-label="Hapus baris"
-                                            disabled={lines.length === 1}
-                                            onClick={() =>
-                                                setLines((ls) =>
-                                                    ls.filter(
-                                                        (_, i) => i !== idx,
-                                                    ),
-                                                )
-                                            }
-                                        >
-                                            <Trash2 />
-                                        </Button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                        <tfoot>
-                            <tr className="border-t bg-muted/40 font-semibold">
-                                <td className="px-3 py-2">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        className="h-10"
-                                        onClick={() =>
-                                            setLines((ls) => [
-                                                ...ls,
-                                                blankLine(),
-                                            ])
-                                        }
-                                    >
-                                        <Plus /> Tambah baris
-                                    </Button>
-                                </td>
-                                <td className="px-3 py-2 text-right">Total</td>
-                                <td className="px-3 py-2 tabular-nums">
-                                    {rupiah(total)}
-                                </td>
-                                <td />
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
+                <PurchaseLines
+                    ingredients={ingredients}
+                    lines={lines}
+                    onChange={setLines}
+                />
                 <div>
                     <Button
                         className="h-12"

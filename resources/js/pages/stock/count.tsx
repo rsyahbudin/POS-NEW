@@ -2,7 +2,7 @@ import { Head, Link, router, usePage } from '@inertiajs/react';
 import { FileSpreadsheet } from 'lucide-react';
 import { useState } from 'react';
 import { ImportDialog } from '@/components/pos/import-dialog';
-import { PageHeader } from '@/components/pos/ui';
+import { PageHeader, Select } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,7 @@ type Ingredient = {
     id: number;
     name: string;
     unit: string;
+    choices: { name: string; factor: number }[];
     counted: number | null;
     system: number | null;
 };
@@ -55,6 +56,7 @@ export default function StockCount({
                 .map((i) => [i.id, String(i.counted)]),
         ),
     );
+    const [units, setUnits] = useState<Record<number, string>>({});
     const [note, setNote] = useState(draft.note ?? '');
     const [q, setQ] = useState('');
     const [importing, setImporting] = useState(false);
@@ -69,6 +71,7 @@ export default function StockCount({
                 values[i.id] === undefined || values[i.id] === ''
                     ? null
                     : Number(values[i.id]),
+            unit: units[i.id] ?? i.unit,
         })),
         note: note || null,
     });
@@ -162,9 +165,35 @@ export default function StockCount({
                                                     })
                                                 }
                                             />
-                                            <span className="w-9 text-xs text-muted-foreground">
-                                                {i.unit}
-                                            </span>
+                                            {i.choices.length > 1 ? (
+                                                <Select
+                                                    aria-label={`Satuan ${i.name}`}
+                                                    className="h-11 w-24 px-2"
+                                                    value={
+                                                        units[i.id] ?? i.unit
+                                                    }
+                                                    onChange={(e) =>
+                                                        setUnits({
+                                                            ...units,
+                                                            [i.id]: e.target
+                                                                .value,
+                                                        })
+                                                    }
+                                                >
+                                                    {i.choices.map((c) => (
+                                                        <option
+                                                            key={c.name}
+                                                            value={c.name}
+                                                        >
+                                                            {c.name}
+                                                        </option>
+                                                    ))}
+                                                </Select>
+                                            ) : (
+                                                <span className="w-9 text-xs text-muted-foreground">
+                                                    {i.unit}
+                                                </span>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>

@@ -68,6 +68,7 @@ export default function StockList({
                     </Button>
                 </div>
                 <ResponsiveTable
+                    toolbar={false}
                     headers={['Bahan', 'Stok', 'Batas minimum', 'Status']}
                     numeric={[1, 2]}
                     empty="Tidak ada bahan."

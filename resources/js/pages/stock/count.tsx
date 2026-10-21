@@ -1,5 +1,5 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { FileSpreadsheet } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, FileSpreadsheet } from 'lucide-react';
 import { useState } from 'react';
 import { ImportDialog } from '@/components/pos/import-dialog';
 import { PageHeader, Select } from '@/components/pos/ui';
@@ -61,9 +61,54 @@ export default function StockCount({
     const [q, setQ] = useState('');
     const [importing, setImporting] = useState(false);
     const filled = Object.values(values).filter((v) => v !== '').length;
-    const shown = ingredients.filter((i) =>
-        i.name.toLowerCase().includes(q.toLowerCase()),
-    );
+    const [sortBy, setSortBy] = useState<{
+        key: 'name' | 'system' | 'filled';
+        dir: 1 | -1;
+    } | null>(null);
+    const toggleSort = (key: 'name' | 'system' | 'filled') =>
+        setSortBy((s) =>
+            s?.key !== key
+                ? { key, dir: 1 }
+                : s.dir === 1
+                  ? { key, dir: -1 }
+                  : null,
+        );
+    const shown = ingredients
+        .filter((i) => i.name.toLowerCase().includes(q.toLowerCase()))
+        .sort((a, b) => {
+            if (!sortBy) {
+                return 0;
+            }
+
+            const va =
+                sortBy.key === 'name'
+                    ? a.name
+                    : sortBy.key === 'system'
+                      ? (a.system ?? 0)
+                      : values[a.id]
+                        ? 1
+                        : 0;
+            const vb =
+                sortBy.key === 'name'
+                    ? b.name
+                    : sortBy.key === 'system'
+                      ? (b.system ?? 0)
+                      : values[b.id]
+                        ? 1
+                        : 0;
+
+            return typeof va === 'string'
+                ? va.localeCompare(String(vb), 'id') * sortBy.dir
+                : ((va as number) - (vb as number)) * sortBy.dir;
+        });
+    const arrow = (key: 'name' | 'system' | 'filled') =>
+        sortBy?.key !== key ? (
+            <ArrowUpDown className="size-3.5 opacity-30" />
+        ) : sortBy.dir === 1 ? (
+            <ArrowUp className="size-3.5 text-primary" />
+        ) : (
+            <ArrowDown className="size-3.5 text-primary" />
+        );
     const body = () => ({
         lines: ingredients.map((i) => ({
             ingredient_id: i.id,
@@ -117,14 +162,34 @@ export default function StockCount({
                     <table className="w-full text-sm">
                         <thead className="bg-muted/60 text-left">
                             <tr>
-                                <th className="px-3 py-2 font-medium">Bahan</th>
+                                <th className="px-3 py-2 font-medium">
+                                    <button
+                                        type="button"
+                                        className="inline-flex items-center gap-1 hover:text-primary"
+                                        onClick={() => toggleSort('name')}
+                                    >
+                                        Bahan {arrow('name')}
+                                    </button>
+                                </th>
                                 {!blind && (
                                     <th className="px-3 py-2 text-right font-medium">
-                                        Di sistem
+                                        <button
+                                            type="button"
+                                            className="inline-flex flex-row-reverse items-center gap-1 hover:text-primary"
+                                            onClick={() => toggleSort('system')}
+                                        >
+                                            Di sistem {arrow('system')}
+                                        </button>
                                     </th>
                                 )}
                                 <th className="w-44 px-3 py-2 font-medium">
-                                    Hitungan
+                                    <button
+                                        type="button"
+                                        className="inline-flex items-center gap-1 hover:text-primary"
+                                        onClick={() => toggleSort('filled')}
+                                    >
+                                        Hitungan {arrow('filled')}
+                                    </button>
                                 </th>
                             </tr>
                         </thead>

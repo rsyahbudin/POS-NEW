@@ -163,6 +163,7 @@ export default function RecipesPage({
                             onChange={(e) => setQ(e.target.value)}
                         />
                         <ResponsiveTable
+                            toolbar={false}
                             headers={[
                                 'Menu',
                                 'Kategori',

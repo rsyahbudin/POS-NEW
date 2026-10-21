@@ -276,6 +276,8 @@ export default function Accounting(p: Props) {
                             </ChartCard>
                         </div>
                         <ResponsiveTable
+                            sortable={false}
+                            toolbar={false}
                             headers={['Akun', 'Jumlah']}
                             numeric={[1]}
                             rows={[
@@ -312,6 +314,8 @@ export default function Accounting(p: Props) {
                             />
                         </div>
                         <ResponsiveTable
+                            sortable={false}
+                            toolbar={false}
                             headers={['Akun', 'Saldo']}
                             numeric={[1]}
                             rows={[

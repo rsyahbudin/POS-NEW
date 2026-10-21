@@ -215,6 +215,7 @@ export default function AssetsPage({
                 </div>
 
                 <ResponsiveTable
+                    toolbar={false}
                     headers={[
                         'Aset',
                         'Kategori',

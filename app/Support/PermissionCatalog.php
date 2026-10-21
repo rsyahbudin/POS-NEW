@@ -19,6 +19,8 @@ final class PermissionCatalog
                 'discount-over-limit' => ['label' => 'Diskon di atas batas', 'hint' => 'Pemegang izin ini bisa menyetujui diskon lewat PIN 6 digit.'],
                 'void' => ['label' => 'Void & komplimen', 'hint' => 'Void item/order dan tandai komplimen/staff meal. Peran tanpa izin ini butuh PIN dari pemegang izin.'],
                 'refund' => ['label' => 'Refund', 'hint' => 'Refund pembayaran yang sudah lunas (jurnal pembalik).'],
+                'cancel-order' => ['label' => 'Batalkan pesanan / item (belum dibayar)', 'hint' => 'Batalkan sendiri dengan alasan wajib (tercatat di laporan). Peran tanpa izin ini butuh PIN dari pemegang izin "Void & komplimen".'],
+                'use-print-station' => ['label' => 'Pakai Stasiun Cetak', 'hint' => 'Membuka halaman Stasiun Cetak untuk mencetak antrean struk, bill, dan tiket.'],
                 'update-kitchen-status' => ['label' => 'Update status dapur', 'hint' => 'Buka layar dapur dan majukan status item.'],
             ]],
             'shift' => ['label' => 'Shift & kas', 'items' => [
@@ -29,12 +31,15 @@ final class PermissionCatalog
             ]],
             'report' => ['label' => 'Laporan & akuntansi', 'items' => [
                 'view-sales-reports' => ['label' => 'Laporan penjualan & dashboard', 'hint' => 'Dashboard, laporan penjualan, laporan diskon/void/refund.'],
+                'view-kitchen-report' => ['label' => 'Laporan kinerja dapur', 'hint' => 'Berapa menit dapur menyelesaikan pesanan.'],
+                'view-margin-report' => ['label' => 'Laporan margin & HPP', 'hint' => 'Biaya bahan, laba kotor, dan nilai stok. Data sensitif, batasi ke owner/manager.'],
                 'view-accounting' => ['label' => 'Lihat laporan akuntansi', 'hint' => 'Laba rugi, neraca, arus kas, buku besar, jurnal (hanya baca).'],
                 'manage-accounting' => ['label' => 'Kelola akuntansi', 'hint' => 'Jurnal manual, jurnal pembalik, tutup buku, ubah akun.'],
             ]],
             'admin' => ['label' => 'Pengaturan', 'items' => [
                 'manage-menu' => ['label' => 'Kelola menu', 'hint' => 'Produk, kategori, modifier, stasiun dapur.'],
                 'manage-inventory' => ['label' => 'Kelola stok, bahan & resep', 'hint' => 'Bahan baku, pembelian, opname, resep, dan pengaturan HPP.'],
+                'manage-printers' => ['label' => 'Kelola printer', 'hint' => 'Daftar printer dan routing struk, bill, dan tiket per kategori/menu.'],
                 'manage-tables' => ['label' => 'Kelola meja & QR', 'hint' => 'Area, meja, token QR, cetak QR.'],
                 'manage-pricing' => ['label' => 'Harga & pajak', 'hint' => 'Cadangan untuk kontrol harga/pajak terpisah.'],
                 'manage-settings' => ['label' => 'Pengaturan outlet', 'hint' => 'Profil outlet, metode bayar, pajak, promo, notifikasi.'],

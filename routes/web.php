@@ -105,7 +105,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
     });
 
     // Print station: a device that serves the queued print jobs of its printers
-    Route::prefix('print-station')->name('print-station.')->group(function () {
+    Route::prefix('print-station')->name('print-station.')->middleware('permission:use-print-station')->group(function () {
         Route::get('/', [PrintStationController::class, 'show'])->name('show');
         Route::get('jobs', [PrintStationController::class, 'jobs'])->name('jobs');
         Route::post('jobs/{job}/done', [PrintStationController::class, 'done'])->name('done');
@@ -179,11 +179,14 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::delete('roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy');
         });
 
-        Route::middleware('permission:manage-settings')->group(function () {
+        Route::middleware('permission:manage-printers')->group(function () {
             Route::get('printers', [PrinterController::class, 'index'])->name('printers');
             Route::post('printers', [PrinterController::class, 'store'])->name('printers.store');
             Route::put('printers/{printer}', [PrinterController::class, 'update'])->name('printers.update');
             Route::delete('printers/{printer}', [PrinterController::class, 'destroy'])->name('printers.destroy');
+        });
+
+        Route::middleware('permission:manage-settings')->group(function () {
             Route::get('settings', [SettingsController::class, 'show'])->name('settings');
             Route::post('settings/outlet', [SettingsController::class, 'updateOutlet'])->name('settings.outlet');
             Route::post('settings', [SettingsController::class, 'updateSettings'])->name('settings.update');
@@ -204,12 +207,18 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::get('expenses/export', [ExpenseController::class, 'export'])->name('expenses.export');
         });
 
-        Route::middleware('permission:view-sales-reports')->group(function () {
-            Route::get('reports/sales', [ReportController::class, 'sales'])->name('reports.sales');
+        Route::middleware('permission:view-margin-report')->group(function () {
             Route::get('reports/margin', [ReportController::class, 'margin'])->name('reports.margin');
             Route::get('reports/margin/export', [ReportController::class, 'marginExport'])->name('reports.margin.export');
+        });
+
+        Route::middleware('permission:view-kitchen-report')->group(function () {
             Route::get('reports/kitchen', [ReportController::class, 'kitchen'])->name('reports.kitchen');
             Route::get('reports/kitchen/export', [ReportController::class, 'kitchenExport'])->name('reports.kitchen.export');
+        });
+
+        Route::middleware('permission:view-sales-reports')->group(function () {
+            Route::get('reports/sales', [ReportController::class, 'sales'])->name('reports.sales');
             Route::get('reports/adjustments', [ReportController::class, 'adjustments'])->name('reports.adjustments');
             Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
         });

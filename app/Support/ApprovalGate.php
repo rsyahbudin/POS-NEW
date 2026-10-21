@@ -47,12 +47,12 @@ class ApprovalGate
     }
 
     /**
-     * Cancelling an unpaid order or item: any staff who can take orders may do it (reason is mandatory and
+     * Cancelling an unpaid order or item: staff with the cancel-order permission may do it (reason is mandatory and
      * reported). Pengaturan > Keamanan can require a manager PIN again.
      */
     public function resolveCancel(User $actor, ?string $pin): User
     {
-        if (! (bool) app(SettingsRepository::class)->get('security.cancel_needs_pin', false)) {
+        if ($actor->can('cancel-order') && ! (bool) app(SettingsRepository::class)->get('security.cancel_needs_pin', false)) {
             return $actor;
         }
 

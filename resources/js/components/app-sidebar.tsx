@@ -105,14 +105,14 @@ const items: Item[] = [
         title: 'Kinerja Dapur',
         href: '/admin/reports/kitchen',
         icon: Timer,
-        permission: 'view-sales-reports',
+        permission: 'view-kitchen-report',
         feature: 'kds',
     },
     {
         title: 'Margin & HPP',
         href: '/admin/reports/margin',
         icon: FileBarChart,
-        permission: 'view-sales-reports',
+        permission: 'view-margin-report',
         feature: 'inventory',
     },
     {
@@ -149,17 +149,13 @@ const items: Item[] = [
         title: 'Printer',
         href: '/admin/printers',
         icon: Printer,
-        permission: 'manage-settings',
+        permission: 'manage-printers',
     },
     {
         title: 'Stasiun Cetak',
         href: '/print-station',
         icon: Printer,
-        permission: [
-            'receive-payment',
-            'create-order',
-            'update-kitchen-status',
-        ],
+        permission: 'use-print-station',
     },
     {
         title: 'Pengaturan',

@@ -16,10 +16,12 @@ use App\Domain\Reporting\KitchenReports;
 use App\Domain\Settings\Models\Outlet;
 use App\Domain\Shift\Models\Shift;
 use App\Domain\Shift\ShiftCash;
+use App\Models\User;
 use App\Support\BusinessDate;
 use App\Support\RealtimeConfig;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 // ---------------------------------------------------------------- realtime config
 
@@ -427,4 +429,40 @@ it('saves category and item printer choices from the menu admin', function () {
     expect($cat->printers()->pluck('printers.id')->all())->toBe([$p->id]);
     $this->actingAs($owner)->get('/admin/menu')->assertInertia(fn ($page) => $page->has('printers', 1)->where('categories.0.printer_ids', fn ($ids) => count($ids) <= 1));
     $this->actingAs($owner)->post("/admin/categories/{$cat->id}/printers", ['printer_ids' => [999999]])->assertSessionHasErrors('printer_ids.0');
+});
+
+// ---------------------------------------------------------------- every feature has its own permission
+
+it('lets each feature be granted per role: cancel, print station, printers, kitchen and margin reports', function () {
+    $role = Role::findOrCreate('custom-test', 'web')->syncPermissions(['create-order']);
+    $user = User::factory()->create(['is_active' => true, 'outlet_id' => userWithRole('owner')->outlet_id]);
+    $user->assignRole($role);
+
+    // without the permissions
+    $this->actingAs($user)->get('/print-station')->assertForbidden();
+    $this->actingAs($user)->get('/admin/printers')->assertForbidden();
+    $this->actingAs($user)->get('/admin/reports/kitchen')->assertForbidden();
+    $this->actingAs($user)->get('/admin/reports/margin')->assertForbidden();
+    $order = placeOrder();
+    expect(fn () => app(VoidItemAction::class)->handle($order->items->first(), $user, 'salah'))->toThrow(OrderException::class, 'PIN');
+
+    // with them
+    $role->syncPermissions(['create-order', 'cancel-order', 'use-print-station', 'manage-printers', 'view-kitchen-report', 'view-margin-report']);
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+    $user = $user->fresh();
+    $this->actingAs($user)->get('/print-station')->assertOk();
+    $this->actingAs($user)->get('/admin/printers')->assertOk();
+    $this->actingAs($user)->get('/admin/reports/kitchen')->assertOk();
+    $this->actingAs($user)->get('/admin/reports/margin')->assertOk();
+    app(VoidItemAction::class)->handle($order->items->first(), $user, 'salah input');
+    expect($order->items->first()->fresh()->voided_by)->toBe($user->id);
+});
+
+it('lists the new permissions in the role editor', function () {
+    $this->actingAs(userWithRole('owner'))->get('/admin/roles')->assertInertia(function ($page) {
+        $names = collect($page->toArray()['props']['groups'])->flatMap(fn ($g) => collect($g['items'])->pluck('name'));
+        foreach (['cancel-order', 'use-print-station', 'manage-printers', 'view-kitchen-report', 'view-margin-report', 'manage-inventory'] as $p) {
+            expect($names)->toContain($p);
+        }
+    });
 });

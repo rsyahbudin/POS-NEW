@@ -93,7 +93,6 @@ class PrintStationController extends Controller
 
     private function authorizeStation(Request $request): void
     {
-        $u = $request->user();
-        abort_unless($u && ($u->can('receive-payment') || $u->can('create-order') || $u->can('update-kitchen-status') || $u->can('manage-settings')), 403);
+        abort_unless($this->actor($request)->can('use-print-station'), 403);
     }
 }

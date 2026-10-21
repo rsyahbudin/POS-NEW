@@ -4,8 +4,10 @@ use App\Http\Controllers\Admin\AccountingController;
 use App\Http\Controllers\Admin\DayCloseController;
 use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\FloorController;
+use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\MenuController;
 use App\Http\Controllers\Admin\PrinterController;
+use App\Http\Controllers\Admin\RecipeController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SettingsController;
@@ -138,6 +140,18 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::delete('modifier-groups/{group}', [MenuController::class, 'deleteModifierGroup'])->name('modifier-groups.destroy');
         });
 
+        Route::middleware('permission:manage-inventory')->group(function () {
+            Route::get('inventory', [InventoryController::class, 'index'])->name('inventory');
+            Route::post('inventory/ingredients', [InventoryController::class, 'storeIngredient'])->name('inventory.ingredients.store');
+            Route::put('inventory/ingredients/{ingredient}', [InventoryController::class, 'updateIngredient'])->name('inventory.ingredients.update');
+            Route::post('inventory/ingredients/{ingredient}/count', [InventoryController::class, 'count'])->name('inventory.count');
+            Route::post('inventory/ingredients/{ingredient}/waste', [InventoryController::class, 'waste'])->name('inventory.waste');
+            Route::post('inventory/purchases', [InventoryController::class, 'purchase'])->name('inventory.purchase');
+            Route::get('recipes', [RecipeController::class, 'index'])->name('recipes');
+            Route::post('recipes/products/{product}', [RecipeController::class, 'saveProduct'])->name('recipes.product');
+            Route::post('recipes/modifiers/{modifier}', [RecipeController::class, 'saveModifier'])->name('recipes.modifier');
+        });
+
         Route::middleware('permission:manage-tables')->group(function () {
             Route::get('tables', [FloorController::class, 'index'])->name('tables');
             Route::post('areas', [FloorController::class, 'saveArea'])->name('areas.store');
@@ -192,6 +206,8 @@ Route::middleware(['auth', 'staff'])->group(function () {
 
         Route::middleware('permission:view-sales-reports')->group(function () {
             Route::get('reports/sales', [ReportController::class, 'sales'])->name('reports.sales');
+            Route::get('reports/margin', [ReportController::class, 'margin'])->name('reports.margin');
+            Route::get('reports/margin/export', [ReportController::class, 'marginExport'])->name('reports.margin.export');
             Route::get('reports/kitchen', [ReportController::class, 'kitchen'])->name('reports.kitchen');
             Route::get('reports/kitchen/export', [ReportController::class, 'kitchenExport'])->name('reports.kitchen.export');
             Route::get('reports/adjustments', [ReportController::class, 'adjustments'])->name('reports.adjustments');

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Reporting\KitchenReports;
+use App\Domain\Reporting\MarginReports;
 use App\Domain\Reporting\SalesReports;
 use App\Domain\Settings\SettingsRepository;
 use App\Exports\ReportSheet;
@@ -82,6 +83,42 @@ class ReportController extends Controller
         ]);
     }
 
+    public function margin(Request $request, MarginReports $margin, SettingsRepository $settings): Response
+    {
+        [$from, $to] = $this->params($request);
+        $dimension = (string) $request->input('dimension', 'product');
+        abort_unless(in_array($dimension, MarginReports::DIMENSIONS, true), 422);
+
+        return Inertia::render('admin/reports/margin', [
+            'enabled' => (bool) $settings->get('inventory.enabled', false),
+            'filters' => ['from' => $from, 'to' => $to, 'dimension' => $dimension],
+            'summary' => $margin->summary($from, $to),
+            'rows' => $margin->by($dimension, $from, $to),
+            'stock' => $margin->stock(),
+            'dimensions' => MarginReports::DIMENSIONS,
+        ]);
+    }
+
+    public function marginExport(Request $request, MarginReports $margin): \Symfony\Component\HttpFoundation\Response
+    {
+        [$from, $to] = $this->params($request);
+        $dimension = (string) $request->input('dimension', 'product');
+        abort_unless(in_array($dimension, MarginReports::DIMENSIONS, true), 422);
+        $labels = ['product' => 'Produk', 'category' => 'Kategori', 'day' => 'Hari'];
+        $sub = 'Periode '.$this->rangeLabel($from, $to);
+        $s = $margin->summary($from, $to);
+
+        return ReportFile::download((string) $request->input('format', 'xlsx'), "Margin {$labels[$dimension]} {$from} {$to}", [
+            new ReportSheet("Margin per {$labels[$dimension]}", $sub, [$labels[$dimension], 'Terjual', 'Penjualan', 'HPP', 'Laba kotor', 'Margin %'],
+                $margin->by($dimension, $from, $to)->map(fn ($r) => [$r->label, $r->qty, $r->revenue, $r->cogs, $r->profit, $r->margin_pct])->all()),
+            new ReportSheet('Ringkasan', $sub, ['Keterangan', 'Nilai'], [
+                ['Penjualan', $s['revenue']], ['HPP (biaya bahan)', $s['cogs']], ['Laba kotor', $s['profit']], ['Margin %', $s['margin_pct']], ['Porsi tanpa resep/HPP', $s['uncosted_qty']],
+            ]),
+            new ReportSheet('Stok bahan', 'Saat ini', ['Bahan', 'Satuan', 'Stok', 'Biaya rata-rata', 'Nilai stok', 'Batas minimum'],
+                $margin->stock()->map(fn ($r) => [$r->name, $r->unit, $r->stock, $r->avg_cost, $r->value, $r->min_stock])->all()),
+        ]);
+    }
+
     public function adjustments(Request $request): Response
     {
         [$from, $to] = $this->params($request);
@@ -143,7 +180,7 @@ class ReportController extends Controller
     /** @return array{0: string, 1: string, 2: string} */
     private function params(Request $request): array
     {
-        $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date', 'dimension' => 'nullable|in:'.implode(',', array_unique([...SalesReports::DIMENSIONS, ...KitchenReports::DIMENSIONS]))]);
+        $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date', 'dimension' => 'nullable|in:'.implode(',', array_unique([...SalesReports::DIMENSIONS, ...KitchenReports::DIMENSIONS, ...MarginReports::DIMENSIONS]))]);
 
         return [
             $request->input('from', CarbonImmutable::parse(BusinessDate::for())->subDays(29)->toDateString()),

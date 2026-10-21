@@ -9,6 +9,7 @@ import {
     Monitor,
     QrCode,
     Printer,
+    Package,
     Receipt,
     Settings,
     Timer,
@@ -31,7 +32,10 @@ import {
 } from '@/components/ui/sidebar';
 import type { NavItem } from '@/types';
 
-type Item = NavItem & { permission?: string | string[]; feature?: 'kds' };
+type Item = NavItem & {
+    permission?: string | string[];
+    feature?: 'kds' | 'inventory';
+};
 
 const items: Item[] = [
     {
@@ -66,6 +70,20 @@ const items: Item[] = [
         permission: 'manage-menu',
     },
     {
+        title: 'Stok & Bahan',
+        href: '/admin/inventory',
+        icon: Package,
+        permission: 'manage-inventory',
+        feature: 'inventory',
+    },
+    {
+        title: 'Resep & HPP',
+        href: '/admin/recipes',
+        icon: BookOpenCheck,
+        permission: 'manage-inventory',
+        feature: 'inventory',
+    },
+    {
         title: 'Meja & QR',
         href: '/admin/tables',
         icon: QrCode,
@@ -89,6 +107,13 @@ const items: Item[] = [
         icon: Timer,
         permission: 'view-sales-reports',
         feature: 'kds',
+    },
+    {
+        title: 'Margin & HPP',
+        href: '/admin/reports/margin',
+        icon: FileBarChart,
+        permission: 'view-sales-reports',
+        feature: 'inventory',
     },
     {
         title: 'Diskon/Void/Refund',
@@ -152,7 +177,9 @@ export function AppSidebar() {
     const isOwner = user?.roles?.includes('owner') ?? false;
     const has = (p?: string | string[]) =>
         !p || isOwner || [p].flat().some((x) => user?.permissions?.includes(x));
-    const features = usePage().props.features as { kds: boolean } | undefined;
+    const features = usePage().props.features as
+        | { kds: boolean; inventory: boolean }
+        | undefined;
     const visible = items.filter(
         (i) => has(i.permission) && (!i.feature || features?.[i.feature]),
     );

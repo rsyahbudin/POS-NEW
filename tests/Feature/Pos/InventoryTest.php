@@ -11,6 +11,7 @@ use App\Domain\Ordering\Actions\VoidItemAction;
 use App\Domain\Ordering\Actions\VoidOrderAction;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Settings\Models\Outlet;
+use App\Support\BusinessDate;
 
 beforeEach(fn () => setting('inventory.enabled', true));
 
@@ -126,4 +127,63 @@ it('records stock counts and waste as movements', function () {
     $svc->waste($beans, 20, $user, 'tumpah');
     expect($beans->fresh()->stock)->toBe(430.0);
     expect(StockMovement::query()->pluck('type')->sort()->values()->all())->toBe(['opname', 'waste']);
+});
+
+it('manages ingredients, purchases, counts and waste from the admin pages, for permitted roles only', function () {
+    $manager = userWithRole('manager');
+    $this->actingAs($manager)->post('/admin/inventory/ingredients', ['name' => 'Susu', 'unit' => 'ml', 'min_stock' => 500, 'stock' => 2000, 'unit_cost' => 20])->assertSessionHasNoErrors();
+    $milk = Ingredient::query()->where('name', 'Susu')->first();
+    expect($milk->stock)->toBe(2000.0);
+
+    $this->actingAs($manager)->post('/admin/inventory/ingredients', ['name' => 'Susu', 'unit' => 'ml'])->assertSessionHasErrors('name');
+
+    $this->actingAs($manager)->post('/admin/inventory/purchases', ['purchased_on' => '2026-10-20', 'supplier' => 'Toko', 'items' => [['ingredient_id' => $milk->id, 'qty' => 1000, 'unit_cost' => 30]]])->assertSessionHasNoErrors();
+    expect($milk->fresh()->stock)->toBe(3000.0)->and(round($milk->fresh()->avg_cost, 2))->toBe(23.33);
+
+    $this->actingAs($manager)->post("/admin/inventory/ingredients/{$milk->id}/count", ['counted' => 2900])->assertSessionHasNoErrors();
+    $this->actingAs($manager)->post("/admin/inventory/ingredients/{$milk->id}/waste", ['qty' => 100, 'note' => 'basi'])->assertSessionHasNoErrors();
+    expect($milk->fresh()->stock)->toBe(2800.0);
+    $this->actingAs($manager)->post("/admin/inventory/ingredients/{$milk->id}/waste", ['qty' => 1])->assertSessionHasErrors('note');
+
+    $this->actingAs($manager)->get('/admin/inventory')->assertInertia(fn ($p) => $p->component('admin/inventory')->has('ingredients', 1)->has('movements', 4)->where('enabled', true));
+    $this->actingAs(userWithRole('cashier'))->get('/admin/inventory')->assertForbidden();
+});
+
+it('saves recipes and shows cost and margin per menu item', function () {
+    $beans = ingredient('Biji kopi', 'g', 1000, 200);
+    $owner = userWithRole('owner');
+    $americano = product('Americano');
+
+    $this->actingAs($owner)->post("/admin/recipes/products/{$americano->id}", ['lines' => [['ingredient_id' => $beans->id, 'qty' => 18]]])->assertSessionHasNoErrors();
+    expect(RecipeLine::query()->where('product_id', $americano->id)->count())->toBe(1);
+    $this->actingAs($owner)->get('/admin/recipes')->assertInertia(fn ($p) => $p->component('admin/recipes')->where('products', fn ($products) => collect($products)->firstWhere('id', $americano->id)['cost'] === 3600));
+
+    $modifier = Modifier::query()->first();
+    if ($modifier) {
+        $this->actingAs($owner)->post("/admin/recipes/modifiers/{$modifier->id}", ['lines' => [['ingredient_id' => $beans->id, 'qty' => 9]]])->assertSessionHasNoErrors();
+        expect(ModifierIngredient::query()->where('modifier_id', $modifier->id)->count())->toBe(1);
+    }
+
+    $this->actingAs($owner)->post("/admin/recipes/products/{$americano->id}", ['lines' => [['ingredient_id' => 999999, 'qty' => 1]]])->assertSessionHasErrors('lines.0.ingredient_id');
+    $this->actingAs($owner)->post("/admin/recipes/products/{$americano->id}", ['lines' => []])->assertSessionHasNoErrors();
+    expect(RecipeLine::query()->count())->toBe(0);
+});
+
+it('reports sales, cost and margin per product, category and day, with Excel and PDF', function () {
+    $beans = ingredient('Biji kopi', 'g', 10000, 200);
+    recipe('Americano', [$beans->id => 18]);
+    openShiftFor(userWithRole('cashier'), 0);
+    pay(placeOrder(items: [['product_id' => product('Americano')->id, 'qty' => 2]])); // 44.000 revenue, 7.200 cost
+    pay(placeOrder(items: [['product_id' => product('Nasi Goreng')->id, 'qty' => 1]], tableId: Table::query()->skip(1)->value('id'))); // no recipe
+
+    $d = BusinessDate::for();
+    $manager = userWithRole('manager');
+    $this->actingAs($manager)->get("/admin/reports/margin?from={$d}&to={$d}&dimension=product")->assertOk()
+        ->assertInertia(fn ($p) => $p->where('summary.cogs', 7200)->where('summary.revenue', 44000 + 38000)->where('summary.profit', 82000 - 7200)->where('summary.uncosted_qty', 1));
+    foreach (['category', 'day'] as $dim) {
+        $this->actingAs($manager)->get("/admin/reports/margin?from={$d}&to={$d}&dimension={$dim}")->assertOk();
+    }
+    $this->actingAs($manager)->get("/admin/reports/margin/export?from={$d}&to={$d}&format=xlsx")->assertOk();
+    $this->actingAs($manager)->get("/admin/reports/margin/export?from={$d}&to={$d}&format=pdf")->assertOk();
+    $this->actingAs(userWithRole('cashier'))->get('/admin/reports/margin')->assertForbidden();
 });

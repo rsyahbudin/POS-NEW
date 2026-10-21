@@ -48,7 +48,10 @@ class HandleInertiaRequests extends Middleware
                     'permissions' => $request->user()->getAllPermissions()->pluck('name'),
                 ] : null,
             ],
-            'features' => ['kds' => (bool) app(SettingsRepository::class)->get('kitchen.enabled', false)],
+            'features' => [
+                'kds' => (bool) app(SettingsRepository::class)->get('kitchen.enabled', false),
+                'inventory' => (bool) app(SettingsRepository::class)->get('inventory.enabled', false),
+            ],
             'print_routing' => fn () => $request->user()?->outlet_id ? PrintDispatcher::routing((int) $request->user()->outlet_id) : ['receipt' => false, 'bill' => false, 'ticket' => false],
             'realtime' => fn () => $request->user() ? RealtimeConfig::forRequest($request) : null,
             'flash' => [

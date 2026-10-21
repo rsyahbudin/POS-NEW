@@ -18,6 +18,7 @@ use App\Domain\Ordering\StockService;
 use App\Domain\Payment\SplitGuard;
 use App\Domain\Pricing\Actions\ApplyPromotionsAction;
 use App\Domain\Pricing\Actions\RecalculateOrderAction;
+use App\Domain\Printing\PrintDispatcher;
 use App\Domain\Settings\OutletContext;
 use App\Models\User;
 use App\Support\BusinessDate;
@@ -87,6 +88,8 @@ class PlaceOrderAction
                 array_map('intval', collect($rows)->pluck('station_id')->filter()->unique()->values()->all()),
                 $order->table?->public_id,
             ));
+
+            PrintDispatcher::later(fn (PrintDispatcher $d) => $d->tickets($round));
 
             return $order->refresh()->load(['items', 'table']);
         });

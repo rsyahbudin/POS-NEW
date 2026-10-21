@@ -9,7 +9,11 @@ use App\Domain\Ordering\Actions\VoidOrderAction;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Ordering\Models\OrderRound;
 use App\Domain\Payment\Models\Payment;
+use App\Domain\Printing\Models\Printer;
+use App\Domain\Printing\Models\PrintJob;
+use App\Domain\Printing\PrintDispatcher;
 use App\Domain\Reporting\KitchenReports;
+use App\Domain\Settings\Models\Outlet;
 use App\Domain\Shift\Models\Shift;
 use App\Domain\Shift\ShiftCash;
 use App\Support\BusinessDate;
@@ -307,4 +311,84 @@ it('splits equally and per person, each bill payable on its own', function () {
         ['label' => 'Orang 2', 'items' => [['order_item_id' => $line->id, 'qty' => 1]]],
     ]])->assertOk();
     expect(collect($res->json('order.bills'))->where('status', 'unpaid')->sum('grand_total'))->toBe(44000);
+});
+
+// ---------------------------------------------------------------- multiple printers
+
+function printer(string $kind, ?int $station = null, int $copies = 1): Printer
+{
+    $outlet = (int) Outlet::query()->value('id');
+    $p = Printer::create(['outlet_id' => $outlet, 'name' => ucfirst($kind), 'kind' => $kind, 'station_id' => $station, 'paper_width' => 58, 'copies' => $copies]);
+    PrintDispatcher::forgetRouting($outlet);
+
+    return $p;
+}
+
+it('queues nothing when no printer is configured, so the cashier device keeps printing', function () {
+    openShiftFor(userWithRole('cashier'), 0);
+    pay(placeOrder());
+    expect(PrintJob::query()->count())->toBe(0);
+
+    $this->actingAs(userWithRole('cashier'))->get('/pos')->assertInertia(fn ($p) => $p->where('print_routing.receipt', false)->where('print_routing.ticket', false));
+});
+
+it('routes the receipt, the bill and each station ticket to its own printer', function () {
+    $bar = Station::query()->where('name', 'Bar')->value('id') ?? Station::query()->first()->id;
+    $kitchen = Station::query()->where('id', '!=', $bar)->value('id') ?? $bar;
+    $receipt = printer('receipt');
+    $bill = printer('bill');
+    $barPrinter = printer('ticket', $bar);
+    $kitchenPrinter = printer('ticket', $kitchen);
+
+    openShiftFor(userWithRole('cashier'), 0);
+    $order = placeOrder(items: [['product_id' => product('Americano')->id, 'qty' => 2], ['product_id' => product('Nasi Goreng')->id, 'qty' => 1]]);
+    $jobs = PrintJob::query();
+
+    $tickets = (clone $jobs)->where('kind', 'ticket')->get();
+    expect($tickets->pluck('printer_id')->unique()->sort()->values()->all())->toBe(collect([$barPrinter->id, $kitchenPrinter->id])->unique()->sort()->values()->all());
+    expect($tickets->first()->payload['items'][0])->toHaveKeys(['qty', 'name', 'note', 'modifiers']);
+
+    $this->actingAs(userWithRole('cashier'))->postJson("/pos/orders/{$order->id}/bill-request")->assertOk();
+    expect((clone $jobs)->where('kind', 'bill')->where('printer_id', $bill->id)->count())->toBe(1)
+        ->and((clone $jobs)->where('kind', 'bill')->first()->payload['title'])->toBe('TAGIHAN');
+
+    pay($order);
+    expect((clone $jobs)->where('kind', 'receipt')->where('printer_id', $receipt->id)->count())->toBe(1);
+});
+
+it('lets a print station fetch, finish, fail and retry its jobs', function () {
+    $receipt = printer('receipt', copies: 2);
+    openShiftFor(userWithRole('cashier'), 0);
+    pay(placeOrder());
+    $cashier = userWithRole('cashier');
+
+    $res = $this->actingAs($cashier)->getJson("/print-station/jobs?printers={$receipt->id}")->assertOk();
+    expect($res->json('pending'))->toHaveCount(1)->and($res->json('pending.0.payload.copies'))->toBe(2);
+    $id = $res->json('pending.0.id');
+
+    $this->actingAs($cashier)->postJson("/print-station/jobs/{$id}/done", ['ok' => false, 'error' => 'Printer mati'])->assertOk();
+    $this->actingAs($cashier)->getJson("/print-station/jobs?printers={$receipt->id}")->assertJsonCount(0, 'pending')->assertJsonPath('recent.0.status', 'failed');
+
+    $this->actingAs($cashier)->postJson("/print-station/jobs/{$id}/retry")->assertOk();
+    $this->actingAs($cashier)->postJson("/print-station/jobs/{$id}/done", ['ok' => true])->assertOk();
+    expect(PrintJob::query()->find($id)->status)->toBe('printed');
+});
+
+it('reprints a receipt to the printer as a COPY and manages printers from the admin page', function () {
+    $receipt = printer('receipt');
+    $cashier = userWithRole('cashier');
+    openShiftFor($cashier, 0);
+    $order = placeOrder();
+    pay($order);
+    PrintJob::query()->delete();
+
+    $bill = $order->bills()->first();
+    $this->actingAs($cashier)->postJson("/pos/bills/{$bill->id}/print")->assertOk()->assertJsonPath('queued', 1);
+    expect(PrintJob::query()->first()->payload['copy'])->toBeTrue();
+
+    $owner = userWithRole('owner');
+    $this->actingAs($owner)->post('/admin/printers', ['name' => 'Bar', 'kind' => 'ticket', 'station_id' => Station::query()->value('id'), 'paper_width' => 58, 'copies' => 1])->assertSessionHasNoErrors();
+    $this->actingAs($owner)->get('/admin/printers')->assertInertia(fn ($p) => $p->has('printers', 2));
+    $this->actingAs($cashier)->get('/admin/printers')->assertForbidden();
+    $this->actingAs($owner)->delete('/admin/printers/'.$receipt->id)->assertSessionHasNoErrors();
 });

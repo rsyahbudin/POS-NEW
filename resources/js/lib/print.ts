@@ -112,8 +112,8 @@ const PRINTER_SERVICES = [
     '0000ae30-0000-1000-8000-00805f9b34fb',
 ];
 
-let btDevice: BtDevice | null = null;
-let btChar: BtCharacteristic | null = null;
+const bt: Record<string, { device: BtDevice; char: BtCharacteristic | null }> =
+    {};
 
 function bluetoothApi(): BluetoothApi | null {
     return (
@@ -125,43 +125,45 @@ export function bluetoothSupported(): boolean {
     return bluetoothApi() !== null;
 }
 
-export function bluetoothPrinterName(): string | null {
-    return btDevice?.name ?? null;
+export function bluetoothPrinterName(key = 'default'): string | null {
+    return bt[key]?.device.name ?? null;
 }
 
 /** Must run from a tap: the browser shows its Bluetooth chooser. */
-export async function pairBluetoothPrinter(): Promise<string> {
+export async function pairBluetoothPrinter(key = 'default'): Promise<string> {
     const api = bluetoothApi();
 
     if (!api) {
         throw new Error('Browser ini tidak mendukung Bluetooth.');
     }
 
-    btDevice = await api.requestDevice({
+    const device = await api.requestDevice({
         acceptAllDevices: true,
         optionalServices: PRINTER_SERVICES,
     });
-    btChar = null;
-    await btCharacteristic();
+    bt[key] = { device, char: null };
+    await btCharacteristic(key);
 
-    return btDevice.name ?? 'Printer';
+    return device.name ?? 'Printer';
 }
 
-async function btCharacteristic(): Promise<BtCharacteristic> {
-    if (btChar && btDevice?.gatt?.connected) {
-        return btChar;
+async function btCharacteristic(key: string): Promise<BtCharacteristic> {
+    const entry = bt[key];
+
+    if (entry?.char && entry.device.gatt?.connected) {
+        return entry.char;
     }
 
-    if (!btDevice?.gatt) {
+    if (!entry?.device.gatt) {
         throw new Error('Printer Bluetooth belum dihubungkan.');
     }
 
-    const server = await btDevice.gatt.connect();
+    const server = await entry.device.gatt.connect();
 
     for (const service of await server.getPrimaryServices()) {
         for (const c of await service.getCharacteristics()) {
             if (c.properties.write || c.properties.writeWithoutResponse) {
-                btChar = c;
+                entry.char = c;
 
                 return c;
             }
@@ -183,9 +185,9 @@ function toBytes(data: string[]): Uint8Array {
     return out;
 }
 
-async function bluetoothPrint(data: string[]): Promise<void> {
+async function bluetoothPrint(data: string[], key: string): Promise<void> {
     const bytes = toBytes(data);
-    const c = await btCharacteristic();
+    const c = await btCharacteristic(key);
     const chunk = 100;
 
     for (let i = 0; i < bytes.length; i += chunk) {
@@ -209,27 +211,27 @@ function rawbtPrint(data: string[]): void {
     window.location.href = `rawbt:base64,${btoa(binary)}`;
 }
 
-async function rawPrint(data: string[]): Promise<void> {
-    const prefs = getPrinterPrefs();
+export type Connection = { method: PrintMethod; qz: string; key: string };
 
-    if (!prefs.enabled) {
-        throw new Error('Printer belum diatur di perangkat ini.');
+/** Sends ESC/POS data to one printer through the chosen connection. */
+export async function printRaw(
+    data: string[],
+    conn: Connection,
+): Promise<void> {
+    if (conn.method === 'bluetooth') {
+        return bluetoothPrint(data, conn.key);
     }
 
-    if (prefs.method === 'bluetooth') {
-        return bluetoothPrint(data);
-    }
-
-    if (prefs.method === 'rawbt') {
+    if (conn.method === 'rawbt') {
         return rawbtPrint(data);
     }
 
-    if (!prefs.printer) {
+    if (!conn.qz) {
         throw new Error('Printer belum diatur di perangkat ini.');
     }
 
     await connect();
-    const config = qz.configs.create(prefs.printer, { encoding: 'CP437' });
+    const config = qz.configs.create(conn.qz, { encoding: 'CP437' });
     await qz.print(
         config,
         data.map((d) => ({
@@ -239,6 +241,20 @@ async function rawPrint(data: string[]): Promise<void> {
             data: d,
         })),
     );
+}
+
+async function rawPrint(data: string[]): Promise<void> {
+    const prefs = getPrinterPrefs();
+
+    if (!prefs.enabled) {
+        throw new Error('Printer belum diatur di perangkat ini.');
+    }
+
+    return printRaw(data, {
+        method: prefs.method,
+        qz: prefs.printer,
+        key: 'default',
+    });
 }
 
 /** Browser print fallback: opens the public receipt page and prints it. */

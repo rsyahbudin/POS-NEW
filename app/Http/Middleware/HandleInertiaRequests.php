@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Domain\Printing\PrintDispatcher;
 use App\Domain\Settings\SettingsRepository;
 use App\Support\RealtimeConfig;
 use Illuminate\Http\Request;
@@ -48,6 +49,7 @@ class HandleInertiaRequests extends Middleware
                 ] : null,
             ],
             'features' => ['kds' => (bool) app(SettingsRepository::class)->get('kitchen.enabled', false)],
+            'print_routing' => fn () => $request->user()?->outlet_id ? PrintDispatcher::routing((int) $request->user()->outlet_id) : ['receipt' => false, 'bill' => false, 'ticket' => false],
             'realtime' => fn () => $request->user() ? RealtimeConfig::forRequest($request) : null,
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),

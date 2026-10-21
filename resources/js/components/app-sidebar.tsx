@@ -8,6 +8,7 @@ import {
     LayoutGrid,
     Monitor,
     QrCode,
+    Printer,
     Receipt,
     Settings,
     Timer,
@@ -118,6 +119,22 @@ const items: Item[] = [
         href: '/admin/roles',
         icon: ShieldCheck,
         permission: 'manage-roles',
+    },
+    {
+        title: 'Printer',
+        href: '/admin/printers',
+        icon: Printer,
+        permission: 'manage-settings',
+    },
+    {
+        title: 'Stasiun Cetak',
+        href: '/print-station',
+        icon: Printer,
+        permission: [
+            'receive-payment',
+            'create-order',
+            'update-kitchen-status',
+        ],
     },
     {
         title: 'Pengaturan',

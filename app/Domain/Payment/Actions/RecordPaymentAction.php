@@ -14,6 +14,7 @@ use App\Domain\Payment\Enums\PaymentMethodType;
 use App\Domain\Payment\Models\Bill;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Payment\Models\PaymentMethod;
+use App\Domain\Printing\PrintDispatcher;
 use App\Domain\Shift\Models\Shift;
 use App\Domain\Shift\ShiftResolver;
 use App\Models\User;
@@ -114,6 +115,10 @@ class RecordPaymentAction
             }
 
             $this->updateOrder($order, $shift);
+
+            if ($fullyPaid) {
+                PrintDispatcher::later(fn (PrintDispatcher $d) => $d->receipt($bill->fresh() ?? $bill));
+            }
 
             return $payment;
         });

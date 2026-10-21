@@ -11,6 +11,7 @@ use App\Domain\Ordering\Models\OrderRound;
 use App\Domain\Ordering\StockService;
 use App\Domain\Pricing\Actions\ApplyPromotionsAction;
 use App\Domain\Pricing\Actions\RecalculateOrderAction;
+use App\Domain\Printing\PrintDispatcher;
 use App\Models\User;
 use App\Support\Audit;
 use App\Support\Realtime;
@@ -75,7 +76,10 @@ class ConfirmRoundAction
                 $order->table?->public_id,
             ));
 
-            return $round->refresh()->load('items');
+            $confirmed = $round->refresh()->load('items');
+            PrintDispatcher::later(fn (PrintDispatcher $d) => $d->tickets($confirmed));
+
+            return $confirmed;
         });
     }
 }

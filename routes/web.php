@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\DayCloseController;
 use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\FloorController;
 use App\Http\Controllers\Admin\MenuController;
+use App\Http\Controllers\Admin\PrinterController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SettingsController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\Kds\KdsController;
 use App\Http\Controllers\Pos\OrderController;
 use App\Http\Controllers\Pos\PosController;
 use App\Http\Controllers\Pos\QzTrayController;
+use App\Http\Controllers\Print\PrintStationController;
 use App\Http\Controllers\Qr\QrMenuController;
 use App\Http\Controllers\Receipt\ReceiptController;
 use App\Http\Controllers\Shift\ShiftController;
@@ -100,6 +102,16 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::post('close', [ShiftController::class, 'close'])->name('close');
     });
 
+    // Print station: a device that serves the queued print jobs of its printers
+    Route::prefix('print-station')->name('print-station.')->group(function () {
+        Route::get('/', [PrintStationController::class, 'show'])->name('show');
+        Route::get('jobs', [PrintStationController::class, 'jobs'])->name('jobs');
+        Route::post('jobs/{job}/done', [PrintStationController::class, 'done'])->name('done');
+        Route::post('jobs/{job}/retry', [PrintStationController::class, 'retry'])->name('retry');
+    });
+    Route::post('pos/bills/{bill}/print', [PrintStationController::class, 'reprintReceipt'])->name('pos.bills.print');
+    Route::post('pos/orders/{order}/print-bill', [PrintStationController::class, 'printBill'])->name('pos.orders.print-bill');
+
     // Kitchen display
     Route::prefix('kds')->name('kds.')->middleware(['permission:update-kitchen-status', 'kitchen'])->group(function () {
         Route::get('/', [KdsController::class, 'index'])->name('index');
@@ -153,6 +165,10 @@ Route::middleware(['auth', 'staff'])->group(function () {
         });
 
         Route::middleware('permission:manage-settings')->group(function () {
+            Route::get('printers', [PrinterController::class, 'index'])->name('printers');
+            Route::post('printers', [PrinterController::class, 'store'])->name('printers.store');
+            Route::put('printers/{printer}', [PrinterController::class, 'update'])->name('printers.update');
+            Route::delete('printers/{printer}', [PrinterController::class, 'destroy'])->name('printers.destroy');
             Route::get('settings', [SettingsController::class, 'show'])->name('settings');
             Route::post('settings/outlet', [SettingsController::class, 'updateOutlet'])->name('settings.outlet');
             Route::post('settings', [SettingsController::class, 'updateSettings'])->name('settings.update');

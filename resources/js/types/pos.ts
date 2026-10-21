@@ -195,6 +195,7 @@ export type CartLine = {
 };
 
 export type Receipt = {
+    title?: string | null;
     copy: boolean;
     outlet: {
         name: string | null;

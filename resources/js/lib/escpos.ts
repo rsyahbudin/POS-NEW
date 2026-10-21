@@ -42,6 +42,14 @@ export function receiptEscPos(r: Receipt, paper: PaperWidth): string[] {
         out.push(`${r.header}\n`);
     }
 
+    if (r.title) {
+        out.push(
+            ESC + 'E' + '\x01',
+            `*** ${r.title} ***\n`,
+            ESC + 'E' + '\x00',
+        );
+    }
+
     if (r.copy) {
         out.push(ESC + 'E' + '\x01', '*** COPY ***\n', ESC + 'E' + '\x00');
     }

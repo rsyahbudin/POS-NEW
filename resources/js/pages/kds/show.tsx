@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { Printer, Volume2, VolumeX, WifiOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -53,6 +53,8 @@ export default function KdsPage({
 }: Props) {
     const [tickets, setTickets] = useState(initial);
     const [now, setNow] = useState(Date.now());
+    const routed = (usePage().props.print_routing as { ticket: boolean })
+        .ticket;
     const [auto, setAuto] = useState(() => {
         try {
             return localStorage.getItem(AUTOPRINT) === '1';
@@ -98,7 +100,7 @@ export default function KdsPage({
                 for (const f of fresh) {
                     seen.current.add(f.round_id);
 
-                    if (auto) {
+                    if (auto && !routed) {
                         void printKitchenTicket({
                             label: f.label,
                             number: f.order_number,
@@ -113,7 +115,7 @@ export default function KdsPage({
         } catch {
             // keep last good data
         }
-    }, [station.id, sound, auto]);
+    }, [station.id, sound, auto, routed]);
 
     const { online } = useRealtime(
         [

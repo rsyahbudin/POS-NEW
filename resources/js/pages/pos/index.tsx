@@ -1,4 +1,4 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     Bell,
     ChevronUp,
@@ -110,7 +110,7 @@ type Dialog =
     | { kind: 'refund'; payment: Payment }
     | { kind: 'move' }
     | { kind: 'allocate'; bill: Bill }
-    | { kind: 'receipt'; receipt: Receipt; note?: string }
+    | { kind: 'receipt'; receipt: Receipt; note?: string; billId?: number }
     | { kind: 'online' }
     | { kind: 'printer' }
     | { kind: 'shift' }
@@ -130,6 +130,11 @@ export default function PosPage(props: Props) {
     const [sending, setSending] = useState(false);
     const [markMode, setMarkMode] = useState(false);
     const pin = usePinGate();
+    const routing = usePage().props.print_routing as {
+        receipt: boolean;
+        bill: boolean;
+        ticket: boolean;
+    };
     const sound = useSound();
     const alerted = useRef<Record<number, number>>({});
     const pendingCount = state.pending_qr.length;
@@ -452,6 +457,18 @@ export default function PosPage(props: Props) {
     };
 
     const showReceipt = async (bill: Bill, copy: boolean) => {
+        if (copy && routing.receipt) {
+            const q = await guard(() =>
+                api<{ queued: number }>('POST', `/pos/bills/${bill.id}/print`),
+            );
+
+            if (q) {
+                toast.success(t('Struk dikirim ke antrean printer.'));
+            }
+
+            return;
+        }
+
         const r = await guard(() =>
             copy
                 ? api<{ receipt: Receipt }>(
@@ -465,11 +482,17 @@ export default function PosPage(props: Props) {
         );
 
         if (r) {
-            const how = await printReceipt(r.receipt);
+            const how = routing.receipt
+                ? 'queue'
+                : await printReceipt(r.receipt);
             setDialog({
                 kind: 'receipt',
                 receipt: r.receipt,
-                note: how === 'qz' ? t('Struk dikirim ke printer.') : undefined,
+                billId: bill.id,
+                note:
+                    how === 'qz' || how === 'queue'
+                        ? t('Struk dikirim ke printer.')
+                        : undefined,
             });
         }
     };
@@ -1230,7 +1253,20 @@ export default function PosPage(props: Props) {
                             type="button"
                             variant="outline"
                             className="h-12"
-                            onClick={() => void printReceipt(dialog.receipt)}
+                            onClick={() =>
+                                routing.receipt && dialog.billId
+                                    ? void api(
+                                          'POST',
+                                          `/pos/bills/${dialog.billId}/print`,
+                                      ).then(() =>
+                                          toast.success(
+                                              t(
+                                                  'Struk dikirim ke antrean printer.',
+                                              ),
+                                          ),
+                                      )
+                                    : void printReceipt(dialog.receipt)
+                            }
                         >
                             {t('Cetak')}
                         </Button>

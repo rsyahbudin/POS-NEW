@@ -102,10 +102,28 @@ final class SettingsCatalog
                 ],
             ]]],
             ['key' => 'notif', 'label' => 'Notifikasi', 'groups' => [[
-                'title' => 'Telegram (Z-report tutup hari)',
+                'title' => 'Apa yang dikirim ke HP / email',
+                'fields' => [
+                    ['key' => 'report.send_daily', 'type' => 'bool', 'label' => 'Laporan harian', 'hint' => 'Ringkasan omzet, metode bayar, diskon, void, dan selisih kas, dikirim otomatis setelah hari bisnis selesai.', 'default' => true],
+                    ['key' => 'report.send_shift', 'type' => 'bool', 'label' => 'Laporan tiap shift ditutup', 'hint' => 'Rincian penjualan dan selisih kas dikirim begitu kasir menutup shift.', 'default' => false],
+                    ['key' => 'notify.forward_alerts', 'type' => 'bool', 'label' => 'Teruskan peringatan penting', 'hint' => 'Stok menipis, selisih kas, shift yang lupa ditutup, dan aset rusak ikut dikirim ke saluran di bawah (selain muncul di lonceng).', 'default' => false],
+                ],
+            ], [
+                'title' => 'Telegram',
                 'fields' => [
                     ['key' => 'telegram.bot_token', 'type' => 'secret', 'label' => 'Bot token', 'hint' => 'Dari @BotFather. Tidak ditampilkan lagi setelah disimpan.', 'default' => null],
-                    ['key' => 'telegram.chat_id', 'type' => 'text', 'label' => 'Chat ID owner', 'hint' => 'Tujuan pengiriman rekap harian.', 'default' => null, 'max' => 60],
+                    ['key' => 'telegram.chat_id', 'type' => 'text', 'label' => 'Chat ID', 'hint' => 'Tujuan pengiriman (pribadi atau grup).', 'default' => null, 'max' => 60],
+                ],
+            ], [
+                'title' => 'Email',
+                'fields' => [
+                    ['key' => 'notify.email_to', 'type' => 'text', 'label' => 'Alamat email penerima', 'hint' => 'Pisahkan dengan koma untuk lebih dari satu. Pengiriman memakai pengaturan SMTP (MAIL_*) di file .env server; tanpa itu email hanya tercatat di log.', 'default' => null, 'max' => 300],
+                ],
+            ], [
+                'title' => 'WhatsApp (lewat gateway)',
+                'fields' => [
+                    ['key' => 'whatsapp.token', 'type' => 'secret', 'label' => 'Token gateway', 'hint' => 'WhatsApp tidak punya jalur gratis resmi untuk pesan otomatis. Aplikasi memakai layanan gateway (fonnte.com): daftar, hubungkan nomor pengirim, lalu tempel token di sini. Biaya dan syarat mengikuti layanan itu.', 'default' => null],
+                    ['key' => 'whatsapp.targets', 'type' => 'text', 'label' => 'Nomor penerima', 'hint' => 'Pisahkan dengan koma. Boleh ditulis 0812... atau 62812...', 'default' => null, 'max' => 200],
                 ],
             ]]],
         ];

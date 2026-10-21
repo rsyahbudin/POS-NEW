@@ -5,7 +5,9 @@ namespace App\Domain\Shift\Actions;
 use App\Domain\Accounting\Actions\PostJournalAction;
 use App\Domain\Accounting\SystemAccount;
 use App\Domain\Notification\Notifier;
+use App\Domain\Notification\ReportDelivery;
 use App\Domain\Ordering\Exceptions\OrderException;
+use App\Domain\Settings\SettingsRepository;
 use App\Domain\Shift\Models\Shift;
 use App\Domain\Shift\ShiftCash;
 use App\Models\User;
@@ -80,7 +82,13 @@ class CloseShiftAction
                 ], $shift, $user->id, false, $shift->outlet_id);
             }
 
-            Notifier::later(fn (Notifier $n) => $n->resolve($shift->outlet_id, "shift.open:{$shift->id}"));
+            Notifier::later(function (Notifier $n) use ($shift) {
+                $n->resolve($shift->outlet_id, "shift.open:{$shift->id}");
+                if ((bool) app(SettingsRepository::class)->get('report.send_shift', false)) {
+                    $delivery = app(ReportDelivery::class);
+                    $delivery->deliver('Laporan shift', $delivery->shiftText($shift->refresh()));
+                }
+            });
             if ($difference !== 0) {
                 Notifier::later(fn (Notifier $n) => $n->notify(
                     $shift->outlet_id, 'shift.difference', 'Selisih kas shift '.($difference < 0 ? 'KURANG' : 'LEBIH').' Rp '.number_format(abs($difference), 0, ',', '.'),

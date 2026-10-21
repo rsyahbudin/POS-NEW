@@ -184,7 +184,7 @@ const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 permission: 'view-accounting',
             },
             {
-                title: 'Tutup Hari',
+                title: 'Laporan Harian',
                 href: '/admin/day-close',
                 icon: CalendarCheck,
                 permission: 'manage-shifts-any',

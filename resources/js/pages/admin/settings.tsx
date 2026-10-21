@@ -1,5 +1,7 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
+import { toast } from 'sonner';
+import { api, ApiError } from '@/lib/api';
 import {
     Field,
     MoneyInput,
@@ -348,6 +350,7 @@ function CatalogForm({
                         )}
                     </section>
                 ))}
+                {tab.key === 'notif' && <NotificationTests />}
                 <Button
                     className="h-12"
                     onClick={() =>
@@ -752,5 +755,56 @@ function Promos({ promos }: { promos: Promo[] }) {
                 </Button>
             </section>
         </div>
+    );
+}
+
+/** Sends a real test message to each channel; the form must be saved first because the server uses what is stored. */
+function NotificationTests() {
+    const [busy, setBusy] = useState<string | null>(null);
+    const send = async (channel: string) => {
+        setBusy(channel);
+
+        try {
+            const res = await api<{ message: string }>(
+                'POST',
+                '/admin/settings/test-notification',
+                { channel },
+            );
+            toast.success(res.message);
+        } catch (e) {
+            toast.error(
+                e instanceof ApiError ? e.message : 'Gagal mengirim tes.',
+            );
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    return (
+        <section className="grid gap-3 rounded-xl border bg-card p-4">
+            <h2 className="font-semibold">Uji pengiriman</h2>
+            <p className="text-sm text-muted-foreground">
+                Simpan pengaturan di bawah dulu, lalu kirim pesan uji supaya
+                token, email, atau nomor yang salah ketahuan sekarang.
+            </p>
+            <div className="flex flex-wrap gap-2">
+                {[
+                    ['telegram', 'Telegram'],
+                    ['email', 'Email'],
+                    ['whatsapp', 'WhatsApp'],
+                ].map(([key, label]) => (
+                    <Button
+                        key={key}
+                        type="button"
+                        variant="outline"
+                        className="h-11"
+                        disabled={busy !== null}
+                        onClick={() => void send(key)}
+                    >
+                        {busy === key ? 'Mengirim…' : `Kirim tes ke ${label}`}
+                    </Button>
+                ))}
+            </div>
+        </section>
     );
 }

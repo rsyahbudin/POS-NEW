@@ -3,6 +3,7 @@
 use App\Domain\Accounting\Models\Account;
 use App\Domain\Accounting\SystemAccount;
 use App\Domain\Floor\Models\Table;
+use App\Domain\Notification\ReportDelivery;
 use App\Domain\Ordering\Enums\OrderStatus;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Payment\Actions\RefundPaymentAction;
@@ -140,7 +141,7 @@ it('sends the Z-report to Telegram when configured', function () {
         'orders' => 3, 'gross' => 100000, 'discounts' => 0, 'refunds' => 0, 'net' => 100000, 'by_method' => ['Tunai' => 100000],
         'voids' => ['items' => 0, 'value' => 0], 'comps' => ['items' => 0, 'value' => 0], 'cash_difference' => 0,
     ]]);
-    (new SendZReportJob($day->id))->handle(app(SettingsRepository::class));
+    (new SendZReportJob($day->id))->handle(app(SettingsRepository::class), app(ReportDelivery::class));
 
     Http::assertSent(fn ($r) => str_contains($r->url(), 'botT0KEN/sendMessage') && str_contains($r['text'], 'Rp100.000'));
 });

@@ -4,6 +4,7 @@ namespace App\Domain\Notification;
 
 use App\Domain\Notification\Events\NotificationCreated;
 use App\Domain\Notification\Models\AppNotification;
+use App\Domain\Settings\SettingsRepository;
 use App\Models\User;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
@@ -50,8 +51,24 @@ class Notifier
         } catch (Throwable $e) {
             report($e);
         }
+        $this->forward($n);
 
         return $n;
+    }
+
+    /** Important alerts for the owner also go to Telegram / email / WhatsApp when switched on. */
+    private function forward(AppNotification $n): void
+    {
+        if ($n->user_id !== null || ! in_array($n->level, ['warning', 'danger'], true) || ! in_array($n->kind, ['stock.low', 'shift.difference', 'shift.forgotten', 'asset.attention'], true)) {
+            return;
+        }
+        try {
+            if ((bool) app(SettingsRepository::class)->get('notify.forward_alerts', false)) {
+                app(ReportDelivery::class)->deliver('Peringatan: '.$n->title, (string) $n->body);
+            }
+        } catch (Throwable $e) {
+            report($e);
+        }
     }
 
     /** The thing the alert was about is dealt with: take it off everyone's list. */

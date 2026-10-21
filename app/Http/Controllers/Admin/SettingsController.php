@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Accounting\Models\Account;
+use App\Domain\Notification\Jobs\DeliverMessageJob;
+use App\Domain\Notification\ReportDelivery;
 use App\Domain\Payment\Models\PaymentMethod;
 use App\Domain\Pricing\Models\Promotion;
 use App\Domain\Pricing\Models\TaxRule;
@@ -14,6 +16,7 @@ use App\Http\Controllers\Controller;
 use App\Support\Audit;
 use App\Support\ImageOptimizer;
 use App\Support\MediaUrl;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -22,6 +25,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 class SettingsController extends Controller
 {
@@ -150,5 +154,22 @@ class SettingsController extends Controller
         $promotion->update(['is_active' => false]);
 
         return back()->with('success', 'Promo dinonaktifkan.');
+    }
+
+    /** Sends a test message right away so wrong tokens or numbers show up now, not at closing time. */
+    public function testNotification(Request $request, ReportDelivery $delivery): JsonResponse
+    {
+        $data = $request->validate(['channel' => ['required', Rule::in(array_keys(ReportDelivery::CHANNELS))]]);
+        if (! in_array($data['channel'], $delivery->configured(), true)) {
+            return response()->json(['message' => ReportDelivery::CHANNELS[$data['channel']].' belum diisi atau belum disimpan.'], 422);
+        }
+
+        try {
+            DeliverMessageJob::dispatchSync($data['channel'], 'Tes notifikasi', 'Ini pesan uji dari POS. Kalau Anda menerimanya, saluran sudah benar.');
+        } catch (Throwable $e) {
+            return response()->json(['message' => 'Gagal mengirim: '.mb_substr($e->getMessage(), 0, 160)], 422);
+        }
+
+        return response()->json(['message' => 'Terkirim ke '.ReportDelivery::CHANNELS[$data['channel']].'. Periksa pesan masuk.']);
     }
 }

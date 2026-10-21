@@ -1,7 +1,9 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
+import { Send } from 'lucide-react';
 import { ChartCard, LineChart } from '@/components/pos/charts';
-import { PageHeader, ResponsiveTable, Stat } from '@/components/pos/ui';
+import { Field, PageHeader, ResponsiveTable, Stat } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { dateId, rupiah, timeId } from '@/lib/format';
 
 type Summary = {
@@ -17,33 +19,39 @@ type Summary = {
 };
 type Props = {
     date: string;
+    today: string;
     preview: Summary;
+    shifts: {
+        id: number;
+        user: string;
+        opened_at: string;
+        closed_at: string | null;
+        closed_by: string | null;
+        difference: number | null;
+    }[];
     openShifts: { id: number; user: string; opened_at: string }[];
     closed: boolean;
     history: { date: string; summary: Summary }[];
+    channels: string[];
 };
 
-export default function DayClose({
+export default function DailyReport({
     date,
+    today,
     preview,
+    shifts,
     openShifts,
     closed,
     history,
+    channels,
 }: Props) {
     return (
         <>
-            <Head title="Tutup Hari" />
+            <Head title="Laporan Harian" />
             <div className="grid gap-4 p-4">
-                <p role="note" className="rounded-lg bg-muted p-3 text-sm">
-                    Laporan harian dibuat <b>otomatis</b> setelah hari bisnis
-                    berganti dan semua shift hari itu sudah ditutup, lalu
-                    dikirim ke Telegram (bisa dimatikan di Pengaturan &gt;
-                    Operasional). Menekan tombol di bawah hanya perlu kalau Anda
-                    ingin laporan hari ini lebih awal.
-                </p>
                 <PageHeader
-                    title="Tutup hari (Z-report)"
-                    subtitle={`Hari bisnis ${dateId(date)}`}
+                    title="Laporan harian"
+                    subtitle={`Hari bisnis ${dateId(date)}${date === today ? ' (berjalan)' : ''}${closed ? ' · sudah dikirim otomatis' : ''}`}
                     actions={
                         <>
                             <Button asChild variant="outline" className="h-11">
@@ -59,6 +67,69 @@ export default function DayClose({
                         </>
                     }
                 />
+
+                <form
+                    className="flex flex-wrap items-end gap-2"
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        router.get(
+                            '/admin/day-close',
+                            Object.fromEntries(
+                                new FormData(e.currentTarget).entries(),
+                            ),
+                            { preserveState: true },
+                        );
+                    }}
+                >
+                    <Field label="Tanggal">
+                        <Input
+                            className="h-11"
+                            type="date"
+                            name="date"
+                            defaultValue={date}
+                            max={today}
+                        />
+                    </Field>
+                    <Button className="h-11" type="submit">
+                        Tampilkan
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11"
+                        onClick={() =>
+                            router.post(
+                                '/admin/day-close/send',
+                                { date },
+                                { preserveScroll: true },
+                            )
+                        }
+                    >
+                        <Send /> Kirim laporan ini sekarang
+                    </Button>
+                </form>
+                <p className="text-sm text-muted-foreground">
+                    {channels.length > 0 ? (
+                        <>
+                            Dikirim ke: {channels.join(', ')}. Laporan hari yang
+                            sudah lewat dikirim otomatis setelah semua shiftnya
+                            ditutup.
+                        </>
+                    ) : (
+                        <>
+                            Belum ada saluran pengiriman.{' '}
+                            <Link
+                                href="/admin/settings"
+                                className="font-medium underline"
+                            >
+                                Isi Telegram, email, atau WhatsApp di Pengaturan
+                                › Notifikasi
+                            </Link>{' '}
+                            agar laporan sampai ke HP Anda otomatis.
+                        </>
+                    )}
+                </p>
+
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                     <Stat
                         label="Omzet bersih"
@@ -102,28 +173,43 @@ export default function DayClose({
                                     `${s.user} (sejak ${timeId(s.opened_at)})`,
                             )
                             .join(', ')}
-                        . Tutup semua shift dulu.
+                        . Tutup lewat halaman{' '}
+                        <Link href="/shift" className="font-medium underline">
+                            Shift
+                        </Link>
+                        ; laporan hari itu menunggu shift ini.
                     </div>
                 )}
-                {closed ? (
-                    <p className="rounded-xl border p-3 text-sm text-emerald-800">
-                        Hari ini sudah ditutup.
-                    </p>
-                ) : (
-                    <Button
-                        className="h-12 max-w-sm"
-                        disabled={openShifts.length > 0}
-                        onClick={() =>
-                            confirm(
-                                'Tutup hari bisnis? Z-report akan dikirim ke Telegram owner.',
-                            ) && router.post('/admin/day-close')
-                        }
-                    >
-                        Tutup hari & kirim Z-report
-                    </Button>
-                )}
 
-                <ChartCard title="Omzet bersih per hari (riwayat tutup hari)">
+                <section className="grid gap-2">
+                    <h2 className="font-semibold">Shift pada hari ini</h2>
+                    <ResponsiveTable
+                        headers={[
+                            'Kasir',
+                            'Buka',
+                            'Tutup',
+                            'Ditutup oleh',
+                            'Selisih kas',
+                        ]}
+                        numeric={[4]}
+                        empty="Tidak ada shift pada tanggal ini."
+                        rows={shifts.map((s) => [
+                            s.user,
+                            timeId(s.opened_at),
+                            s.closed_at ? (
+                                timeId(s.closed_at)
+                            ) : (
+                                <span key={s.id} className="text-amber-700">
+                                    Masih terbuka
+                                </span>
+                            ),
+                            s.closed_by ?? '-',
+                            s.difference === null ? '-' : rupiah(s.difference),
+                        ])}
+                    />
+                </section>
+
+                <ChartCard title="Omzet bersih per hari (riwayat)">
                     <LineChart
                         title="Omzet bersih per hari"
                         data={[...history].reverse().map((h) => ({
@@ -132,8 +218,8 @@ export default function DayClose({
                         }))}
                     />
                 </ChartCard>
-                <section>
-                    <h2 className="mb-2 font-semibold">Riwayat</h2>
+                <section className="grid gap-2">
+                    <h2 className="font-semibold">Riwayat laporan harian</h2>
                     <ResponsiveTable
                         headers={[
                             'Tanggal',

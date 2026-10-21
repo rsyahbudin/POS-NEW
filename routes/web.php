@@ -236,6 +236,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::get('settings', [SettingsController::class, 'show'])->name('settings');
             Route::post('settings/outlet', [SettingsController::class, 'updateOutlet'])->name('settings.outlet');
             Route::post('settings', [SettingsController::class, 'updateSettings'])->name('settings.update');
+            Route::post('settings/test-notification', [SettingsController::class, 'testNotification'])->name('settings.test-notification');
             Route::post('payment-methods', [SettingsController::class, 'savePaymentMethod'])->name('payment-methods.store');
             Route::put('payment-methods/{method}', [SettingsController::class, 'savePaymentMethod'])->name('payment-methods.update');
             Route::post('tax-rules', [SettingsController::class, 'saveTaxRule'])->name('tax-rules.store');
@@ -277,6 +278,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::middleware('permission:manage-shifts-any')->group(function () {
             Route::get('day-close', [DayCloseController::class, 'index'])->name('day-close');
             Route::post('day-close', [DayCloseController::class, 'close'])->name('day-close.store');
+            Route::post('day-close/send', [DayCloseController::class, 'send'])->name('day-close.send');
             Route::get('day-close/export', [DayCloseController::class, 'export'])->name('day-close.export');
         });
 

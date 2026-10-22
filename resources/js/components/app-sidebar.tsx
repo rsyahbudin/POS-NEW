@@ -14,6 +14,7 @@ import {
     Package,
     Receipt,
     Settings,
+    Smartphone,
     Timer,
     Trash2,
     Truck,
@@ -172,6 +173,12 @@ const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 href: '/admin/reports/waste',
                 icon: Trash2,
                 permission: 'view-waste-report',
+            },
+            {
+                title: 'Pembayaran Online',
+                href: '/admin/online-payments',
+                icon: Smartphone,
+                permission: 'manage-online-payments',
             },
             {
                 title: 'Jejak Aktivitas',

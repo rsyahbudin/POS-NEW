@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Payment\Online\OnlineActor;
 use App\Domain\Settings\OutletContext;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -21,7 +22,7 @@ class UserController extends Controller
     public function index(): Response
     {
         return Inertia::render('admin/users', [
-            'users' => User::query()->orderBy('name')->get()->map(fn (User $u) => [
+            'users' => User::query()->where('email', '!=', OnlineActor::EMAIL)->orderBy('name')->get()->map(fn (User $u) => [
                 'pin_login' => $u->roles()->where('allow_pin_login', true)->exists(),
                 'id' => $u->id, 'name' => $u->name, 'email' => $u->email, 'is_active' => $u->is_active,
                 'role' => $u->getRoleNames()->first(), 'has_pin' => $u->pin_hash !== null, 'has_2fa' => $u->two_factor_confirmed_at !== null,

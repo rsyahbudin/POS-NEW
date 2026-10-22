@@ -59,7 +59,7 @@ class Notifier
     /** Important alerts for the owner also go to Telegram / email / WhatsApp when switched on. */
     private function forward(AppNotification $n): void
     {
-        if ($n->user_id !== null || ! in_array($n->level, ['warning', 'danger'], true) || ! in_array($n->kind, ['stock.low', 'shift.difference', 'shift.forgotten', 'asset.attention'], true)) {
+        if ($n->user_id !== null || ! in_array($n->level, ['warning', 'danger'], true) || ! in_array($n->kind, ['stock.low', 'shift.difference', 'shift.forgotten', 'asset.attention', 'online.unapplied'], true)) {
             return;
         }
         try {

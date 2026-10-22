@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\FloorController;
 use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\MenuController;
+use App\Http\Controllers\Admin\OnlinePaymentController;
 use App\Http\Controllers\Admin\PrinterController;
 use App\Http\Controllers\Admin\RecipeController;
 use App\Http\Controllers\Admin\ReportController;
@@ -24,6 +25,8 @@ use App\Http\Controllers\Pos\PosController;
 use App\Http\Controllers\Pos\QzTrayController;
 use App\Http\Controllers\Print\PrintStationController;
 use App\Http\Controllers\Qr\QrMenuController;
+use App\Http\Controllers\Qr\QrPaymentController;
+use App\Http\Controllers\QrisWebhookController;
 use App\Http\Controllers\Receipt\ReceiptController;
 use App\Http\Controllers\Shift\ShiftController;
 use App\Http\Controllers\Stock\StockController;
@@ -39,7 +42,10 @@ Route::prefix('m/{token}')->middleware('throttle:qr')->group(function () {
     Route::get('/', [QrMenuController::class, 'show'])->name('qr.show');
     Route::get('status', [QrMenuController::class, 'statusJson'])->name('qr.status');
     Route::post('order', [QrMenuController::class, 'store'])->middleware('throttle:qr-submit')->name('qr.order');
+    Route::post('pay', [QrPaymentController::class, 'start'])->middleware('throttle:qr-submit')->name('qr.pay');
+    Route::get('pay/{publicId}', [QrPaymentController::class, 'status'])->name('qr.pay.status');
 });
+Route::post('webhooks/qris/{provider}', QrisWebhookController::class)->middleware('throttle:120,1')->name('webhooks.qris');
 Route::get('r/{publicId}', [ReceiptController::class, 'show'])->middleware('throttle:60,1')->name('receipt.show');
 
 /*
@@ -193,6 +199,11 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::delete('modifier-groups/{group}', [MenuController::class, 'deleteModifierGroup'])->name('modifier-groups.destroy');
         });
 
+        Route::middleware('permission:manage-online-payments')->group(function () {
+            Route::get('online-payments', [OnlinePaymentController::class, 'index'])->name('online-payments');
+            Route::post('online-payments/{onlinePayment}/retry', [OnlinePaymentController::class, 'retry'])->name('online-payments.retry');
+            Route::post('online-payments/{onlinePayment}/simulate', [OnlinePaymentController::class, 'simulate'])->name('online-payments.simulate');
+        });
         Route::middleware('permission:manage-suppliers')->group(function () {
             Route::get('suppliers', [SupplierController::class, 'index'])->name('suppliers');
             Route::get('suppliers/{supplier}', [SupplierController::class, 'show'])->name('suppliers.show');

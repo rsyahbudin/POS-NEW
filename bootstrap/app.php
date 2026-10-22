@@ -27,6 +27,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'kitchen' => EnsureKitchenEnabled::class,
         ]);
 
+        $middleware->validateCsrfTokens(except: ['webhooks/*']);
+
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->web(append: [

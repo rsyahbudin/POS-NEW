@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Qr;
 use App\Domain\Floor\Models\Table;
 use App\Domain\Ordering\Actions\SubmitQrOrderAction;
 use App\Domain\Ordering\Models\Order;
+use App\Domain\Payment\Online\OnlinePaymentService;
 use App\Domain\Settings\Models\Outlet;
 use App\Domain\Settings\SettingsRepository;
 use App\Http\Controllers\Controller;
@@ -33,6 +34,7 @@ class QrMenuController extends Controller
             'menu' => MenuPresenter::categories($table->outlet_id, onlyAvailable: true),
             'outletId' => $table->outlet_id,
             'status' => $this->status($table),
+            'qris' => app(OnlinePaymentService::class)->enabled(),
             'autoConfirm' => (bool) app(SettingsRepository::class)->get('qr.auto_confirm', false),
         ]);
     }

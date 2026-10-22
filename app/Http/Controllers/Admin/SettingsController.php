@@ -36,7 +36,11 @@ class SettingsController extends Controller
         $id = $this->outlet->id();
         $values = $this->settings->withDefaults();
         // Secrets never leave the server in plain text.
-        $values['telegram.bot_token'] = $values['telegram.bot_token'] ? '••••••••' : null;
+        foreach (SettingsCatalog::fields() as $key => $f) {
+            if ($f['type'] === 'secret') {
+                $values[$key] = $values[$key] ? '••••••••' : null;
+            }
+        }
 
         return Inertia::render('admin/settings', [
             'outlet' => Outlet::find($id)?->only(['name', 'address', 'npwp']) + ['logo' => Outlet::find($id)?->logo_path ? MediaUrl::public(Outlet::find($id)->logo_path) : null],
@@ -95,14 +99,14 @@ class SettingsController extends Controller
         }
 
         foreach ($clean as $key => $value) {
-            if ($key === 'telegram.bot_token' && $value === '••••••••') {
+            if ((SettingsCatalog::fields()[$key]['type'] ?? null) === 'secret' && $value === '••••••••') {
                 continue; // masked placeholder: keep the stored token
             }
             $old = $this->settings->get($key);
             $new = SettingsCatalog::cast($key, $value);
             if ($old !== $new) {
                 $this->settings->set($key, $new);
-                $secret = str_contains($key, 'token');
+                $secret = (SettingsCatalog::fields()[$key]['type'] ?? null) === 'secret';
                 Audit::log('settings.changed', null, ['key' => $key, 'from' => $secret ? '***' : $old, 'to' => $secret ? '***' : $new]);
             }
         }

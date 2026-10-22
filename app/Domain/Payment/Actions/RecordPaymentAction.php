@@ -39,13 +39,13 @@ class RecordPaymentAction
     /**
      * @param  int  $amount  amount handed over (cash: tendered, may exceed the bill) or exact amount (non-cash)
      */
-    public function handle(Bill $bill, User $user, int $methodId, int $amount, string $idempotencyKey, ?string $reference = null): Payment
+    public function handle(Bill $bill, User $user, int $methodId, int $amount, string $idempotencyKey, ?string $reference = null, ?Shift $intoShift = null): Payment
     {
         if ($amount <= 0) {
             throw new OrderException('Nominal pembayaran harus lebih dari 0.');
         }
 
-        return DB::transaction(function () use ($bill, $user, $methodId, $amount, $idempotencyKey, $reference) {
+        return DB::transaction(function () use ($bill, $user, $methodId, $amount, $idempotencyKey, $reference, $intoShift) {
             $order = Order::query()->lockForUpdate()->findOrFail($bill->order_id);
 
             $existing = Payment::query()->where('idempotency_key', $idempotencyKey)->first();
@@ -58,7 +58,7 @@ class RecordPaymentAction
             }
 
             $bill = Bill::query()->lockForUpdate()->findOrFail($bill->id);
-            $resolved = $this->shifts->forUser($user);
+            $resolved = $intoShift ?? $this->shifts->forUser($user);
             $shift = ($resolved ? Shift::query()->lockForUpdate()->find($resolved->id) : null)
                 ?? throw new OrderException('Buka shift dulu sebelum menerima pembayaran.');
 

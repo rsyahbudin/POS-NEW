@@ -39,6 +39,7 @@ type Props = {
     menu: Category[];
     outletId: number;
     autoConfirm: boolean;
+    qris: boolean;
     status: Status;
 };
 
@@ -57,6 +58,7 @@ export default function QrMenu({
     menu: initialMenu,
     status: initialStatus,
     autoConfirm,
+    qris,
 }: Props) {
     const [menu, setMenu] = useState(initialMenu);
     const [cart, setCart] = useState<Line[]>([]);
@@ -593,13 +595,150 @@ export default function QrMenu({
                         <p className="mt-3 text-right font-semibold">
                             Total sementara {rp(status.total)}
                         </p>
-                        <p className="mt-1 text-center text-sm text-muted-foreground">
-                            Pembayaran di kasir
-                        </p>
+                        {qris &&
+                        status.rounds.length > 0 &&
+                        status.rounds.every(
+                            (r) => r.status !== 'Menunggu Konfirmasi',
+                        ) &&
+                        status.rounds.some((r) => r.status !== 'Ditolak') ? (
+                            <PayBox token={token} />
+                        ) : (
+                            <p className="mt-1 text-center text-sm text-muted-foreground">
+                                Pembayaran di kasir
+                            </p>
+                        )}
                     </Sheet>
                 )}
             </div>
         </>
+    );
+}
+
+type Pay = {
+    public_id: string;
+    status: string;
+    amount: number;
+    expires_at: string | null;
+    qr: string | null;
+    simulated: boolean;
+};
+
+/** Pay the table's bill with a dynamic QRIS code; polls until the gateway reports it paid. */
+function PayBox({ token }: { token: string }) {
+    const [pay, setPay] = useState<Pay | null>(null);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState('');
+
+    const start = async () => {
+        setBusy(true);
+        setError('');
+
+        try {
+            const res = await fetch(`/m/${token}/pay`, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'X-XSRF-TOKEN': xsrf(),
+                },
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                setError(
+                    data.message ?? 'QRIS belum bisa dibuat. Bayar di kasir.',
+                );
+            } else {
+                setPay(data);
+            }
+        } catch {
+            setError('Koneksi terputus. Coba lagi.');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!pay || pay.status !== 'pending') {
+            return;
+        }
+
+        const id = window.setInterval(async () => {
+            try {
+                const res = await fetch(`/m/${token}/pay/${pay.public_id}`, {
+                    headers: { Accept: 'application/json' },
+                });
+
+                if (res.ok) {
+                    setPay(await res.json());
+                }
+            } catch {
+                // keep waiting
+            }
+        }, 3000);
+
+        return () => window.clearInterval(id);
+    }, [pay, token]);
+
+    if (pay?.status === 'paid') {
+        return (
+            <p
+                role="status"
+                className="mt-3 rounded-lg bg-emerald-50 p-4 text-center font-semibold text-emerald-900"
+            >
+                Pembayaran {rp(pay.amount)} berhasil. Terima kasih!
+            </p>
+        );
+    }
+
+    if (pay?.status === 'pending' && pay.qr) {
+        return (
+            <div className="mt-3 grid justify-items-center gap-2 rounded-xl border p-4">
+                <p className="font-semibold">
+                    Scan untuk membayar {rp(pay.amount)}
+                </p>
+                <img
+                    src={pay.qr}
+                    alt="Kode QRIS"
+                    className="size-64 rounded-lg bg-white p-2"
+                />
+                <p className="text-center text-sm text-muted-foreground">
+                    Buka aplikasi bank atau e-wallet (BCA, GoPay, OVO, Dana,
+                    dll), pilih Scan QRIS. Halaman ini otomatis berubah setelah
+                    lunas.
+                </p>
+                {pay.simulated && (
+                    <p className="text-xs text-amber-800">
+                        Mode simulasi: tidak ada uang yang bergerak.
+                    </p>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <div className="mt-3 grid gap-2">
+            {pay && pay.status !== 'pending' && (
+                <p role="alert" className="text-center text-sm text-red-800">
+                    Kode QR sudah tidak berlaku. Buat yang baru.
+                </p>
+            )}
+            {error && (
+                <p role="alert" className="text-center text-sm text-red-800">
+                    {error}
+                </p>
+            )}
+            <button
+                type="button"
+                disabled={busy}
+                onClick={() => void start()}
+                className="h-12 rounded-xl bg-primary font-semibold text-primary-foreground disabled:opacity-60"
+            >
+                {busy ? 'Membuat QR…' : 'Bayar dengan QRIS'}
+            </button>
+            <p className="text-center text-sm text-muted-foreground">
+                Atau bayar di kasir
+            </p>
+        </div>
     );
 }
 

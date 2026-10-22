@@ -50,6 +50,7 @@ final class PermissionCatalog
                 'manage-suppliers' => ['label' => 'Kelola data pemasok', 'hint' => 'Tambah/ubah pemasok, lihat riwayat belanja dan perbandingan harga.'],
                 'record-waste' => ['label' => 'Catat bahan / menu terbuang', 'hint' => 'Mencatat waste dengan alasan. Stok berkurang dan nilainya masuk laporan waste.'],
                 'view-waste-report' => ['label' => 'Laporan waste', 'hint' => 'Nilai rupiah dan penyebab bahan terbuang.'],
+                'manage-online-payments' => ['label' => 'Pembayaran QRIS online', 'hint' => 'Melihat daftar pembayaran QRIS dari HP pelanggan, mencatat ulang yang tertahan, dan menerima peringatannya.'],
                 'manage-tables' => ['label' => 'Kelola meja & QR', 'hint' => 'Area, meja, token QR, cetak QR.'],
                 'manage-pricing' => ['label' => 'Harga & pajak', 'hint' => 'Cadangan untuk kontrol harga/pajak terpisah.'],
                 'manage-settings' => ['label' => 'Pengaturan outlet', 'hint' => 'Profil outlet, metode bayar, pajak, promo, notifikasi.'],

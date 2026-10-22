@@ -103,6 +103,16 @@ final class SettingsCatalog
                     ['key' => 'security.pin_lock_minutes', 'type' => 'int', 'label' => 'Lama terkunci (menit)', 'hint' => 'Kasir tidak bisa memakai PIN manager selama ini.', 'default' => 15, 'min' => 1, 'max' => 1440],
                 ],
             ]]],
+            ['key' => 'qris', 'label' => 'QRIS Online', 'groups' => [[
+                'title' => 'Bayar dari HP pelanggan',
+                'fields' => [
+                    ['key' => 'qris.enabled', 'type' => 'bool', 'label' => 'Pelanggan bisa bayar QRIS dari halaman QR meja', 'hint' => 'Aktif: setelah pesanan dikonfirmasi, halaman QR meja menampilkan tombol Bayar QRIS. Pembayaran yang masuk otomatis tercatat lunas di shift yang sedang terbuka. Butuh akun payment gateway (lihat petunjuk di halaman Pembayaran Online).', 'default' => false],
+                    ['key' => 'qris.provider', 'type' => 'select', 'label' => 'Gateway', 'hint' => 'Midtrans untuk pembayaran sungguhan. Simulasi untuk uji coba: tidak ada uang yang bergerak, manager menandai lunas sendiri.', 'default' => 'midtrans', 'options' => [['midtrans', 'Midtrans'], ['fake', 'Simulasi (uji coba)']]],
+                    ['key' => 'qris.midtrans_server_key', 'type' => 'secret', 'label' => 'Midtrans Server Key', 'hint' => 'Dari dashboard Midtrans > Settings > Access Keys. Tidak ditampilkan lagi setelah disimpan. Pakai key Sandbox untuk uji coba.', 'default' => null],
+                    ['key' => 'qris.production', 'type' => 'bool', 'label' => 'Mode produksi Midtrans', 'hint' => 'Nonaktif = Sandbox (uji coba, tanpa uang asli). Aktifkan hanya setelah akun Midtrans Anda diverifikasi dan Server Key yang dipakai adalah key Production.', 'default' => false],
+                    ['key' => 'qris.expiry_minutes', 'type' => 'int', 'label' => 'QR berlaku (menit)', 'hint' => 'Setelah waktu ini kode QR kedaluwarsa dan pelanggan bisa meminta yang baru.', 'default' => 15, 'min' => 3, 'max' => 60],
+                ],
+            ]]],
             ['key' => 'notif', 'label' => 'Notifikasi', 'groups' => [[
                 'title' => 'Apa yang dikirim ke HP / email',
                 'fields' => [

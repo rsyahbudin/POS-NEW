@@ -97,13 +97,13 @@ export function PaymentDialog({
             title={t('Pembayaran')}
             description={bill.label ?? order.number}
         >
-            <div className="rounded-lg bg-muted p-3 text-center">
-                <p className="text-xs text-muted-foreground">
+            <div className="rounded-xl border bg-muted/40 px-3 py-4 text-center">
+                <p className="text-sm text-muted-foreground">
                     {bill.label
                         ? `${t('Tagihan')} ${bill.label}`
                         : t('Sisa tagihan')}
                 </p>
-                <p className="text-3xl font-bold tabular-nums">
+                <p className="mt-0.5 text-4xl font-semibold tracking-tight tabular-nums">
                     {rupiah(remaining)}
                 </p>
             </div>
@@ -181,9 +181,14 @@ export function PaymentDialog({
             )}
 
             {isCash && (
-                <p className="text-center text-lg" aria-live="polite">
-                    {t('Kembalian')}:{' '}
-                    <strong className="tabular-nums">{rupiah(change)}</strong>
+                <p
+                    className="flex items-center justify-between rounded-lg bg-muted/60 px-4 py-3 text-base"
+                    aria-live="polite"
+                >
+                    <span>{t('Kembalian')}:</span>
+                    <strong className="text-xl font-semibold tabular-nums">
+                        {rupiah(change)}
+                    </strong>
                 </p>
             )}
 

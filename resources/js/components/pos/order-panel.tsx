@@ -8,13 +8,13 @@ import type { Bill, CartLine, Order, OrderItem, Payment } from '@/types/pos';
 const ITEM_STATUS: Record<string, { label: string; cls: string }> = {
     pending: {
         label: 'Menunggu konfirmasi',
-        cls: 'bg-slate-200 text-slate-900',
+        cls: 'bg-muted text-muted-foreground',
     },
-    new: { label: 'Baru', cls: 'bg-sky-200 text-sky-950' },
-    preparing: { label: 'Dibuat', cls: 'bg-amber-200 text-amber-950' },
-    ready: { label: 'Siap', cls: 'bg-emerald-200 text-emerald-950' },
-    voided: { label: 'VOID', cls: 'bg-red-200 text-red-950' },
-    rejected: { label: 'Dihapus', cls: 'bg-slate-200 text-slate-900' },
+    new: { label: 'Baru', cls: 'bg-sky-100 text-sky-900' },
+    preparing: { label: 'Dibuat', cls: 'bg-amber-100 text-amber-900' },
+    ready: { label: 'Siap', cls: 'bg-emerald-100 text-emerald-900' },
+    voided: { label: 'VOID', cls: 'bg-red-100 text-red-800' },
+    rejected: { label: 'Dihapus', cls: 'bg-muted text-muted-foreground' },
 };
 
 export type PanelActions = {
@@ -93,9 +93,9 @@ export function OrderPanel({
     return (
         <section
             aria-label={t('Pesanan')}
-            className="flex h-full min-h-0 flex-col rounded-2xl border bg-card"
+            className="flex h-full min-h-0 flex-col rounded-xl border bg-card"
         >
-            <header className="flex items-start justify-between gap-2 border-b p-3">
+            <header className="flex items-start justify-between gap-2 border-b px-4 py-3">
                 <div>
                     <h2 className="text-lg leading-tight font-semibold">
                         {title}
@@ -115,16 +115,16 @@ export function OrderPanel({
                     )}
                 </div>
                 {order && (
-                    <span className="rounded bg-muted px-2 py-1 text-xs font-medium">
+                    <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-xs font-medium">
                         {order.status_label}
                     </span>
                 )}
             </header>
 
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
                 {order?.rounds.map((round, idx) => (
                     <div key={round.id}>
-                        <p className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+                        <p className="mb-1.5 flex flex-wrap items-center gap-x-2 text-xs font-medium text-muted-foreground">
                             {t('Ronde')} {idx + 1} · {timeId(round.created_at)}
                             {round.source === 'pos' && round.by && (
                                 <span>
@@ -137,7 +137,7 @@ export function OrderPanel({
                                 </span>
                             )}
                             {round.source === 'qr' && (
-                                <span className="rounded bg-violet-600 px-1.5 text-[10px] font-bold text-white">
+                                <span className="rounded bg-violet-100 px-1.5 text-[10px] font-semibold text-violet-800">
                                     QR{' '}
                                     {round.customer_name
                                         ? `· ${round.customer_name}`
@@ -150,14 +150,14 @@ export function OrderPanel({
                                 </span>
                             )}
                         </p>
-                        <ul className="grid gap-1">
+                        <ul className="divide-y rounded-lg border">
                             {round.items
                                 .filter((i) => i.status !== 'rejected')
                                 .map((i) => (
                                     <li
                                         key={i.id}
                                         className={cn(
-                                            'rounded-lg border p-2 text-sm',
+                                            'px-3 py-2.5 text-sm',
                                             i.status === 'voided' &&
                                                 'opacity-60',
                                         )}
@@ -213,7 +213,7 @@ export function OrderPanel({
                                                     i.status === 'voided') && (
                                                     <span
                                                         className={cn(
-                                                            'rounded px-1.5 py-0.5 text-[10px] font-semibold',
+                                                            'rounded-md px-1.5 py-0.5 text-[10px] font-medium',
                                                             ITEM_STATUS[
                                                                 i.status
                                                             ]?.cls,
@@ -381,7 +381,7 @@ export function OrderPanel({
                 )}
 
                 {order && order.bills.some((b) => b.mode) && (
-                    <div className="rounded-lg border p-2 text-sm">
+                    <div className="rounded-lg border p-3 text-sm">
                         <p className="mb-1 font-medium">
                             {t('Tagihan terpisah')}
                         </p>
@@ -439,7 +439,7 @@ export function OrderPanel({
                 )}
 
                 {order && order.payments.length > 0 && (
-                    <div className="rounded-lg border p-2 text-sm">
+                    <div className="rounded-lg border p-3 text-sm">
                         <p className="mb-1 font-medium">{t('Pembayaran')}</p>
                         {order.payments.map((p) => (
                             <div
@@ -485,7 +485,7 @@ export function OrderPanel({
                 )}
             </div>
 
-            <footer className="grid gap-2 border-t p-3">
+            <footer className="grid gap-2 border-t p-4">
                 {order && liveItems.length > 0 && (
                     <dl className="grid gap-0.5 text-sm">
                         <Row
@@ -535,7 +535,7 @@ export function OrderPanel({
                                 value={rupiah(order.rounding)}
                             />
                         )}
-                        <div className="mt-1 flex items-center justify-between border-t pt-1 text-lg font-bold">
+                        <div className="mt-1 flex items-center justify-between border-t pt-2 text-xl font-semibold tracking-tight">
                             <dt>{t('Total')}</dt>
                             <dd className="tabular-nums">
                                 {rupiah(order.grand_total)}
@@ -788,7 +788,7 @@ function PickSummary({ pick }: { pick: PickState }) {
 
     return (
         <div
-            className="grid gap-2 rounded-xl border-2 border-primary/40 bg-primary/5 p-3"
+            className="grid gap-2 rounded-xl border border-primary/40 bg-primary/5 p-3"
             aria-live="polite"
         >
             <p className="text-sm font-semibold">{t('Bayar sebagian dulu')}</p>

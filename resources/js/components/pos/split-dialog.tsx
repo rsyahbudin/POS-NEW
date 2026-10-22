@@ -174,7 +174,7 @@ export function SplitDialog({
             >
                 <Minus />
             </Button>
-            <span className="w-8 text-center text-lg font-bold tabular-nums">
+            <span className="w-8 text-center text-lg font-semibold tabular-nums">
                 {people}
             </span>
             <Button
@@ -253,7 +253,7 @@ export function SplitDialog({
                         <p className="text-sm text-muted-foreground">
                             {t('Tiap orang membayar')}
                         </p>
-                        <p className="text-3xl font-bold tabular-nums">
+                        <p className="text-3xl font-semibold tracking-tight tabular-nums">
                             {rupiah(share)}
                         </p>
                         {share * people !== order.grand_total && (
@@ -298,7 +298,7 @@ export function SplitDialog({
                                 <span className="block text-xs text-muted-foreground">
                                     {t('Orang')} {i + 1}
                                 </span>
-                                <span className="block font-bold tabular-nums">
+                                <span className="block font-semibold tabular-nums">
                                     {totals[i] === null
                                         ? '…'
                                         : rupiah(totals[i] ?? 0)}
@@ -346,7 +346,7 @@ export function SplitDialog({
                                     >
                                         <Minus />
                                     </Button>
-                                    <span className="w-6 text-center font-bold tabular-nums">
+                                    <span className="w-6 text-center font-semibold tabular-nums">
                                         {mine}
                                     </span>
                                     <Button
@@ -403,7 +403,7 @@ function Choice({
         <button
             type="button"
             onClick={onClick}
-            className="flex items-center gap-3 rounded-xl border-2 p-3 text-left hover:border-primary"
+            className="flex items-center gap-3 rounded-xl border p-3.5 text-left transition-colors hover:border-primary hover:bg-accent/40"
         >
             <span className="text-primary [&_svg]:size-6">{icon}</span>
             <span>

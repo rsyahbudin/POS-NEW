@@ -88,7 +88,7 @@ export default function RolesPage({
     return (
         <>
             <Head title="Peran & Akses" />
-            <div className="grid gap-4 p-4">
+            <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
                 <PageHeader
                     title="Peran & hak akses"
                     subtitle="Atur fitur apa saja yang boleh diakses tiap peran. Perubahan langsung berlaku di login berikutnya dan tercatat di audit log."

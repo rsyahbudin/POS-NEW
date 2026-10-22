@@ -70,7 +70,7 @@ export default function PurchasePage({
     return (
         <>
             <Head title="Belanja Bahan" />
-            <div className="grid gap-4 p-4">
+            <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
                 <PageHeader
                     title="Belanja bahan"
                     subtitle="Catat bahan yang dibeli: jumlah, satuan, dan total harga yang dibayar."

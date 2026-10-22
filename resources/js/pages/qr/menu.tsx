@@ -249,14 +249,18 @@ export default function QrMenu({
         <>
             <Head title={`Menu · ${table.name}`} />
             <div className="min-h-dvh bg-background pb-28 text-foreground">
-                <header className="sticky top-0 z-10 bg-primary px-4 py-4 text-primary-foreground">
-                    <p className="text-xs font-medium text-primary-foreground/80">
+                <header className="sticky top-0 z-10 border-b bg-card/95 px-4 py-3 backdrop-blur-sm">
+                    <p className="text-xs font-medium text-muted-foreground">
                         {outlet}
                     </p>
-                    <h1 className="text-xl font-bold">Meja {table.name}</h1>
-                    <p className="text-xs text-primary-foreground/80">
-                        Pembayaran di kasir.
-                    </p>
+                    <h1 className="text-xl font-semibold tracking-tight">
+                        Meja {table.name}
+                    </h1>
+                    {!qris && (
+                        <p className="text-xs text-muted-foreground">
+                            Pembayaran di kasir.
+                        </p>
+                    )}
                 </header>
 
                 <nav
@@ -269,7 +273,7 @@ export default function QrMenu({
                                 key={c.id}
                                 onClick={() => setCat(c.id)}
                                 aria-pressed={cat === c.id}
-                                className={`h-11 shrink-0 rounded-full border px-4 text-sm font-medium ${cat === c.id ? 'border-primary bg-primary text-primary-foreground' : 'bg-card'}`}
+                                className={`h-10 shrink-0 rounded-lg border px-4 text-sm font-medium ${cat === c.id ? 'border-primary bg-primary text-primary-foreground' : 'bg-card'}`}
                             >
                                 {c.name}
                             </button>
@@ -277,7 +281,7 @@ export default function QrMenu({
                     )}
                 </nav>
 
-                <main className="grid gap-3 px-4">
+                <main className="mx-4 divide-y overflow-hidden rounded-xl border bg-card">
                     {products.map((p) => {
                         const hasOptions =
                             p.variants.length > 0 ||
@@ -289,7 +293,7 @@ export default function QrMenu({
                         return (
                             <div
                                 key={p.id}
-                                className="flex min-h-[72px] items-center gap-3 rounded-2xl border bg-card p-3"
+                                className="flex min-h-[72px] items-center gap-3 p-3"
                             >
                                 {p.image && (
                                     <img
@@ -310,7 +314,7 @@ export default function QrMenu({
                                             {p.description}
                                         </span>
                                     )}
-                                    <span className="mt-0.5 block text-sm font-bold text-primary tabular-nums">
+                                    <span className="mt-0.5 block text-sm font-semibold tabular-nums">
                                         {p.variants.length > 1
                                             ? `dari ${rp(Math.min(...p.variants.map((v) => v.price)))}`
                                             : rp(p.price)}
@@ -321,7 +325,7 @@ export default function QrMenu({
                                         <button
                                             onClick={() => setPicking(p)}
                                             aria-label={`Pilih ${p.name}`}
-                                            className="h-11 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground active:scale-95"
+                                            className="h-10 rounded-lg border border-primary px-4 text-sm font-semibold text-primary active:scale-95"
                                         >
                                             {inCart > 0 ? 'Tambah' : 'Pilih'}
                                         </button>
@@ -335,7 +339,7 @@ export default function QrMenu({
                                     <button
                                         onClick={() => bump(p, 1)}
                                         aria-label={`Tambah ${p.name}`}
-                                        className="size-11 rounded-full bg-primary text-2xl leading-none font-bold text-primary-foreground active:scale-95"
+                                        className="size-10 rounded-lg bg-primary text-2xl leading-none text-primary-foreground active:scale-95"
                                     >
                                         +
                                     </button>
@@ -344,12 +348,12 @@ export default function QrMenu({
                                         <button
                                             onClick={() => bump(p, -1)}
                                             aria-label={`Kurangi ${p.name}`}
-                                            className="size-11 rounded-full border text-xl leading-none font-bold active:scale-95"
+                                            className="size-10 rounded-lg border text-xl leading-none active:scale-95"
                                         >
                                             −
                                         </button>
                                         <span
-                                            className="w-7 text-center font-bold tabular-nums"
+                                            className="w-7 text-center font-semibold tabular-nums"
                                             aria-live="polite"
                                         >
                                             {inCart}
@@ -357,7 +361,7 @@ export default function QrMenu({
                                         <button
                                             onClick={() => bump(p, 1)}
                                             aria-label={`Tambah ${p.name}`}
-                                            className="size-11 rounded-full bg-primary text-xl leading-none font-bold text-primary-foreground active:scale-95"
+                                            className="size-10 rounded-lg bg-primary text-xl leading-none text-primary-foreground active:scale-95"
                                         >
                                             +
                                         </button>
@@ -373,7 +377,9 @@ export default function QrMenu({
                     )}
                 </main>
 
-                <div className="fixed inset-x-0 bottom-0 z-20 grid gap-2 border-t bg-card p-3">
+                <div
+                    className={`fixed inset-x-0 bottom-0 z-20 grid gap-2 border-t bg-card p-3 ${status.rounds.length === 0 && count === 0 ? 'hidden' : ''}`}
+                >
                     {status.rounds.length > 0 && (
                         <button
                             onClick={() => setOpen('status')}

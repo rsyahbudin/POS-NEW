@@ -87,7 +87,7 @@ export default function SettingsPage({
     return (
         <>
             <Head title="Pengaturan" />
-            <div className="grid gap-4 p-4">
+            <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
                 <PageHeader
                     title="Pengaturan"
                     subtitle="Semua pengaturan operasional diubah di sini, tanpa perlu ubah kode. Perubahan tercatat di audit log."

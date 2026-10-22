@@ -124,7 +124,7 @@ export default function StockCount({
     return (
         <>
             <Head title="Stok Opname" />
-            <div className="grid gap-4 p-4">
+            <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
                 <PageHeader
                     title="Stok opname"
                     subtitle={

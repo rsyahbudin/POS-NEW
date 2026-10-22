@@ -3,18 +3,24 @@ import { rupiah } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { Floor, FloorTable } from '@/types/pos';
 
-const STATUS: Record<FloorTable['status'], { label: string; cls: string }> = {
+const STATUS: Record<
+    FloorTable['status'],
+    { label: string; cls: string; dot: string }
+> = {
     empty: {
         label: 'Kosong',
-        cls: 'border-emerald-600/30 bg-emerald-50 hover:border-emerald-600/60 dark:bg-emerald-950/30',
+        cls: 'bg-card hover:border-primary/50',
+        dot: 'bg-emerald-500',
     },
     occupied: {
         label: 'Terisi',
-        cls: 'border-amber-600/40 bg-amber-50 dark:bg-amber-950/30',
+        cls: 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30',
+        dot: 'bg-amber-500',
     },
     awaiting_payment: {
         label: 'Menunggu Bayar',
-        cls: 'border-rose-600/40 bg-rose-50 dark:bg-rose-950/30',
+        cls: 'border-rose-300 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/30',
+        dot: 'bg-rose-500',
     },
 };
 
@@ -41,14 +47,14 @@ export function TableMap({
                                 onClick={() => onSelect(tb)}
                                 aria-pressed={selectedId === tb.id}
                                 className={cn(
-                                    'min-h-24 rounded-2xl border-2 p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                    'min-h-24 rounded-xl border p-3 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
                                     STATUS[tb.status].cls,
                                     selectedId === tb.id &&
                                         'ring-2 ring-primary',
                                 )}
                             >
                                 <span className="flex items-center justify-between">
-                                    <span className="text-lg font-semibold">
+                                    <span className="text-lg font-semibold tracking-tight">
                                         {tb.name}
                                     </span>
                                     {!tb.qr_enabled && (
@@ -57,7 +63,14 @@ export function TableMap({
                                         </span>
                                     )}
                                 </span>
-                                <span className="block text-xs text-slate-700 dark:text-slate-200">
+                                <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                                    <span
+                                        aria-hidden
+                                        className={cn(
+                                            'size-1.5 rounded-full',
+                                            STATUS[tb.status].dot,
+                                        )}
+                                    />
                                     {t(STATUS[tb.status].label)} · {tb.capacity}{' '}
                                     {t('kursi')}
                                 </span>

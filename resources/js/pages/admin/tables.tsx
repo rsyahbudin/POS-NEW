@@ -28,7 +28,7 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
     return (
         <>
             <Head title="Meja & QR" />
-            <div className="grid gap-4 p-4">
+            <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
                 <PageHeader
                     title="Area, meja & QR"
                     actions={

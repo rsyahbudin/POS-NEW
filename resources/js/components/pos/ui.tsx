@@ -106,11 +106,15 @@ export function PageHeader({
     actions?: ReactNode;
 }) {
     return (
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
             <div>
-                <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+                <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+                    {title}
+                </h1>
                 {subtitle && (
-                    <p className="text-sm text-muted-foreground">{subtitle}</p>
+                    <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">
+                        {subtitle}
+                    </p>
                 )}
             </div>
             <div className="flex flex-wrap items-center gap-2">{actions}</div>
@@ -128,9 +132,9 @@ export function Stat({
     hint?: ReactNode;
 }) {
     return (
-        <div className="rounded-2xl border bg-card p-4">
-            <p className="text-xs font-medium text-muted-foreground">{label}</p>
-            <p className="mt-1.5 text-2xl font-bold tracking-tight tabular-nums">
+        <div className="min-w-0 rounded-xl border bg-card p-3.5 sm:p-4">
+            <p className="text-[13px] text-muted-foreground">{label}</p>
+            <p className="mt-1 text-xl font-semibold tracking-tight tabular-nums sm:text-2xl">
                 {value}
             </p>
             {hint && (
@@ -469,9 +473,9 @@ export function ResponsiveTable({
                 </p>
             ) : (
                 <>
-                    <div className="hidden overflow-x-auto rounded-2xl border bg-card md:block">
+                    <div className="hidden overflow-x-auto rounded-xl border bg-card md:block">
                         <table className="w-full text-sm">
-                            <thead className="bg-muted/60">
+                            <thead className="border-b bg-muted/40">
                                 <tr>
                                     {headers.map((h, i) => {
                                         const right =
@@ -490,7 +494,7 @@ export function ResponsiveTable({
                                                           : undefined
                                                 }
                                                 className={cn(
-                                                    'px-3 py-2 text-left font-medium',
+                                                    'px-4 py-2.5 text-left text-xs font-medium text-muted-foreground',
                                                     right && 'text-right',
                                                 )}
                                             >
@@ -526,12 +530,17 @@ export function ResponsiveTable({
                             </thead>
                             <tbody>
                                 {order.map((r) => (
-                                    <tr key={r} className="border-t">
+                                    <tr
+                                        key={r}
+                                        className="border-t transition-colors first:border-t-0 hover:bg-muted/40"
+                                    >
                                         {rows[r].map((cell, i) => (
                                             <td
                                                 key={i}
                                                 className={cn(
-                                                    'px-3 py-2',
+                                                    'px-4 py-3',
+                                                    headers[i] === 'Aksi' &&
+                                                        "[&_button[class*='border-input']]:border-transparent [&_button[class*='border-input']]:bg-transparent [&_button[class*='border-input']:hover]:bg-accent",
                                                     numeric.includes(i) &&
                                                         'text-right tabular-nums',
                                                 )}
@@ -548,9 +557,9 @@ export function ResponsiveTable({
                         {order.map((r) => (
                             <div
                                 key={r}
-                                className="rounded-2xl border bg-card p-3"
+                                className="rounded-xl border bg-card p-3.5"
                             >
-                                <p className="font-medium">{rows[r][0]}</p>
+                                <p className="font-semibold">{rows[r][0]}</p>
                                 <dl className="mt-1 grid gap-0.5 text-sm">
                                     {rows[r].slice(1).map((cell, i) => (
                                         <div
@@ -587,7 +596,7 @@ export function Tabs<T extends string>({
     return (
         <div
             role="tablist"
-            className="flex gap-1 overflow-x-auto rounded-xl bg-muted p-1"
+            className="-mb-1 flex [scrollbar-width:none] gap-1 overflow-x-auto border-b"
         >
             {tabs.map((tb) => (
                 <button
@@ -596,10 +605,10 @@ export function Tabs<T extends string>({
                     aria-selected={value === tb.id}
                     onClick={() => onChange(tb.id)}
                     className={cn(
-                        'h-10 shrink-0 rounded-lg px-3.5 text-sm font-semibold transition-colors',
+                        '-mb-px h-11 shrink-0 border-b-2 px-3.5 text-sm font-medium transition-colors',
                         value === tb.id
-                            ? 'bg-card text-primary shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground',
+                            ? 'border-primary text-foreground'
+                            : 'border-transparent text-muted-foreground hover:text-foreground',
                     )}
                 >
                     {tb.label}

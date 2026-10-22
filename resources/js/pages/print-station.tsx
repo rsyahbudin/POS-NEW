@@ -222,7 +222,7 @@ export default function PrintStation({
     return (
         <>
             <Head title="Stasiun Cetak" />
-            <div className="grid gap-4 p-4">
+            <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
                 <PageHeader
                     title="Stasiun Cetak"
                     subtitle="Biarkan halaman ini terbuka di perangkat yang tersambung ke printer. Pesanan, bill, dan struk yang masuk antrean dicetak otomatis."

@@ -48,7 +48,7 @@ export default function DailyReport({
     return (
         <>
             <Head title="Laporan Harian" />
-            <div className="grid gap-4 p-4">
+            <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
                 <PageHeader
                     title="Laporan harian"
                     subtitle={`Hari bisnis ${dateId(date)}${date === today ? ' (berjalan)' : ''}${closed ? ' · sudah dikirim otomatis' : ''}`}

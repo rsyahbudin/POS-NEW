@@ -63,7 +63,7 @@ export function ProductGrid({
                             aria-selected={cat === c.id}
                             onClick={() => setCat(c.id)}
                             className={cn(
-                                'h-11 shrink-0 rounded-full border px-4 text-sm font-semibold transition-colors',
+                                'h-10 shrink-0 rounded-lg border px-4 text-sm font-medium transition-colors',
                                 cat === c.id
                                     ? 'border-primary bg-primary text-primary-foreground'
                                     : 'bg-card hover:bg-muted',
@@ -85,7 +85,7 @@ export function ProductGrid({
                             disabled={out && !markMode}
                             onClick={() => onPick(p)}
                             className={cn(
-                                'relative flex min-h-24 flex-col justify-between rounded-2xl border bg-card p-3 text-left transition outline-none hover:border-primary/60 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]',
+                                'relative flex min-h-24 flex-col justify-between rounded-2xl border bg-card p-3 text-left transition outline-none hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]',
                                 out && 'opacity-60',
                                 markMode && 'ring-2 ring-amber-500',
                             )}
@@ -104,7 +104,7 @@ export function ProductGrid({
                                 {p.name}
                             </span>
                             <span className="mt-2 flex items-end justify-between gap-1">
-                                <span className="text-sm font-bold text-primary tabular-nums">
+                                <span className="text-sm font-semibold text-primary tabular-nums">
                                     {p.variants.length > 1
                                         ? `${t('dari')} ${rupiah(Math.min(...p.variants.map((v) => v.price)))}`
                                         : rupiah(p.price)}

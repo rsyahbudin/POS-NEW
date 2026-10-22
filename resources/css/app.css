@@ -9,13 +9,14 @@
 
 @theme {
     --font-sans:
-        'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
-        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
-        'Noto Color Emoji';
+        'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+        'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
 
-    --radius-lg: var(--radius);
-    --radius-md: calc(var(--radius) - 2px);
-    --radius-sm: calc(var(--radius) - 4px);
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.625rem;
+    --radius-xl: 0.75rem;
+    --radius-2xl: 0.875rem;
 
     --color-background: var(--background);
     --color-foreground: var(--foreground);
@@ -62,74 +63,74 @@
 }
 
 :root {
-    --background: oklch(0.975 0.006 95);
-    --foreground: oklch(0.22 0.015 160);
+    --background: oklch(0.982 0.003 250);
+    --foreground: oklch(0.21 0.012 255);
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.22 0.015 160);
+    --card-foreground: oklch(0.21 0.012 255);
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.22 0.015 160);
-    --primary: oklch(0.5 0.115 165);
-    --primary-foreground: oklch(0.99 0.005 165);
-    --secondary: oklch(0.94 0.012 165);
-    --secondary-foreground: oklch(0.32 0.07 165);
-    --muted: oklch(0.955 0.008 95);
-    --muted-foreground: oklch(0.5 0.015 150);
-    --accent: oklch(0.94 0.02 165);
-    --accent-foreground: oklch(0.32 0.07 165);
-    --destructive: oklch(0.55 0.22 27);
+    --popover-foreground: oklch(0.21 0.012 255);
+    --primary: oklch(0.48 0.12 163);
+    --primary-foreground: oklch(0.99 0.004 163);
+    --secondary: oklch(0.955 0.005 250);
+    --secondary-foreground: oklch(0.3 0.02 255);
+    --muted: oklch(0.96 0.004 250);
+    --muted-foreground: oklch(0.52 0.014 255);
+    --accent: oklch(0.955 0.012 163);
+    --accent-foreground: oklch(0.34 0.08 163);
+    --destructive: oklch(0.56 0.21 27);
     --destructive-foreground: oklch(0.99 0 0);
-    --border: oklch(0.9 0.01 95);
-    --input: oklch(0.88 0.012 95);
-    --ring: oklch(0.6 0.12 165);
-    --chart-1: oklch(0.5 0.115 165);
-    --chart-2: oklch(0.7 0.14 70);
-    --chart-3: oklch(0.55 0.15 250);
+    --border: oklch(0.915 0.005 250);
+    --input: oklch(0.88 0.007 250);
+    --ring: oklch(0.58 0.12 163);
+    --chart-1: oklch(0.48 0.12 163);
+    --chart-2: oklch(0.72 0.14 70);
+    --chart-3: oklch(0.56 0.15 250);
     --chart-4: oklch(0.6 0.2 20);
     --chart-5: oklch(0.6 0.15 310);
-    --radius: 0.875rem;
-    --sidebar: oklch(1 0 0);
-    --sidebar-foreground: oklch(0.22 0.015 160);
-    --sidebar-primary: oklch(0.5 0.115 165);
-    --sidebar-primary-foreground: oklch(0.99 0.005 165);
-    --sidebar-accent: oklch(0.94 0.02 165);
-    --sidebar-accent-foreground: oklch(0.32 0.07 165);
-    --sidebar-border: oklch(0.9 0.01 95);
-    --sidebar-ring: oklch(0.6 0.12 165);
+    --radius: 0.625rem;
+    --sidebar: oklch(0.99 0.002 250);
+    --sidebar-foreground: oklch(0.3 0.014 255);
+    --sidebar-primary: oklch(0.48 0.12 163);
+    --sidebar-primary-foreground: oklch(0.99 0.004 163);
+    --sidebar-accent: oklch(0.955 0.012 163);
+    --sidebar-accent-foreground: oklch(0.34 0.08 163);
+    --sidebar-border: oklch(0.915 0.005 250);
+    --sidebar-ring: oklch(0.58 0.12 163);
 }
 
 .dark {
-    --background: oklch(0.18 0.01 165);
-    --foreground: oklch(0.96 0.008 95);
-    --card: oklch(0.22 0.012 165);
-    --card-foreground: oklch(0.96 0.008 95);
-    --popover: oklch(0.22 0.012 165);
-    --popover-foreground: oklch(0.96 0.008 95);
-    --primary: oklch(0.74 0.14 165);
-    --primary-foreground: oklch(0.2 0.03 165);
-    --secondary: oklch(0.28 0.02 165);
-    --secondary-foreground: oklch(0.92 0.02 165);
-    --muted: oklch(0.27 0.012 165);
-    --muted-foreground: oklch(0.72 0.015 150);
-    --accent: oklch(0.3 0.03 165);
-    --accent-foreground: oklch(0.92 0.02 165);
+    --background: oklch(0.17 0.008 255);
+    --foreground: oklch(0.96 0.004 250);
+    --card: oklch(0.21 0.01 255);
+    --card-foreground: oklch(0.96 0.004 250);
+    --popover: oklch(0.21 0.01 255);
+    --popover-foreground: oklch(0.96 0.004 250);
+    --primary: oklch(0.74 0.14 163);
+    --primary-foreground: oklch(0.2 0.03 163);
+    --secondary: oklch(0.27 0.01 255);
+    --secondary-foreground: oklch(0.92 0.006 250);
+    --muted: oklch(0.26 0.01 255);
+    --muted-foreground: oklch(0.7 0.012 250);
+    --accent: oklch(0.29 0.025 163);
+    --accent-foreground: oklch(0.92 0.02 163);
     --destructive: oklch(0.65 0.2 25);
     --destructive-foreground: oklch(0.99 0 0);
-    --border: oklch(0.31 0.015 165);
-    --input: oklch(0.34 0.015 165);
-    --ring: oklch(0.6 0.12 165);
-    --chart-1: oklch(0.74 0.14 165);
+    --border: oklch(0.3 0.01 255);
+    --input: oklch(0.34 0.012 255);
+    --ring: oklch(0.6 0.12 163);
+    --chart-1: oklch(0.74 0.14 163);
     --chart-2: oklch(0.78 0.14 75);
     --chart-3: oklch(0.7 0.13 250);
     --chart-4: oklch(0.7 0.18 20);
     --chart-5: oklch(0.7 0.15 310);
-    --sidebar: oklch(0.2 0.012 165);
-    --sidebar-foreground: oklch(0.96 0.008 95);
-    --sidebar-primary: oklch(0.74 0.14 165);
-    --sidebar-primary-foreground: oklch(0.2 0.03 165);
-    --sidebar-accent: oklch(0.3 0.03 165);
-    --sidebar-accent-foreground: oklch(0.92 0.02 165);
-    --sidebar-border: oklch(0.31 0.015 165);
-    --sidebar-ring: oklch(0.6 0.12 165);
+    --sidebar: oklch(0.19 0.009 255);
+    --sidebar-foreground: oklch(0.96 0.004 250);
+    --sidebar-primary: oklch(0.74 0.14 163);
+    --sidebar-primary-foreground: oklch(0.2 0.03 163);
+    --sidebar-accent: oklch(0.29 0.025 163);
+    --sidebar-accent-foreground: oklch(0.92 0.02 163);
+    --sidebar-border: oklch(0.3 0.01 255);
+    --sidebar-ring: oklch(0.6 0.12 163);
 }
 
 @layer base {
@@ -139,6 +140,18 @@
 
     body {
         @apply bg-background text-foreground;
+        font-feature-settings: 'cv11', 'ss03';
+        -webkit-font-smoothing: antialiased;
+    }
+
+    h1,
+    h2,
+    h3 {
+        text-wrap: balance;
+    }
+
+    table {
+        font-variant-numeric: tabular-nums;
     }
 
     /* Native controls follow the brand colour and the input look. */

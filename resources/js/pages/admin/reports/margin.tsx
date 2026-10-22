@@ -70,7 +70,7 @@ export default function MarginReport({
     return (
         <>
             <Head title="Margin & HPP" />
-            <div className="grid gap-4 p-4">
+            <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
                 <PageHeader
                     title="Margin & HPP"
                     subtitle="Penjualan dikurangi biaya bahan (HPP) yang tercatat saat menu terjual."

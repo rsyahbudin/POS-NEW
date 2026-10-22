@@ -75,7 +75,7 @@ export default function WastePage({
     return (
         <>
             <Head title="Bahan Terbuang" />
-            <div className="grid gap-4 p-4">
+            <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
                 <PageHeader
                     title="Bahan terbuang (waste)"
                     subtitle="Catat bahan atau menu yang terbuang beserta alasannya. Stok berkurang dan nilainya masuk laporan waste."

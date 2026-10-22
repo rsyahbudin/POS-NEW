@@ -76,7 +76,7 @@ export default function SuppliersPage({
     return (
         <>
             <Head title="Pemasok" />
-            <div className="grid gap-4 p-4">
+            <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
                 <PageHeader
                     title="Pemasok"
                     subtitle="Tempat Anda membeli bahan: kontak, riwayat belanja, dan perbandingan harga."

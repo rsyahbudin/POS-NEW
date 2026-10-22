@@ -40,7 +40,7 @@ export default function ActivityPage({ filters, rows, users, groups }: Props) {
     return (
         <>
             <Head title="Jejak Aktivitas" />
-            <div className="grid gap-4 p-4">
+            <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
                 <PageHeader
                     title="Jejak aktivitas"
                     subtitle="Siapa melakukan apa dan kapan: pesanan, pembayaran, shift, stok, dan pengaturan."

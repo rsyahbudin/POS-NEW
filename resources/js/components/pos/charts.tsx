@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import { rupiah } from '@/lib/format';
 
 export type Datum = { label: string; value: number };
@@ -21,6 +22,29 @@ const compact: Fmt = (n) => {
 
     return String(n);
 };
+
+/** Width of the box the chart sits in, so the SVG is drawn 1:1 and its text keeps a readable size. */
+function useWidth(): [React.RefObject<HTMLElement | null>, number] {
+    const ref = useRef<HTMLElement | null>(null);
+    const [w, setW] = useState(640);
+
+    useLayoutEffect(() => {
+        const el = ref.current;
+
+        if (!el) {
+            return;
+        }
+
+        const measure = () => setW(Math.max(260, Math.round(el.clientWidth)));
+        measure();
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+
+        return () => ro.disconnect();
+    }, []);
+
+    return [ref, w];
+}
 
 function niceMax(max: number): number {
     if (max <= 0) {
@@ -84,21 +108,22 @@ export function ColumnChart({
     color?: string;
     height?: number;
 }) {
+    const [ref, W] = useWidth();
+
     if (data.length === 0) {
         return <Empty title={title} />;
     }
 
-    const W = 640;
     const pad = { l: 44, r: 8, t: 10, b: 26 };
     const max = niceMax(Math.max(...data.map((d) => d.value), 0));
     const innerW = W - pad.l - pad.r;
     const innerH = height - pad.t - pad.b;
     const step = innerW / data.length;
     const bar = Math.min(40, step * 0.7);
-    const every = Math.ceil(data.length / 12);
+    const every = Math.ceil(data.length / Math.max(2, Math.floor(innerW / 44)));
 
     return (
-        <figure>
+        <figure ref={ref}>
             <svg
                 viewBox={`0 0 ${W} ${height}`}
                 className="w-full"
@@ -116,13 +141,14 @@ export function ColumnChart({
                                 y1={y}
                                 y2={y}
                                 stroke="currentColor"
-                                strokeOpacity={0.12}
+                                strokeOpacity={0.1}
+                                strokeDasharray="3 4"
                             />
                             <text
                                 x={pad.l - 6}
                                 y={y + 3}
                                 textAnchor="end"
-                                fontSize={10}
+                                fontSize={11}
                                 fill="currentColor"
                                 fillOpacity={0.6}
                             >
@@ -142,7 +168,7 @@ export function ColumnChart({
                                 y={pad.t + innerH - h}
                                 width={bar}
                                 height={Math.max(h, d.value > 0 ? 1 : 0)}
-                                rx={3}
+                                rx={2}
                                 fill={color}
                             >
                                 <title>{`${d.label}: ${fmt(d.value)}`}</title>
@@ -152,7 +178,7 @@ export function ColumnChart({
                                     x={x + bar / 2}
                                     y={height - 8}
                                     textAnchor="middle"
-                                    fontSize={10}
+                                    fontSize={11}
                                     fill="currentColor"
                                     fillOpacity={0.7}
                                 >
@@ -185,11 +211,12 @@ export function LineChart({
     color?: string;
     height?: number;
 }) {
+    const [ref, W] = useWidth();
+
     if (data.length === 0) {
         return <Empty title={title} />;
     }
 
-    const W = 640;
     const pad = { l: 44, r: 12, t: 10, b: 26 };
     const max = niceMax(Math.max(...data.map((d) => d.value), 0));
     const innerW = W - pad.l - pad.r;
@@ -205,10 +232,10 @@ export function LineChart({
         )
         .join(' ');
     const area = `${path} L${x(data.length - 1).toFixed(1)},${pad.t + innerH} L${x(0).toFixed(1)},${pad.t + innerH} Z`;
-    const every = Math.ceil(data.length / 8);
+    const every = Math.ceil(data.length / Math.max(2, Math.floor(innerW / 56)));
 
     return (
-        <figure>
+        <figure ref={ref}>
             <svg
                 viewBox={`0 0 ${W} ${height}`}
                 className="w-full"
@@ -223,13 +250,14 @@ export function LineChart({
                             y1={pad.t + innerH * (1 - f)}
                             y2={pad.t + innerH * (1 - f)}
                             stroke="currentColor"
-                            strokeOpacity={0.12}
+                            strokeOpacity={0.1}
+                            strokeDasharray="3 4"
                         />
                         <text
                             x={pad.l - 6}
                             y={pad.t + innerH * (1 - f) + 3}
                             textAnchor="end"
-                            fontSize={10}
+                            fontSize={11}
                             fill="currentColor"
                             fillOpacity={0.6}
                         >
@@ -237,17 +265,29 @@ export function LineChart({
                         </text>
                     </g>
                 ))}
-                <path d={area} fill={color} fillOpacity={0.12} />
+                <path d={area} fill={color} fillOpacity={0.07} />
                 <path
                     d={path}
                     fill="none"
                     stroke={color}
-                    strokeWidth={2}
+                    strokeWidth={1.75}
                     strokeLinejoin="round"
+                    strokeLinecap="round"
                 />
                 {data.map((d, i) => (
                     <g key={d.label}>
-                        <circle cx={x(i)} cy={y(d.value)} r={3.5} fill={color}>
+                        <circle
+                            cx={x(i)}
+                            cy={y(d.value)}
+                            r={i === data.length - 1 ? 4 : 2.5}
+                            fill={
+                                i === data.length - 1
+                                    ? color
+                                    : 'var(--color-card)'
+                            }
+                            stroke={color}
+                            strokeWidth={1.5}
+                        >
                             <title>{`${d.label}: ${fmt(d.value)}`}</title>
                         </circle>
                         {i % every === 0 && (
@@ -255,7 +295,7 @@ export function LineChart({
                                 x={x(i)}
                                 y={height - 8}
                                 textAnchor="middle"
-                                fontSize={10}
+                                fontSize={11}
                                 fill="currentColor"
                                 fillOpacity={0.7}
                             >
@@ -294,16 +334,18 @@ export function BarList({
     const top = Math.max(...rows.map((r) => Math.abs(r.value)), 1);
 
     return (
-        <figure role="img" aria-label={title} className="grid gap-1.5">
+        <figure role="img" aria-label={title} className="grid gap-3">
             {rows.map((r) => (
-                <div
-                    key={r.label}
-                    className="grid grid-cols-[minmax(0,9rem)_1fr_auto] items-center gap-2 text-sm"
-                >
-                    <span className="truncate" title={r.label}>
-                        {r.label}
-                    </span>
-                    <span className="h-3 overflow-hidden rounded-full bg-muted">
+                <div key={r.label} className="grid gap-1">
+                    <div className="flex items-baseline justify-between gap-3 text-sm">
+                        <span className="truncate" title={r.label}>
+                            {r.label}
+                        </span>
+                        <span className="shrink-0 font-medium tabular-nums">
+                            {fmt(r.value)}
+                        </span>
+                    </div>
+                    <span className="h-1.5 overflow-hidden rounded-full bg-muted">
                         <span
                             className="block h-full rounded-full"
                             style={{
@@ -311,9 +353,6 @@ export function BarList({
                                 background: color,
                             }}
                         />
-                    </span>
-                    <span className="text-right text-xs tabular-nums">
-                        {fmt(r.value)}
                     </span>
                 </div>
             ))}
@@ -367,7 +406,7 @@ export function PairedBars({
                             key={s.name}
                             className="grid grid-cols-[1fr_auto] items-center gap-2"
                         >
-                            <span className="h-3 overflow-hidden rounded-full bg-muted">
+                            <span className="h-2 overflow-hidden rounded-full bg-muted">
                                 <span
                                     className="block h-full rounded-full"
                                     style={{
@@ -397,12 +436,14 @@ export function ChartCard({
     hint?: string;
 }) {
     return (
-        <section className="rounded-xl border bg-card p-4">
-            <h2 className="font-semibold">{title}</h2>
+        <section className="rounded-xl border bg-card p-4 sm:p-5">
+            <h2 className="text-sm font-medium text-muted-foreground">
+                {title}
+            </h2>
             {hint && (
-                <p className="mb-2 text-xs text-muted-foreground">{hint}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
             )}
-            <div className="mt-2 text-foreground">{children}</div>
+            <div className="mt-4 text-foreground">{children}</div>
         </section>
     );
 }

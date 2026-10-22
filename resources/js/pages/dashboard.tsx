@@ -1,4 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
+import { TrendingDown, TrendingUp } from 'lucide-react';
 import {
     BarList,
     ChartCard,
@@ -53,9 +54,21 @@ export default function Dashboard({
                         label="Omzet hari ini"
                         value={rupiah(metrics.revenue)}
                         hint={
-                            metrics.change_percent === null
-                                ? 'Belum ada pembanding'
-                                : `${metrics.change_percent >= 0 ? '▲' : '▼'} ${Math.abs(metrics.change_percent)}% vs minggu lalu`
+                            metrics.change_percent === null ? (
+                                'Belum ada pembanding'
+                            ) : (
+                                <span
+                                    className={`inline-flex items-center gap-1 font-medium ${metrics.change_percent >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}
+                                >
+                                    {metrics.change_percent >= 0 ? (
+                                        <TrendingUp className="size-3.5" />
+                                    ) : (
+                                        <TrendingDown className="size-3.5" />
+                                    )}
+                                    {Math.abs(metrics.change_percent)}% vs
+                                    minggu lalu
+                                </span>
+                            )
                         }
                     />
                     <Stat label="Transaksi" value={metrics.orders} />
@@ -90,24 +103,27 @@ export default function Dashboard({
                     </ChartCard>
                 </div>
 
-                <ChartCard title="Produk terlaris hari ini">
-                    <BarList
-                        title="Produk terlaris hari ini"
-                        data={topProducts.map((p) => ({
-                            label: p.label,
-                            value: p.total,
-                        }))}
+                <div className="grid gap-4 lg:grid-cols-[2fr_3fr]">
+                    <ChartCard title="Produk terlaris hari ini">
+                        <BarList
+                            title="Produk terlaris hari ini"
+                            data={topProducts.map((p) => ({
+                                label: p.label,
+                                value: p.total,
+                            }))}
+                        />
+                    </ChartCard>
+                    <ResponsiveTable
+                        headers={['Produk', 'Qty', 'Nilai']}
+                        numeric={[1, 2]}
+                        empty="Belum ada penjualan hari ini."
+                        rows={topProducts.map((p) => [
+                            p.label,
+                            p.orders,
+                            rupiah(p.total),
+                        ])}
                     />
-                </ChartCard>
-                <ResponsiveTable
-                    headers={['Produk', 'Qty', 'Nilai']}
-                    numeric={[1, 2]}
-                    rows={topProducts.map((p) => [
-                        p.label,
-                        p.orders,
-                        rupiah(p.total),
-                    ])}
-                />
+                </div>
             </div>
         </>
     );

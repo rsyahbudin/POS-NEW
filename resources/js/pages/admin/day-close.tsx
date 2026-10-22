@@ -69,7 +69,7 @@ export default function DailyReport({
                 />
 
                 <form
-                    className="flex flex-wrap items-end gap-2"
+                    className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3"
                     onSubmit={(e) => {
                         e.preventDefault();
                         router.get(

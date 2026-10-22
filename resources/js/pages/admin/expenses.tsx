@@ -192,7 +192,7 @@ export default function ExpensesPage({
                 </section>
 
                 <form
-                    className="flex flex-wrap items-end gap-2"
+                    className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3"
                     onSubmit={(e) => {
                         e.preventDefault();
                         const d = new FormData(e.currentTarget);

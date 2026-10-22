@@ -78,6 +78,7 @@ class InventoryService
         $ingredients = Ingredient::query()->whereIn('id', array_keys($use))->lockForUpdate()->get()->keyBy('id');
         $block = (bool) $this->settings->get('inventory.block_when_empty', false);
         $total = 0.0;
+        $outletId = 0;
 
         foreach ($use as $id => $perPortion) {
             $need = $perPortion * $item->qty;
@@ -88,6 +89,7 @@ class InventoryService
             if ($block && $ing->stock < $need) {
                 throw new OrderException("Bahan {$ing->name} tidak cukup (sisa ".$this->fmt($ing->stock)." {$ing->unit}).");
             }
+            $outletId = $ing->outlet_id;
             $ing->update(['stock' => $ing->stock - $need]);
             StockMovement::create([
                 'outlet_id' => $ing->outlet_id, 'ingredient_id' => $ing->id, 'type' => 'sale', 'qty' => -$need,
@@ -97,6 +99,7 @@ class InventoryService
         }
 
         $item->update(['inventory_consumed' => true, 'cogs' => (int) round($total)]);
+        app(InventoryJournal::class)->sale($item, $outletId, (int) round($total), "HPP: {$item->name_snapshot}");
     }
 
     public function restore(OrderItem $item): void
@@ -116,6 +119,7 @@ class InventoryService
                 'unit_cost' => $m->unit_cost, 'order_item_id' => $item->id,
             ]);
         }
+        app(InventoryJournal::class)->unsale($item, (int) ($moves->first()->outlet_id ?? 0), "Batal HPP: {$item->name_snapshot}");
         $item->update(['inventory_consumed' => false, 'cogs' => 0]);
     }
 
@@ -294,6 +298,7 @@ class InventoryService
             ]);
         }
         $purchase->update(['status' => 'approved', 'reviewed_by' => $reviewer->id, 'reviewed_at' => now()]);
+        app(InventoryJournal::class)->purchase($purchase, $purchase->outlet_id, (int) $purchase->total, $purchase->purchased_on->toDateString(), $reviewer->id, 'Belanja bahan'.($purchase->supplier ? ": {$purchase->supplier}" : ''));
         Audit::log('inventory.purchase', $purchase, ['total' => $purchase->total, 'items' => $purchase->items()->count()], $reviewer);
     }
 
@@ -310,6 +315,7 @@ class InventoryService
                     'unit_cost' => $ing->avg_cost, 'user_id' => $user->id, 'note' => $note,
                 ]);
                 Audit::log('inventory.counted', $ing, ['ingredient' => $ing->name, 'difference' => $diff], $user);
+                app(InventoryJournal::class)->count($ing, $ing->outlet_id, (int) round($diff * $ing->avg_cost), "Selisih stok: {$ing->name}", $user->id);
             }
 
             return $diff;
@@ -327,6 +333,7 @@ class InventoryService
                 'unit_cost' => $ing->avg_cost, 'user_id' => $user->id, 'note' => $note,
             ]);
             Audit::log('inventory.waste', $ing, ['ingredient' => $ing->name, 'qty' => $qty, 'note' => $note], $user);
+            app(InventoryJournal::class)->waste($ing, $ing->outlet_id, (int) round($qty * $ing->avg_cost), "Bahan terbuang: {$ing->name}", $user->id);
         });
     }
 

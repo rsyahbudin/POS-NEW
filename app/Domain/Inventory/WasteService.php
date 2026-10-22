@@ -97,6 +97,7 @@ class WasteService
 
     private function announce(WasteEntry $entry, User $user): void
     {
+        app(InventoryJournal::class)->waste($entry, $entry->outlet_id, $entry->cost, "Terbuang: {$entry->label} ({$entry->reason})", $user->id);
         Audit::log('inventory.waste', null, ['item' => $entry->label, 'qty' => $entry->qty, 'unit' => $entry->unit, 'reason' => $entry->reason, 'note' => $entry->note, 'amount' => $entry->cost], $user);
         if ($user->can('manage-inventory')) {
             return;

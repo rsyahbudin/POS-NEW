@@ -20,6 +20,11 @@ enum SystemAccount: string
     case CashVariance = 'cash_variance';
     case RoundingVariance = 'rounding_variance';
     case OwnerEquity = 'owner_equity';
+    case InventoryAsset = 'inventory_asset';
+    case PurchasePayment = 'purchase_payment';
+    case Cogs = 'cogs';
+    case WasteLoss = 'waste_loss';
+    case StockVariance = 'stock_variance';
 
     public function resolve(?int $outletId = null): Account
     {
@@ -44,6 +49,11 @@ enum SystemAccount: string
             self::CashVariance => ['code' => '5-9100', 'name' => 'Selisih Kas', 'type' => AccountType::Expense],
             self::RoundingVariance => ['code' => '5-9200', 'name' => 'Selisih Pembulatan', 'type' => AccountType::Expense],
             self::OwnerEquity => ['code' => '3-1000', 'name' => 'Modal Pemilik', 'type' => AccountType::Equity],
+            self::InventoryAsset => ['code' => '1-1300', 'name' => 'Persediaan Bahan', 'type' => AccountType::Asset],
+            self::PurchasePayment => ['code' => '1-1230', 'name' => 'Kas Belanja Bahan', 'type' => AccountType::Asset],
+            self::Cogs => ['code' => '5-1100', 'name' => 'Harga Pokok Penjualan', 'type' => AccountType::Expense],
+            self::WasteLoss => ['code' => '5-1200', 'name' => 'Beban Bahan Terbuang', 'type' => AccountType::Expense],
+            self::StockVariance => ['code' => '5-9300', 'name' => 'Selisih Stok', 'type' => AccountType::Expense],
         };
     }
 }

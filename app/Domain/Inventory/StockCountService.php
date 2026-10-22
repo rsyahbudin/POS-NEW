@@ -101,6 +101,7 @@ class StockCountService
                 throw new OrderException('Hitungan yang Anda kirim sendiri harus disetujui orang lain.');
             }
             $name = User::query()->whereKey($count->user_id)->value('name') ?? '-';
+            $value = 0.0;
             foreach ($count->lines()->get() as $line) {
                 $delta = $line->counted - (float) $line->system_qty;
                 if (abs($delta) <= 0.0005) {
@@ -115,7 +116,9 @@ class StockCountService
                     'outlet_id' => $ing->outlet_id, 'ingredient_id' => $ing->id, 'type' => 'opname', 'qty' => $delta,
                     'unit_cost' => $ing->avg_cost, 'user_id' => $count->user_id, 'note' => "Opname #{$count->id} oleh {$name}",
                 ]);
+                $value += $delta * $ing->avg_cost;
             }
+            app(InventoryJournal::class)->count($count, $count->outlet_id, (int) round($value), "Selisih stok opname #{$count->id}", $count->user_id);
             $count->update(['status' => 'approved', 'reviewed_by' => $reviewer->id, 'reviewed_at' => now(), 'review_note' => $auto ? 'Otomatis' : null]);
             Audit::log('stock.count_approved', $count, ['auto' => $auto], $reviewer);
             Notifier::later(function (Notifier $n) use ($count, $reviewer, $auto) {

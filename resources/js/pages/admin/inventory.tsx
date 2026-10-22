@@ -87,6 +87,8 @@ type Props = {
     ingredients: Ingredient[];
     purchases: Purchase[];
     movements: Movement[];
+    suppliers: { id: number; name: string }[];
+    wasteReasons: { id: number; name: string }[];
 };
 
 const TYPE: Record<string, string> = {
@@ -106,6 +108,8 @@ export default function InventoryPage({
     ingredients,
     purchases,
     movements,
+    suppliers,
+    wasteReasons,
 }: Props) {
     const errors = usePage().props.errors as Record<string, string>;
     const [tab, setTab] = useState<
@@ -137,10 +141,13 @@ export default function InventoryPage({
     const [waste, setWaste] = useState<{
         ing: Ingredient;
         qty: number | '';
+        unit: string;
+        reason: number | '';
         note: string;
     } | null>(null);
     const [buy, setBuy] = useState<{
         supplier: string;
+        supplier_id: number | '';
         purchased_on: string;
         note: string;
         items: PLine[];
@@ -168,6 +175,7 @@ export default function InventoryPage({
                                 onClick={() =>
                                     setBuy({
                                         supplier: '',
+                                        supplier_id: '',
                                         purchased_on: new Date()
                                             .toISOString()
                                             .slice(0, 10),
@@ -332,6 +340,8 @@ export default function InventoryPage({
                                             setWaste({
                                                 ing: i,
                                                 qty: '',
+                                                unit: i.unit,
+                                                reason: '',
                                                 note: '',
                                             })
                                         }
@@ -902,7 +912,7 @@ export default function InventoryPage({
                     onClose={() => setWaste(null)}
                     title={`Buang ${waste.ing.name}`}
                 >
-                    <Field label={`Jumlah (${waste.ing.unit})`}>
+                    <Field label="Jumlah">
                         <Input
                             className="h-11"
                             type="number"
@@ -921,11 +931,44 @@ export default function InventoryPage({
                             }
                         />
                     </Field>
-                    <Field label="Alasan (wajib)">
+                    <Field label="Satuan">
+                        <Select
+                            value={waste.unit}
+                            onChange={(e) =>
+                                setWaste({ ...waste, unit: e.target.value })
+                            }
+                        >
+                            {waste.ing.choices.map((c) => (
+                                <option key={c.name} value={c.name}>
+                                    {c.name}
+                                </option>
+                            ))}
+                        </Select>
+                    </Field>
+                    <Field label="Alasan">
+                        <Select
+                            value={waste.reason}
+                            onChange={(e) =>
+                                setWaste({
+                                    ...waste,
+                                    reason: e.target.value
+                                        ? Number(e.target.value)
+                                        : '',
+                                })
+                            }
+                        >
+                            <option value="">Pilih alasan…</option>
+                            {wasteReasons.map((r) => (
+                                <option key={r.id} value={r.id}>
+                                    {r.name}
+                                </option>
+                            ))}
+                        </Select>
+                    </Field>
+                    <Field label="Catatan (opsional)">
                         <Input
                             className="h-11"
                             value={waste.note}
-                            placeholder="tumpah, basi, rusak"
                             onChange={(e) =>
                                 setWaste({ ...waste, note: e.target.value })
                             }
@@ -933,11 +976,16 @@ export default function InventoryPage({
                     </Field>
                     <Button
                         className="h-12"
-                        disabled={waste.qty === '' || waste.note.trim() === ''}
+                        disabled={waste.qty === '' || waste.reason === ''}
                         onClick={() =>
                             router.post(
                                 `/admin/inventory/ingredients/${waste.ing.id}/waste`,
-                                { qty: waste.qty, note: waste.note },
+                                {
+                                    qty: waste.qty,
+                                    unit: waste.unit,
+                                    reason_id: waste.reason,
+                                    note: waste.note || null,
+                                },
                                 { ...opts, onSuccess: () => setWaste(null) },
                             )
                         }
@@ -970,13 +1018,24 @@ export default function InventoryPage({
                             />
                         </Field>
                         <Field label="Pemasok">
-                            <Input
-                                className="h-11"
-                                value={buy.supplier}
+                            <Select
+                                value={buy.supplier_id}
                                 onChange={(e) =>
-                                    setBuy({ ...buy, supplier: e.target.value })
+                                    setBuy({
+                                        ...buy,
+                                        supplier_id: e.target.value
+                                            ? Number(e.target.value)
+                                            : '',
+                                    })
                                 }
-                            />
+                            >
+                                <option value="">Tanpa pemasok</option>
+                                {suppliers.map((s) => (
+                                    <option key={s.id} value={s.id}>
+                                        {s.name}
+                                    </option>
+                                ))}
+                            </Select>
                         </Field>
                     </div>
                     <PurchaseLines
@@ -992,7 +1051,7 @@ export default function InventoryPage({
                                 '/admin/inventory/purchases',
                                 {
                                     purchased_on: buy.purchased_on,
-                                    supplier: buy.supplier || null,
+                                    supplier_id: buy.supplier_id || null,
                                     note: buy.note || null,
                                     items: purchaseItems(buy.items),
                                 },

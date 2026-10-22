@@ -14,6 +14,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $note
  * @property int $total
  * @property int|null $user_id
+ * @property int|null $supplier_id
  * @property string $status
  * @property int|null $reviewed_by
  * @property Carbon|null $reviewed_at

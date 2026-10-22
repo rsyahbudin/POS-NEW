@@ -7,6 +7,7 @@ use App\Domain\Inventory\Models\Ingredient;
 use App\Domain\Inventory\Models\ModifierIngredient;
 use App\Domain\Inventory\Models\RecipeLine;
 use App\Domain\Inventory\Models\StockMovement;
+use App\Domain\Inventory\Models\WasteReason;
 use App\Domain\Ordering\Actions\VoidItemAction;
 use App\Domain\Ordering\Actions\VoidOrderAction;
 use App\Domain\Ordering\Exceptions\OrderException;
@@ -141,9 +142,9 @@ it('manages ingredients, purchases, counts and waste from the admin pages, for p
     expect($milk->fresh()->stock)->toBe(3000.0)->and(round($milk->fresh()->avg_cost, 2))->toBe(23.33);
 
     $this->actingAs($manager)->post("/admin/inventory/ingredients/{$milk->id}/count", ['counted' => 2900])->assertSessionHasNoErrors();
-    $this->actingAs($manager)->post("/admin/inventory/ingredients/{$milk->id}/waste", ['qty' => 100, 'note' => 'basi'])->assertSessionHasNoErrors();
+    $this->actingAs($manager)->post("/admin/inventory/ingredients/{$milk->id}/waste", ['qty' => 100, 'reason_id' => WasteReason::query()->value('id'), 'note' => 'basi'])->assertSessionHasNoErrors();
     expect($milk->fresh()->stock)->toBe(2800.0);
-    $this->actingAs($manager)->post("/admin/inventory/ingredients/{$milk->id}/waste", ['qty' => 1])->assertSessionHasErrors('note');
+    $this->actingAs($manager)->post("/admin/inventory/ingredients/{$milk->id}/waste", ['qty' => 1])->assertSessionHasErrors('reason_id');
 
     $this->actingAs($manager)->get('/admin/inventory')->assertInertia(fn ($p) => $p->component('admin/inventory')->has('ingredients', 1)->has('movements', 4)->where('enabled', true));
     $this->actingAs(userWithRole('cashier'))->get('/admin/inventory')->assertForbidden();

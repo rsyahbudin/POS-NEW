@@ -15,6 +15,8 @@ import {
     Receipt,
     Settings,
     Timer,
+    Trash2,
+    Truck,
     ShieldCheck,
     ShoppingBasket,
     Users,
@@ -86,6 +88,12 @@ const top: Item[] = [
         permission: 'record-purchase',
     },
     {
+        title: 'Bahan Terbuang',
+        href: '/stock/waste',
+        icon: Trash2,
+        permission: 'record-waste',
+    },
+    {
         title: 'Stasiun Cetak',
         href: '/print-station',
         icon: Printer,
@@ -115,6 +123,12 @@ const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 href: '/admin/recipes',
                 icon: BookOpenCheck,
                 permission: 'manage-inventory',
+            },
+            {
+                title: 'Pemasok',
+                href: '/admin/suppliers',
+                icon: Truck,
+                permission: 'manage-suppliers',
             },
             {
                 title: 'Aset & Alat',
@@ -152,6 +166,12 @@ const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 icon: Timer,
                 permission: 'view-kitchen-report',
                 feature: 'kds',
+            },
+            {
+                title: 'Laporan Waste',
+                href: '/admin/reports/waste',
+                icon: Trash2,
+                permission: 'view-waste-report',
             },
             {
                 title: 'Jejak Aktivitas',

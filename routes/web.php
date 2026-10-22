@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\RecipeController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Asset\AssetController;
 use App\Http\Controllers\Auth\PinLoginController;
@@ -26,6 +27,7 @@ use App\Http\Controllers\Qr\QrMenuController;
 use App\Http\Controllers\Receipt\ReceiptController;
 use App\Http\Controllers\Shift\ShiftController;
 use App\Http\Controllers\Stock\StockController;
+use App\Http\Controllers\Stock\WasteController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -140,6 +142,15 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::post('apply', [ImportController::class, 'apply'])->name('apply');
     });
 
+    // Waste (staff)
+    Route::middleware('permission:record-waste')->prefix('stock/waste')->name('stock.waste.')->group(function () {
+        Route::get('/', [WasteController::class, 'index'])->name('index');
+        Route::post('ingredient', [WasteController::class, 'ingredient'])->name('ingredient');
+        Route::post('product', [WasteController::class, 'product'])->name('product');
+        Route::post('reasons', [WasteController::class, 'saveReason'])->name('reasons.store');
+        Route::put('reasons/{reason}', [WasteController::class, 'saveReason'])->name('reasons.update');
+    });
+
     // Shopping for ingredients (staff)
     Route::middleware('permission:record-purchase')->prefix('stock/purchase')->name('stock.')->group(function () {
         Route::get('/', [StockController::class, 'purchase'])->name('purchase');
@@ -180,6 +191,18 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::post('modifier-groups', [MenuController::class, 'saveModifierGroup'])->name('modifier-groups.store');
             Route::put('modifier-groups/{group}', [MenuController::class, 'saveModifierGroup'])->name('modifier-groups.update');
             Route::delete('modifier-groups/{group}', [MenuController::class, 'deleteModifierGroup'])->name('modifier-groups.destroy');
+        });
+
+        Route::middleware('permission:manage-suppliers')->group(function () {
+            Route::get('suppliers', [SupplierController::class, 'index'])->name('suppliers');
+            Route::get('suppliers/{supplier}', [SupplierController::class, 'show'])->name('suppliers.show');
+            Route::post('suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
+            Route::put('suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
+        });
+
+        Route::middleware('permission:view-waste-report')->group(function () {
+            Route::get('reports/waste', [ReportController::class, 'waste'])->name('reports.waste');
+            Route::get('reports/waste/export', [ReportController::class, 'wasteExport'])->name('reports.waste.export');
         });
 
         Route::middleware('permission:manage-inventory')->group(function () {

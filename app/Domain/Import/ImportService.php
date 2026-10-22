@@ -8,6 +8,7 @@ use App\Domain\Import\Importers\IngredientsImporter;
 use App\Domain\Import\Importers\ProductsImporter;
 use App\Domain\Import\Importers\PurchaseImporter;
 use App\Domain\Import\Importers\RecipesImporter;
+use App\Domain\Import\Importers\SuppliersImporter;
 use App\Domain\Ordering\Exceptions\OrderException;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -17,7 +18,7 @@ class ImportService
     /** @return array<string, Importer> */
     public function importers(): array
     {
-        $all = [new IngredientsImporter, new PurchaseImporter, new CountImporter, new RecipesImporter, new ProductsImporter, new AssetsImporter];
+        $all = [new IngredientsImporter, new PurchaseImporter, new CountImporter, new RecipesImporter, new ProductsImporter, new AssetsImporter, new SuppliersImporter];
 
         return collect($all)->keyBy(fn (Importer $i) => $i->key())->all();
     }

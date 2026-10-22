@@ -7,6 +7,7 @@ use App\Domain\Inventory\Models\ModifierIngredient;
 use App\Domain\Inventory\Models\Purchase;
 use App\Domain\Inventory\Models\RecipeLine;
 use App\Domain\Inventory\Models\StockMovement;
+use App\Domain\Inventory\Models\Supplier;
 use App\Domain\Notification\Notifier;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Ordering\Models\OrderItem;
@@ -153,7 +154,7 @@ class InventoryService
     /**
      * Goods received, applied at once (managers). Raises stock and re-averages the cost.
      *
-     * @param  array{supplier?: string|null, purchased_on: string, note?: string|null, items: list<array{ingredient_id: int, qty: float|int, unit_cost: float|int}>}  $data
+     * @param  array{supplier?: string|null, supplier_id?: int|null, purchased_on: string, note?: string|null, items: list<array{ingredient_id: int, qty: float|int, unit_cost: float|int}>}  $data
      */
     public function receive(int $outletId, array $data, User $user): Purchase
     {
@@ -169,7 +170,7 @@ class InventoryService
      * Staff shopping: applied at once when the user manages inventory or approval is off, otherwise saved as
      * "pending" and applied only after a manager approves. Stock and costs do not move before that.
      *
-     * @param  array{supplier?: string|null, purchased_on: string, note?: string|null, items: list<array{ingredient_id: int, qty: float|int, unit_cost: float|int}>}  $data
+     * @param  array{supplier?: string|null, supplier_id?: int|null, purchased_on: string, note?: string|null, items: list<array{ingredient_id: int, qty: float|int, unit_cost: float|int}>}  $data
      */
     public function submitPurchase(int $outletId, array $data, User $user): Purchase
     {
@@ -236,14 +237,21 @@ class InventoryService
     }
 
     /**
-     * @param  array{supplier?: string|null, purchased_on: string, note?: string|null, items: list<array{ingredient_id: int, qty: float|int, unit_cost: float|int}>}  $data
+     * @param  array{supplier?: string|null, supplier_id?: int|null, purchased_on: string, note?: string|null, items: list<array{ingredient_id: int, qty: float|int, unit_cost: float|int}>}  $data
      */
     private function record(int $outletId, array $data, User $user): Purchase
     {
         $purchase = Purchase::create([
-            'outlet_id' => $outletId, 'supplier' => $data['supplier'] ?? null, 'purchased_on' => $data['purchased_on'],
+            'outlet_id' => $outletId, 'supplier' => $data['supplier'] ?? null, 'supplier_id' => $data['supplier_id'] ?? null, 'purchased_on' => $data['purchased_on'],
             'note' => $data['note'] ?? null, 'user_id' => $user->id, 'status' => 'pending',
         ]);
+        if (! empty($data['supplier_id'])) {
+            $name = Supplier::query()->where('outlet_id', $outletId)->whereKey($data['supplier_id'])->value('name');
+            if ($name === null) {
+                throw new OrderException('Pemasok tidak ditemukan.');
+            }
+            $purchase->update(['supplier' => $name]);
+        }
         $sum = 0;
         foreach ($data['items'] as $row) {
             Ingredient::query()->where('outlet_id', $outletId)->findOrFail($row['ingredient_id']);
@@ -256,12 +264,29 @@ class InventoryService
         return $purchase;
     }
 
+    /** A price that jumped past the limit (Pengaturan > Stok & HPP) tells the managers, so a supplier raising prices is noticed. */
+    private function priceAlert(Ingredient $ing, float $previous, float $now, ?string $supplier): void
+    {
+        $limit = (int) $this->settings->get('inventory.price_alert_percent', 15);
+        if ($limit <= 0 || $previous <= 0 || $now < $previous * (1 + $limit / 100)) {
+            return;
+        }
+        $pct = (int) round(($now / $previous - 1) * 100);
+        $fmt = fn (float $v) => 'Rp '.rtrim(rtrim(number_format($v, 2, ',', '.'), '0'), ',');
+        Notifier::later(fn (Notifier $n) => $n->notify(
+            $ing->outlet_id, 'price.rise', "Harga {$ing->name} naik {$pct}%", "{$fmt($previous)} → {$fmt($now)} per {$ing->unit}".($supplier ? " · {$supplier}" : ''),
+            '/admin/suppliers', 'warning', ['manage-inventory', 'manage-suppliers'],
+        ));
+    }
+
     /** Puts a recorded purchase into stock and re-averages each ingredient's cost. */
     private function apply(Purchase $purchase, User $reviewer): void
     {
         foreach ($purchase->items()->get() as $item) {
             $ing = Ingredient::query()->lockForUpdate()->findOrFail($item->ingredient_id);
+            $previous = $ing->avg_cost;
             $avg = $ing->stock <= 0 ? $item->unit_cost : (($ing->stock * $ing->avg_cost) + ($item->qty * $item->unit_cost)) / ($ing->stock + $item->qty);
+            $this->priceAlert($ing, $previous, $item->unit_cost, $purchase->supplier);
             $ing->update(['stock' => $ing->stock + $item->qty, 'avg_cost' => $avg]);
             StockMovement::create([
                 'outlet_id' => $purchase->outlet_id, 'ingredient_id' => $ing->id, 'type' => 'purchase', 'qty' => $item->qty,

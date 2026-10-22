@@ -9,7 +9,12 @@ import {
     readyLines,
 } from '@/components/pos/purchase-lines';
 import type { PIngredient, PLine } from '@/components/pos/purchase-lines';
-import { Field, PageHeader, ResponsiveTable } from '@/components/pos/ui';
+import {
+    Field,
+    PageHeader,
+    ResponsiveTable,
+    Select,
+} from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { rupiah } from '@/lib/format';
@@ -38,14 +43,16 @@ export default function PurchasePage({
     needsApproval,
     ingredients,
     history,
+    suppliers,
 }: {
     needsApproval: boolean;
     ingredients: PIngredient[];
     history: History[];
+    suppliers: { id: number; name: string }[];
 }) {
     const errors = usePage().props.errors as Record<string, string>;
     const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-    const [supplier, setSupplier] = useState('');
+    const [supplier, setSupplier] = useState<number | ''>('');
     const [lines, setLines] = useState<PLine[]>([blankLine()]);
     const [importing, setImporting] = useState(false);
     const ready = readyLines(lines);
@@ -54,7 +61,7 @@ export default function PurchasePage({
             '/stock/purchase',
             {
                 purchased_on: date,
-                supplier: supplier || null,
+                supplier_id: supplier || null,
                 items: purchaseItems(lines),
             },
             { preserveScroll: true, onSuccess: () => setLines([blankLine()]) },
@@ -106,13 +113,24 @@ export default function PurchasePage({
                             onChange={(e) => setDate(e.target.value)}
                         />
                     </Field>
-                    <Field label="Toko / pemasok">
-                        <Input
-                            className="h-11"
+                    <Field label="Pemasok">
+                        <Select
                             value={supplier}
-                            placeholder="mis. Pasar, Toko Maju"
-                            onChange={(e) => setSupplier(e.target.value)}
-                        />
+                            onChange={(e) =>
+                                setSupplier(
+                                    e.target.value
+                                        ? Number(e.target.value)
+                                        : '',
+                                )
+                            }
+                        >
+                            <option value="">Tanpa pemasok</option>
+                            {suppliers.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                    {s.name}
+                                </option>
+                            ))}
+                        </Select>
                     </Field>
                 </div>
 

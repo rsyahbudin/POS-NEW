@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Reporting\KitchenReports;
 use App\Domain\Reporting\MarginReports;
 use App\Domain\Reporting\SalesReports;
+use App\Domain\Reporting\WasteReports;
 use App\Domain\Settings\SettingsRepository;
 use App\Exports\ReportSheet;
 use App\Http\Controllers\Controller;
@@ -119,6 +120,38 @@ class ReportController extends Controller
         ]);
     }
 
+    public function waste(Request $request, WasteReports $waste): Response
+    {
+        [$from, $to] = $this->params($request);
+        $dimension = (string) $request->input('dimension', 'item');
+        abort_unless(in_array($dimension, WasteReports::DIMENSIONS, true), 422);
+
+        return Inertia::render('admin/reports/waste', [
+            'filters' => ['from' => $from, 'to' => $to, 'dimension' => $dimension],
+            'summary' => $waste->summary($from, $to),
+            'rows' => $waste->by($dimension, $from, $to),
+            'entries' => $waste->entries($from, $to),
+            'dimensions' => WasteReports::DIMENSIONS,
+        ]);
+    }
+
+    public function wasteExport(Request $request, WasteReports $waste): \Symfony\Component\HttpFoundation\Response
+    {
+        [$from, $to] = $this->params($request);
+        $dimension = (string) $request->input('dimension', 'item');
+        abort_unless(in_array($dimension, WasteReports::DIMENSIONS, true), 422);
+        $labels = ['item' => 'Item', 'reason' => 'Alasan', 'person' => 'Pencatat', 'day' => 'Hari'];
+        $sub = 'Periode '.$this->rangeLabel($from, $to);
+        $s = $waste->summary($from, $to);
+
+        return ReportFile::download((string) $request->input('format', 'xlsx'), "Waste {$labels[$dimension]} {$from} {$to}", [
+            new ReportSheet("Waste per {$labels[$dimension]}", $sub, [$labels[$dimension], 'Kejadian', 'Nilai (Rp)', '% dari total'], array_map(fn ($r) => [$r->label, $r->entries, $r->cost, $r->share_pct], $waste->by($dimension, $from, $to))),
+            new ReportSheet('Rincian', $sub, ['Waktu', 'Item', 'Jumlah', 'Satuan', 'Alasan', 'Catatan', 'Nilai (Rp)', 'Pencatat'],
+                array_map(fn ($e) => [$e['at'], $e['label'], $e['qty'], $e['unit'], $e['reason'], $e['note'] ?? '', $e['cost'], $e['user'] ?? '-'], $waste->entries($from, $to, 5000))),
+            new ReportSheet('Ringkasan', $sub, ['Keterangan', 'Nilai'], [['Total nilai terbuang', $s['cost']], ['Jumlah kejadian', $s['entries']], ['Item terbanyak', $s['top_item'] ?? '-'], ['Alasan terbanyak', $s['top_reason'] ?? '-']]),
+        ]);
+    }
+
     public function adjustments(Request $request): Response
     {
         [$from, $to] = $this->params($request);
@@ -180,7 +213,7 @@ class ReportController extends Controller
     /** @return array{0: string, 1: string, 2: string} */
     private function params(Request $request): array
     {
-        $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date', 'dimension' => 'nullable|in:'.implode(',', array_unique([...SalesReports::DIMENSIONS, ...KitchenReports::DIMENSIONS, ...MarginReports::DIMENSIONS]))]);
+        $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date', 'dimension' => 'nullable|in:'.implode(',', array_unique([...SalesReports::DIMENSIONS, ...KitchenReports::DIMENSIONS, ...MarginReports::DIMENSIONS, ...WasteReports::DIMENSIONS]))]);
 
         return [
             $request->input('from', CarbonImmutable::parse(BusinessDate::for())->subDays(29)->toDateString()),

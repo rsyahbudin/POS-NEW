@@ -7,6 +7,7 @@ use App\Domain\Import\Importer;
 use App\Domain\Import\ImportNumber;
 use App\Domain\Inventory\InventoryService;
 use App\Domain\Inventory\Models\Ingredient;
+use App\Domain\Inventory\Models\Supplier;
 use App\Domain\Inventory\Units;
 use App\Models\User;
 use App\Support\Audit;
@@ -54,7 +55,7 @@ class PurchaseImporter extends Importer
     {
         return [
             ['key' => 'purchased_on', 'label' => 'Tanggal pembelian', 'type' => 'date', 'default' => now()->toDateString()],
-            ['key' => 'supplier', 'label' => 'Pemasok', 'type' => 'text'],
+            ['key' => 'supplier', 'label' => 'Pemasok (nama)', 'type' => 'text'],
         ];
     }
 
@@ -155,8 +156,13 @@ class PurchaseImporter extends Importer
             $items[] = ['ingredient_id' => $ing->id, 'qty' => $rec['qty'], 'unit_cost' => $rec['unit_cost']];
         }
         $date = (string) ($ctx->extra['purchased_on'] ?? '') ?: BusinessDate::for();
+        $supplierName = trim((string) ($ctx->extra['supplier'] ?? ''));
+        $supplier = $supplierName === '' ? null : Supplier::query()->where('outlet_id', $ctx->outletId)->whereRaw('lower(name) = ?', [mb_strtolower($supplierName)])->first();
+        if ($supplier === null && $supplierName !== '' && $ctx->user->can('manage-suppliers')) {
+            $supplier = Supplier::create(['outlet_id' => $ctx->outletId, 'name' => $supplierName]);
+        }
         $purchase = app(InventoryService::class)->submitPurchase($ctx->outletId, [
-            'supplier' => ($ctx->extra['supplier'] ?? null) ?: null, 'purchased_on' => $date, 'note' => 'Impor Excel', 'items' => $items,
+            'supplier' => $supplierName !== '' ? $supplierName : null, 'supplier_id' => $supplier?->id, 'purchased_on' => $date, 'note' => 'Impor Excel', 'items' => $items,
         ], $ctx->user);
         Audit::log('import.purchase', $purchase, ['items' => count($items), 'new_ingredients' => $created], $ctx->user);
 

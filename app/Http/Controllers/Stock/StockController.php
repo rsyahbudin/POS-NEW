@@ -6,6 +6,7 @@ use App\Domain\Inventory\InventoryService;
 use App\Domain\Inventory\Models\Ingredient;
 use App\Domain\Inventory\Models\Purchase;
 use App\Domain\Inventory\Models\StockCount;
+use App\Domain\Inventory\Models\Supplier;
 use App\Domain\Inventory\StockCountService;
 use App\Domain\Inventory\Units;
 use App\Domain\Settings\OutletContext;
@@ -62,6 +63,7 @@ class StockController extends Controller
         $id = $this->outlet->id();
 
         return Inertia::render('stock/purchase', [
+            'suppliers' => Supplier::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('name')->get(['id', 'name'])->all(),
             'needsApproval' => ! $user->can('manage-inventory') && (bool) $this->settings->get('inventory.purchase_needs_approval', true),
             'ingredients' => Ingredient::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('name')->get()->map(fn (Ingredient $i) => [
                 'id' => $i->id, 'name' => $i->name, 'unit' => $i->unit, 'choices' => Units::choices($i),
@@ -77,7 +79,7 @@ class StockController extends Controller
     {
         $outletId = $this->outlet->id();
         $data = $request->validate([
-            'supplier' => 'nullable|string|max:80', 'purchased_on' => 'required|date', 'note' => 'nullable|string|max:200',
+            'supplier' => 'nullable|string|max:80', 'supplier_id' => ['nullable', 'integer', Rule::exists('suppliers', 'id')->where('outlet_id', $outletId)], 'purchased_on' => 'required|date', 'note' => 'nullable|string|max:200',
             'items' => 'required|array|min:1|max:60',
             'items.*.ingredient_id' => ['required', 'integer', Rule::exists('ingredients', 'id')->where('outlet_id', $outletId)],
             'items.*.qty' => 'required|numeric|gt:0', 'items.*.unit' => 'nullable|string|max:20',

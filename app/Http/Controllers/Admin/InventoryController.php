@@ -9,8 +9,11 @@ use App\Domain\Inventory\Models\Purchase;
 use App\Domain\Inventory\Models\RecipeLine;
 use App\Domain\Inventory\Models\StockCount;
 use App\Domain\Inventory\Models\StockMovement;
+use App\Domain\Inventory\Models\Supplier;
+use App\Domain\Inventory\Models\WasteReason;
 use App\Domain\Inventory\StockCountService;
 use App\Domain\Inventory\Units;
+use App\Domain\Inventory\WasteService;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Settings\OutletContext;
 use App\Domain\Settings\SettingsRepository;
@@ -35,6 +38,8 @@ class InventoryController extends Controller
 
         return Inertia::render('admin/inventory', [
             'enabled' => $this->inventory->enabled(),
+            'suppliers' => Supplier::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('name')->get(['id', 'name'])->all(),
+            'wasteReasons' => WasteReason::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('sort')->orderBy('id')->get(['id', 'name'])->all(),
             'baseUnits' => collect(Units::BASE)->map(fn (string $label, string $key) => ['key' => $key, 'label' => $label])->values()->all(),
             'ingredients' => Ingredient::query()->where('outlet_id', $id)->with('packs')->orderBy('name')->get()->map(fn (Ingredient $i) => [
                 'id' => $i->id, 'name' => $i->name, 'unit' => $i->unit, 'stock' => $i->stock, 'avg_cost' => round($i->avg_cost, 2),
@@ -141,7 +146,7 @@ class InventoryController extends Controller
     {
         $outletId = $this->outlet->id();
         $data = $request->validate([
-            'supplier' => 'nullable|string|max:80', 'purchased_on' => 'required|date', 'note' => 'nullable|string|max:200',
+            'supplier' => 'nullable|string|max:80', 'supplier_id' => ['nullable', 'integer', Rule::exists('suppliers', 'id')->where('outlet_id', $outletId)], 'purchased_on' => 'required|date', 'note' => 'nullable|string|max:200',
             'items' => 'required|array|min:1|max:60',
             'items.*.ingredient_id' => ['required', 'integer', Rule::exists('ingredients', 'id')->where('outlet_id', $outletId)],
             'items.*.qty' => 'required|numeric|gt:0', 'items.*.unit' => 'nullable|string|max:20',
@@ -199,8 +204,8 @@ class InventoryController extends Controller
     public function waste(Request $request, Ingredient $ingredient): RedirectResponse
     {
         abort_unless($ingredient->outlet_id === $this->outlet->id(), 404);
-        $data = $request->validate(['qty' => 'required|numeric|gt:0', 'note' => 'required|string|max:200']);
-        $this->inventory->waste($ingredient, (float) $data['qty'], $this->actor($request), $data['note']);
+        $data = $request->validate(['qty' => 'required|numeric|gt:0', 'unit' => 'nullable|string|max:20', 'reason_id' => 'required|integer', 'note' => 'nullable|string|max:200']);
+        app(WasteService::class)->ingredient($ingredient, (float) $data['qty'], $data['unit'] ?? null, (int) $data['reason_id'], $data['note'] ?? null, $this->actor($request));
 
         return back()->with('success', 'Bahan terbuang dicatat.');
     }

@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  * @property float $avg_cost
  * @property float $min_stock
  * @property bool $is_active
+ * @property int|null $preferred_supplier_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */

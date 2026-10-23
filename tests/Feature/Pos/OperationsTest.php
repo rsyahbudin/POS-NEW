@@ -91,11 +91,9 @@ it('lets the owner take payments through the cashier\'s open shift', function ()
     expect(app(ShiftCash::class)->summarize($shift->fresh())['cash_sales'])->toBe(44000);
 });
 
-it('still requires an own shift for cashiers, and when sharing is switched off', function () {
-    openShiftFor(userWithRole('manager'), 0);   // manager's shift, cashier has none
-    expect(fn () => pay(placeOrder(), userWithRole('cashier')))->toThrow(OrderException::class, 'shift');
+it('needs an open shift for everybody, and an own one for everybody once sharing is switched off', function () {
+    expect(fn () => pay(placeOrder(), userWithRole('cashier')))->toThrow(OrderException::class, 'shift'); // nobody opened a shift
 
-    Shift::query()->delete();
     $cashier = userWithRole('cashier');
     openShiftFor($cashier, 0);
     setting('shift.shared_for_managers', false);

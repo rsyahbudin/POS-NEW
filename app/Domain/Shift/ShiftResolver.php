@@ -10,10 +10,9 @@ use App\Models\User;
 /**
  * Which open shift a user's payments are booked into.
  *
- * Normally their own. In a small cafe the cashier opens the shift and the
- * owner/manager also takes payments from another device: if the setting allows
- * it, users who may manage any shift use the outlet's open shift (the most
- * recent one when several are open). `payments.received_by` still records who took the money.
+ * Normally their own. A small cafe has one drawer: whoever opens the shift (owner, manager or cashier), everyone else
+ * who may take payments works inside it. If the setting allows it, a user without a shift of their own uses the
+ * outlet's open shift (the most recent one when several are open). `payments.received_by` still records who took the money.
  */
 class ShiftResolver
 {
@@ -31,6 +30,7 @@ class ShiftResolver
 
     public function canShare(User $user): bool
     {
-        return (bool) $this->settings->get('shift.shared_for_managers', true) && $user->can('manage-shifts-any');
+        return (bool) $this->settings->get('shift.shared_for_managers', true)
+            && ($user->can('manage-shifts-any') || $user->can('receive-payment'));
     }
 }

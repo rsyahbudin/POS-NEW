@@ -183,6 +183,7 @@ Modul 4.1–4.15 adalah inti POS; 4.16–4.27 ditambahkan setelah MVP. Setiap kr
 **Story:** Sebagai manager, saya ingin setiap shift ditutup dengan hitungan kas fisik agar selisih langsung ketahuan.
 
 - Pembayaran butuh shift terbuka. Buka shift: modal awal terisi dari uang yang ditinggal shift sebelumnya, dikonfirmasi atau dikoreksi.
+- Satu laci kas = satu shift bersama (opsi di Pengaturan › Operasional, default aktif): kasir, manager, atau owner yang belum punya shift sendiri memakai shift outlet yang sedang terbuka, siapa pun yang membukanya; penerima tiap pembayaran tetap tercatat atas nama yang login. Opsi dimatikan bila ingin selisih kas per orang. Waiter dan dapur tidak diminta membuka shift.
 - Shift dibuka dari dalam layar kasir: kasir yang masuk tanpa shift terbuka diminta lewat dialog (sekali per sesi), dan banner di kasir membuka dialog yang sama. Menu Shift tidak ada di sidebar kasir; kas masuk/keluar dan tutup shift dibuka dari tombol shift di layar kasir. Manager dan owner punya menu "Shift & Kas" untuk melihat dan menutup shift orang lain.
 - Selama shift: kas masuk/keluar non-penjualan dengan alasan.
 - Tutup shift: uang fisik per pecahan; sistem menampilkan kas seharusnya, kas fisik, selisih; uang yang ditinggal dan yang disetor dicatat.

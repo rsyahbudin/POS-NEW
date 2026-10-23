@@ -3,7 +3,6 @@ import {
     Bell,
     ChevronUp,
     Clock,
-    Settings2,
     Bike,
     ShoppingBag,
     UtensilsCrossed,
@@ -790,20 +789,22 @@ export default function PosPage(props: Props) {
                     <Link href="/" className="shrink-0 text-base font-semibold">
                         POS
                     </Link>
-                    <span
-                        className={cn(
-                            'min-w-0 truncate rounded-md px-2 py-0.5 text-xs',
-                            props.shift
-                                ? 'bg-emerald-100 text-emerald-900'
-                                : 'bg-amber-100 text-amber-900',
-                        )}
-                    >
-                        {props.shift
-                            ? props.shift.mine || !props.shift.owner
-                                ? t('Shift terbuka')
-                                : `${t('Shift terbuka')} · ${props.shift.owner}`
-                            : t('Shift belum dibuka')}
-                    </span>
+                    {(props.shift || can.pay) && (
+                        <span
+                            className={cn(
+                                'min-w-0 truncate rounded-md px-2 py-0.5 text-xs',
+                                props.shift
+                                    ? 'bg-emerald-100 text-emerald-900'
+                                    : 'bg-amber-100 text-amber-900',
+                            )}
+                        >
+                            {props.shift
+                                ? props.shift.mine || !props.shift.owner
+                                    ? t('Shift terbuka')
+                                    : `${t('Shift terbuka')} · ${props.shift.owner}`
+                                : t('Shift belum dibuka')}
+                        </span>
+                    )}
                     {!online && (
                         <span
                             role="status"
@@ -867,16 +868,6 @@ export default function PosPage(props: Props) {
                             {t('Tandai Habis')}
                         </Button>
                         <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="size-11"
-                            aria-label={t('Pengaturan printer')}
-                            onClick={() => setDialog({ kind: 'printer' })}
-                        >
-                            <Settings2 />
-                        </Button>
-                        <Button
                             asChild
                             variant="outline"
                             size="sm"
@@ -895,6 +886,7 @@ export default function PosPage(props: Props) {
                         </Button>
                         <AccountMenu
                             onHistory={() => setDialog({ kind: 'history' })}
+                            onPrinter={() => setDialog({ kind: 'printer' })}
                         />
                     </div>
                 </header>
@@ -932,7 +924,7 @@ export default function PosPage(props: Props) {
                     </div>
                 )}
 
-                {!props.shift && (
+                {!props.shift && can.pay && (
                     <div
                         role="alert"
                         className="flex items-center justify-between gap-2 bg-amber-100 px-3 py-2 text-sm text-amber-950"

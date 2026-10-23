@@ -1,5 +1,5 @@
 import { Link, router, usePage } from '@inertiajs/react';
-import { History, LogOut } from 'lucide-react';
+import { History, LogOut, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -14,7 +14,13 @@ import { t } from '@/lang';
 import { logout } from '@/routes';
 
 /** Who is signed in, plus the way out. The POS, kitchen and shift screens have no sidebar, so this is their account menu. */
-export function AccountMenu({ onHistory }: { onHistory?: () => void }) {
+export function AccountMenu({
+    onHistory,
+    onPrinter,
+}: {
+    onHistory?: () => void;
+    onPrinter?: () => void;
+}) {
     const user = usePage().props.auth.user;
     const initials = useInitials();
 
@@ -52,6 +58,15 @@ export function AccountMenu({ onHistory }: { onHistory?: () => void }) {
                     >
                         <History className="mr-2" />
                         {t('Riwayat transaksi')}
+                    </DropdownMenuItem>
+                )}
+                {onPrinter && (
+                    <DropdownMenuItem
+                        className="h-11 text-base"
+                        onSelect={onPrinter}
+                    >
+                        <Printer className="mr-2" />
+                        {t('Pengaturan printer')}
                     </DropdownMenuItem>
                 )}
                 <DropdownMenuItem asChild className="h-11 text-base">

@@ -1,10 +1,12 @@
 <?php
 
+use App\Domain\Notification\DailyReportSender;
 use App\Domain\Notification\Jobs\DeliverMessageJob;
 use App\Domain\Notification\Notifier;
 use App\Domain\Notification\ReportDelivery;
 use App\Domain\Settings\Models\Outlet;
 use App\Domain\Settings\SettingsRepository;
+use App\Domain\Shift\Actions\CloseShiftAction;
 use App\Domain\Shift\ZReport;
 use App\Domain\Shift\ZReportSummary;
 use App\Support\BusinessDate;
@@ -177,4 +179,36 @@ it('emails the daily report as a designed message with a plain-text fallback', f
 
     expect($message->getHtmlBody())->toContain('Penjualan bersih')->toContain('Rp44.000')->toContain('Menu terlaris')->toContain('Penjualan per jam')->toContain('7 hari terakhir')->toContain('Per kasir')->toContain('/admin/reports/sales?from='.$date)
         ->and($message->getTextBody())->toContain('Omzet bersih')->toContain('Penjualan per jam:')->toContain('1 order');
+});
+
+it('sends the daily report as soon as the last shift closes, once, and again only when the numbers change', function () {
+    setUpChannels(true, false, false);
+    Http::fake(['*' => Http::response(['ok' => true])]);
+    $cashier = userWithRole('cashier');
+    openShiftFor($cashier, 0);
+    pay(placeOrder($cashier), $cashier);
+    $this->actingAs($cashier)->post('/shift/close', ['counted_cash' => 44000, 'cash_left' => 0, 'close_key' => 'l1'])->assertRedirect();
+
+    Http::assertSent(fn ($r) => str_contains($r->url(), 'sendMessage') && str_contains($r['text'], 'Laporan harian') && str_contains($r['text'], 'Rp44.000'));
+    Http::assertSentCount(1);
+
+    // the day closing by itself later adds nothing: same numbers
+    $this->travelTo(now()->addDay()->setTime(12, 0));
+    $this->artisan('days:auto-close')->assertSuccessful();
+    Http::assertSentCount(1);
+});
+
+it('waits for the shift that is still open, and can be switched off', function () {
+    setUpChannels(true, false, false);
+    Http::fake(['*' => Http::response(['ok' => true])]);
+    $sender = app(DailyReportSender::class);
+    setting('report.on_last_shift', false);
+    $cashier = userWithRole('cashier');
+    $shift = openShiftFor($cashier, 0);
+    pay(placeOrder($cashier), $cashier);
+    app(CloseShiftAction::class)->handle($shift, $cashier, 44000, 0, null, null, 'l2');
+    Http::assertNothingSent();
+
+    expect($sender->send(BusinessDate::for()))->toBe(['telegram'])->and($sender->send(BusinessDate::for()))->toBe([]);
+    Http::assertSentCount(1);
 });

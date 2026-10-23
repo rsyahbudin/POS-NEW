@@ -4,6 +4,7 @@ namespace App\Domain\Shift\Actions;
 
 use App\Domain\Accounting\Actions\PostJournalAction;
 use App\Domain\Accounting\SystemAccount;
+use App\Domain\Notification\Jobs\SendDailyReportJob;
 use App\Domain\Notification\Notifier;
 use App\Domain\Notification\ReportDelivery;
 use App\Domain\Ordering\Exceptions\OrderException;
@@ -86,6 +87,11 @@ class CloseShiftAction
                     $delivery->deliver('Laporan shift', $delivery->shiftText($shift->refresh()));
                 }
             });
+            // Nobody is left behind the counter: the day's report does not have to wait for the date to change.
+            if ((bool) app(SettingsRepository::class)->get('report.on_last_shift', true)
+                && ! Shift::query()->where('outlet_id', $shift->outlet_id)->whereNull('closed_at')->exists()) {
+                SendDailyReportJob::dispatch($shift->business_date->toDateString())->afterCommit();
+            }
             if ($difference !== 0) {
                 Notifier::later(fn (Notifier $n) => $n->notify(
                     $shift->outlet_id, 'shift.difference', 'Selisih kas shift '.($difference < 0 ? 'KURANG' : 'LEBIH').' Rp '.number_format(abs($difference), 0, ',', '.'),

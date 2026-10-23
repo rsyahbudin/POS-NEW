@@ -2,14 +2,13 @@
 
 namespace App\Domain\Shift\Jobs;
 
-use App\Domain\Notification\ReportDelivery;
-use App\Domain\Settings\SettingsRepository;
+use App\Domain\Notification\DailyReportSender;
 use App\Domain\Shift\Models\BusinessDay;
 use App\Domain\Shift\ZReportSummary;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
-/** Sends the daily report to every channel set up under Pengaturan > Notifikasi. */
+/** Sends the daily report to every channel set up under Pengaturan > Notifikasi once the business day is closed. */
 class SendZReportJob implements ShouldQueue
 {
     use Queueable;
@@ -18,13 +17,9 @@ class SendZReportJob implements ShouldQueue
 
     public function __construct(public int $businessDayId) {}
 
-    public function handle(SettingsRepository $settings, ReportDelivery $delivery): void
+    public function handle(DailyReportSender $sender): void
     {
-        if (! (bool) $settings->get('report.send_daily', true)) {
-            return;
-        }
-
         $day = BusinessDay::findOrFail($this->businessDayId);
-        $delivery->deliver('Laporan harian '.$day->date->format('d M Y'), $delivery->dailyText($day), null, $delivery->dailyHtml($day->date->toDateString(), ZReportSummary::fromArray($day->summary)));
+        $sender->send($day->date->toDateString(), false, ZReportSummary::fromArray($day->summary));
     }
 }

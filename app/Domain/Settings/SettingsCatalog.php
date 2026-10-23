@@ -120,6 +120,7 @@ final class SettingsCatalog
                 'title' => 'Apa yang dikirim ke HP / email',
                 'fields' => [
                     ['key' => 'report.send_daily', 'type' => 'bool', 'label' => 'Laporan harian', 'hint' => 'Ringkasan omzet, metode bayar, diskon, void, dan selisih kas, dikirim otomatis setelah hari bisnis selesai.', 'default' => true],
+                    ['key' => 'report.on_last_shift', 'type' => 'bool', 'label' => 'Kirim laporan harian saat shift terakhir ditutup', 'hint' => 'Aktif: begitu shift terakhir hari itu ditutup, laporan harian langsung dikirim tanpa menunggu tanggal bisnis berganti. Kalau setelah itu masih ada penjualan, laporan diperbarui dikirim lagi. Mati: laporan dikirim setelah hari bisnis ditutup.', 'default' => true],
                     ['key' => 'report.send_shift', 'type' => 'bool', 'label' => 'Laporan tiap shift ditutup', 'hint' => 'Rincian penjualan dan selisih kas dikirim begitu kasir menutup shift.', 'default' => false],
                     ['key' => 'notify.forward_alerts', 'type' => 'bool', 'label' => 'Teruskan peringatan penting', 'hint' => 'Stok menipis, selisih kas, shift yang lupa ditutup, dan aset rusak ikut dikirim ke saluran di bawah (selain muncul di lonceng).', 'default' => false],
                 ],

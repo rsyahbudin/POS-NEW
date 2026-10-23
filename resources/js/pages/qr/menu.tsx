@@ -479,10 +479,18 @@ export default function QrMenu({
                             className="flex h-14 items-center justify-between rounded-2xl bg-primary pr-5 pl-3 text-base font-semibold text-primary-foreground shadow-lg active:scale-[0.99]"
                         >
                             <span className="flex items-center gap-3">
-                                <span className="grid size-8 place-items-center rounded-full bg-white/20 text-sm tabular-nums">
+                                <span
+                                    aria-hidden
+                                    className="grid size-8 place-items-center rounded-full bg-white/20 text-sm tabular-nums"
+                                >
                                     {count}
                                 </span>
-                                Lihat pesanan
+                                <span className="grid text-left leading-tight">
+                                    <span>Lihat pesanan</span>
+                                    <span className="text-xs font-normal opacity-80">
+                                        {count} item
+                                    </span>
+                                </span>
                             </span>
                             <span className="tabular-nums">{rp(total)}</span>
                         </button>

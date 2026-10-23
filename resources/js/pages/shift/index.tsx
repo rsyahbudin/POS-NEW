@@ -10,6 +10,7 @@ import {
     Stat,
 } from '@/components/pos/ui';
 import { AccountMenu } from '@/components/pos/account-menu';
+import { Modal } from '@/components/pos/modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { t } from '@/lang';
@@ -65,7 +66,7 @@ type Props = {
         total: number;
         paid_by: string;
     }[];
-    can: { operate: boolean };
+    can: { operate: boolean; reopen_id: number | null };
 };
 
 export default function ShiftPage({
@@ -110,7 +111,12 @@ export default function ShiftPage({
                         operate={can.operate}
                     />
                 ) : can.operate ? (
-                    <OpenForm suggested={suggestedOpening} />
+                    <>
+                        {can.reopen_id !== null && (
+                            <ReopenCard id={can.reopen_id} />
+                        )}
+                        <OpenForm suggested={suggestedOpening} />
+                    </>
                 ) : (
                     <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
                         {t(
@@ -200,6 +206,76 @@ export default function ShiftPage({
                 )}
             </div>
         </>
+    );
+}
+
+/** Undo a close pressed by mistake: the last closed shift opens again, its cash variance and deposit entries are reversed. */
+function ReopenCard({ id }: { id: number }) {
+    const [asking, setAsking] = useState(false);
+    const [reason, setReason] = useState('');
+    const [busy, setBusy] = useState(false);
+
+    return (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+            <p className="min-w-0 flex-1">
+                <strong>{t('Salah tutup shift?')}</strong>{' '}
+                {t(
+                    'Shift terakhir bisa dibuka kembali, penutupan dan setorannya dibatalkan.',
+                )}
+            </p>
+            <Button
+                variant="outline"
+                className="h-11 bg-white"
+                onClick={() => setAsking(true)}
+            >
+                {t('Buka kembali shift')}
+            </Button>
+            <Modal
+                open={asking}
+                onClose={() => setAsking(false)}
+                title={t('Buka kembali shift terakhir?')}
+                description={t(
+                    'Hasil hitung kas, selisih, dan setoran saat menutup akan dibatalkan. Shift terbuka lagi untuk semua staf, dan tutup shift perlu diisi ulang.',
+                )}
+            >
+                <Field label={t('Alasan (opsional)')}>
+                    <Input
+                        className="h-11"
+                        value={reason}
+                        maxLength={200}
+                        onChange={(e) => setReason(e.target.value)}
+                    />
+                </Field>
+                <div className="grid grid-cols-2 gap-2">
+                    <Button
+                        variant="outline"
+                        className="h-12"
+                        onClick={() => setAsking(false)}
+                    >
+                        {t('Batal')}
+                    </Button>
+                    <Button
+                        className="h-12"
+                        disabled={busy}
+                        onClick={() => {
+                            setBusy(true);
+                            router.post(
+                                `/shift/${id}/reopen`,
+                                { reason: reason || null },
+                                {
+                                    onFinish: () => {
+                                        setBusy(false);
+                                        setAsking(false);
+                                    },
+                                },
+                            );
+                        }}
+                    >
+                        {t('Ya, buka kembali')}
+                    </Button>
+                </div>
+            </Modal>
+        </section>
     );
 }
 
@@ -498,6 +574,7 @@ function CloseForm({
     const [left, setLeft] = useState<number | ''>('');
     const [reason, setReason] = useState('');
     const [busy, setBusy] = useState(false);
+    const [confirming, setConfirming] = useState(false);
     const key = useRef(uuid());
 
     const c = typeof counted === 'number' ? counted : 0;
@@ -615,43 +692,93 @@ function CloseForm({
                     left === '' ||
                     (diff !== 0 && !reason.trim())
                 }
-                onClick={() => {
-                    if (
-                        !window.confirm(
-                            t(
-                                'Tutup shift sekarang? Kamu akan keluar dari sesi.',
-                            ),
-                        )
-                    ) {
-                        return;
-                    }
-
-                    setBusy(true);
-                    const target = (
-                        document.getElementById(
-                            'deposit-to',
-                        ) as HTMLSelectElement | null
-                    )?.value;
-                    router.post(
-                        '/shift/close',
-                        {
-                            shift_id: shiftId ?? null,
-                            counted_cash: counted,
-                            cash_left: left,
-                            deposit_account_id: target ? Number(target) : null,
-                            difference_reason: reason || null,
-                            close_key: key.current,
-                        },
-                        {
-                            onError: () =>
-                                toast.error(t('Gagal menutup shift.')),
-                            onFinish: () => setBusy(false),
-                        },
-                    );
-                }}
+                onClick={() => setConfirming(true)}
             >
                 {t('Tutup shift')}
             </Button>
+            <Modal
+                open={confirming}
+                onClose={() => setConfirming(false)}
+                title={t('Tutup shift sekarang?')}
+                description={t(
+                    'Setelah ditutup, transaksi baru perlu membuka shift baru, dan kamu keluar dari sesi.',
+                )}
+            >
+                <dl className="grid gap-1 rounded-lg bg-muted p-3 text-sm">
+                    <div className="flex justify-between">
+                        <dt>{t('Kas seharusnya')}</dt>
+                        <dd className="tabular-nums">{rupiah(expected)}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                        <dt>{t('Kas dihitung')}</dt>
+                        <dd className="tabular-nums">{rupiah(c)}</dd>
+                    </div>
+                    <div
+                        className={`flex justify-between font-semibold ${diff === 0 ? 'text-emerald-800' : 'text-red-700'}`}
+                    >
+                        <dt>{t('Selisih')}</dt>
+                        <dd className="tabular-nums">
+                            {diff > 0 ? '+' : ''}
+                            {rupiah(diff)}
+                        </dd>
+                    </div>
+                    <div className="flex justify-between border-t pt-1">
+                        <dt>{t('Ditinggal di laci')}</dt>
+                        <dd className="tabular-nums">{rupiah(leftN)}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                        <dt>{t('Disetor')}</dt>
+                        <dd className="tabular-nums">
+                            {rupiah(Math.max(0, c - leftN))}
+                        </dd>
+                    </div>
+                </dl>
+                <div className="grid grid-cols-2 gap-2">
+                    <Button
+                        variant="outline"
+                        className="h-12"
+                        onClick={() => setConfirming(false)}
+                    >
+                        {t('Kembali')}
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        className="h-12"
+                        disabled={busy}
+                        onClick={() => {
+                            setBusy(true);
+                            const target = (
+                                document.getElementById(
+                                    'deposit-to',
+                                ) as HTMLSelectElement | null
+                            )?.value;
+                            router.post(
+                                '/shift/close',
+                                {
+                                    shift_id: shiftId ?? null,
+                                    counted_cash: counted,
+                                    cash_left: left,
+                                    deposit_account_id: target
+                                        ? Number(target)
+                                        : null,
+                                    difference_reason: reason || null,
+                                    close_key: key.current,
+                                },
+                                {
+                                    onError: () =>
+                                        toast.error(t('Gagal menutup shift.')),
+                                    onFinish: () => {
+                                        setBusy(false);
+                                        setConfirming(false);
+                                    },
+                                },
+                            );
+                        }}
+                    >
+                        {t('Ya, tutup shift')}
+                    </Button>
+                </div>
+            </Modal>
         </section>
     );
 }

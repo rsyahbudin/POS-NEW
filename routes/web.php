@@ -125,6 +125,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
     // One shift per store. Every staff role may look at it (and its history); only the shift permission acts on it.
     Route::prefix('shift')->name('shift.')->group(function () {
         Route::get('/', [ShiftController::class, 'index'])->middleware('permission:open-close-shift|manage-shifts-any|view-own-shift-recap|create-order|receive-payment')->name('index');
+        Route::post('{shift}/reopen', [ShiftController::class, 'reopen'])->middleware('permission:reopen-shift')->name('reopen');
         Route::middleware('permission:open-close-shift')->group(function () {
             Route::post('open', [ShiftController::class, 'open'])->name('open');
             Route::post('movements', [ShiftController::class, 'movement'])->name('movement');

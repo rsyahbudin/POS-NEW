@@ -18,9 +18,8 @@ final class SettingsCatalog
     {
         return [
             ['key' => 'ops', 'label' => 'Operasional', 'groups' => [[
-                'title' => 'Hari bisnis & harga',
+                'title' => 'Harga & penutupan hari',
                 'fields' => [
-                    ['key' => 'operations.business_day_start', 'type' => 'time', 'label' => 'Jam mulai hari bisnis', 'hint' => 'Transaksi sebelum jam ini masuk ke tanggal bisnis kemarin (mis. 04:00 agar operasional lewat tengah malam tetap satu hari).', 'default' => '04:00'],
                     ['key' => 'pricing.rounding', 'type' => 'select', 'label' => 'Pembulatan grand total', 'hint' => 'Selisih pembulatan dicatat di akun tersendiri.', 'default' => 0, 'options' => [['0', 'Tanpa pembulatan'], ['100', 'Ke Rp100 terdekat'], ['500', 'Ke Rp500 terdekat']]],
                     ['key' => 'operations.auto_close_day', 'type' => 'bool', 'label' => 'Tutup hari otomatis', 'hint' => 'Aktif: setelah hari bisnis berganti dan semua shift hari itu sudah ditutup, aplikasi membuat laporan harian (Z-report) sendiri dan mengirimnya ke Telegram. Manager tidak perlu menekan Tutup Hari. Kalau masih ada shift yang lupa ditutup, manager mendapat notifikasi.', 'default' => true],
                     ['key' => 'ui.accent', 'type' => 'select', 'label' => 'Warna aksen aplikasi', 'hint' => 'Warna tombol, menu aktif, dan grafik di semua perangkat. Warna status (meja kosong/terisi, pesanan siap, peringatan) tidak ikut berubah supaya tetap jelas dibaca.', 'default' => 'blue', 'options' => Accent::options()],

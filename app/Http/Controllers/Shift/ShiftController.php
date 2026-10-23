@@ -9,6 +9,7 @@ use App\Domain\Settings\OutletContext;
 use App\Domain\Shift\Actions\AddCashMovementAction;
 use App\Domain\Shift\Actions\CloseShiftAction;
 use App\Domain\Shift\Actions\OpenShiftAction;
+use App\Domain\Shift\Actions\ReopenShiftAction;
 use App\Domain\Shift\Models\Shift;
 use App\Domain\Shift\ShiftCash;
 use App\Domain\Shift\ShiftResolver;
@@ -47,8 +48,30 @@ class ShiftController extends Controller
                     'at' => $o->created_at?->toIso8601String(), 'status' => $o->status->label(), 'total' => $o->grand_total - $o->refunded_total,
                     'paid_by' => $o->payments->map(fn ($p) => $p->receiver?->name)->filter()->unique()->implode(', '),
                 ])->all() : [],
-            'can' => ['operate' => $operate],
+            'can' => ['operate' => $operate, 'reopen_id' => $shift ? null : $this->reopenable($request)],
         ]);
+    }
+
+    /** Id of the last closed shift when this person may undo its close, else null. */
+    private function reopenable(Request $request): ?int
+    {
+        $user = $request->user();
+        $last = Shift::query()->where('outlet_id', $this->outlet->id())->whereNotNull('closed_at')->latest('id')->first();
+        if ($user === null || $last === null || ! $user->can('reopen-shift')) {
+            return null;
+        }
+        $own = $last->closed_by === $user->id && $last->closed_at?->gte(now()->subMinutes(ReopenShiftAction::OWN_CLOSE_MINUTES));
+
+        return $user->can('manage-shifts-any') || $own ? $last->id : null;
+    }
+
+    public function reopen(Request $request, Shift $shift, ReopenShiftAction $action): RedirectResponse
+    {
+        abort_unless($shift->outlet_id === $this->outlet->id(), 404);
+        $data = $request->validate(['reason' => 'nullable|string|max:200']);
+        $action->handle($shift, $this->actor($request), $data['reason'] ?? null);
+
+        return redirect()->route('shift.index')->with('success', 'Shift dibuka kembali.');
     }
 
     public function open(Request $request, OpenShiftAction $action): RedirectResponse

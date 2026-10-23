@@ -10,7 +10,6 @@ use App\Domain\Settings\SettingsRepository;
 use App\Domain\Shift\Actions\CloseBusinessDayAction;
 use App\Domain\Shift\Models\BusinessDay;
 use App\Domain\Shift\Models\Shift;
-use App\Support\BusinessDate;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 
@@ -31,7 +30,7 @@ class AutoCloseBusinessDays extends Command
         }
 
         $outletId = $outlet->id();
-        $today = BusinessDate::for();
+        $today = CarbonImmutable::now()->setTimezone(config('app.timezone'))->toDateString();
         $since = CarbonImmutable::parse($today)->subDays(14)->toDateString();
 
         $dates = Order::query()->where('outlet_id', $outletId)->whereBetween('business_date', [$since, $today])->where('business_date', '<', $today)->distinct()->pluck('business_date')
@@ -43,7 +42,8 @@ class AutoCloseBusinessDays extends Command
         foreach ($dates->diff($closed) as $date) {
             $open = Shift::query()->where('outlet_id', $outletId)->whereNull('closed_at')->where('business_date', '<=', $date)->with('user:id,name')->get();
             if ($open->isNotEmpty()) {
-                foreach ($open as $shift) {
+                // A shift that runs past midnight is normal; it only counts as forgotten after half a day.
+                foreach ($open->filter(fn ($s) => $s->opened_at->lt(now()->subHours(12))) as $shift) {
                     $notifier->notify(
                         $outletId, 'shift.forgotten', "Shift {$shift->user?->name} belum ditutup",
                         'Dibuka '.$shift->opened_at->setTimezone('Asia/Jakarta')->translatedFormat('d M H:i').'. Laporan hari itu menunggu shift ini ditutup.',

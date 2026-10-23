@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  * @property int $opening_cash
  * @property int|null $expected_cash
  * @property int|null $counted_cash
+ * @property int|null $closed_by
  * @property int|null $cash_left
  * @property int|null $cash_deposited
  * @property int|null $deposit_account_id

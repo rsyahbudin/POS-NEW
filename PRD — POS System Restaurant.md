@@ -249,7 +249,7 @@ Modul 4.1–4.15 adalah inti POS; 4.16–4.27 ditambahkan setelah MVP. Setiap kr
 ### 4.14 Pengaturan, User & Peran
 
 - Profil outlet, jam operasional; metode bayar, pajak, promo.
-- Layar Pengaturan hanya berisi opsi sistem, terbagi tab: Operasional (hari bisnis, pembulatan, tutup hari otomatis, shift bersama, batas diskon, **warna aksen aplikasi**), Pesanan QR, Stok & HPP, Dapur (KDS), Kasir & struk, Keamanan, QRIS Online, Notifikasi.
+- Layar Pengaturan hanya berisi opsi sistem, terbagi tab: Operasional (pembulatan, tutup hari otomatis, shift bersama, batas diskon, **warna aksen aplikasi**), Pesanan QR, Stok & HPP, Dapur (KDS), Kasir & struk, Keamanan, QRIS Online, Notifikasi.
 - Yang sering diubah punya halaman sendiri di menu, dengan izin masing-masing: **Diskon & Promo** (izin "Kelola diskon & promo") dan **Pembayaran & Pajak** (metode bayar, pajak, service charge; izin "Pembayaran & pajak").
 - Manajemen user: buat, nonaktifkan, reset password, set PIN, set peran.
 - **Peran & Akses:** owner membuat peran baru dan mencentang izin per kelompok; peran bawaan bisa diubah (owner tidak). Opsi login PIN per peran.
@@ -259,6 +259,9 @@ Modul 4.1–4.15 adalah inti POS; 4.16–4.27 ditambahkan setelah MVP. Setiap kr
 
 - **Komplimen & staff meal**, **nomor panggil**, **stok porsi** (produk "Habis" saat 0), **pindah item antar meja**.
 - **Tutup hari otomatis:** setelah hari bisnis berganti dan semua shift ditutup, aplikasi membuat laporan harian sendiri; tidak ada tombol tutup hari wajib.
+- **Tanggal penjualan tanpa jam operasional:** tidak ada pengaturan jam mulai hari. Selama ada shift terbuka, penjualan masuk ke tanggal shift itu dibuka (shift yang lewat tengah malam tetap satu hari); bila tidak ada shift terbuka, tanggalnya hari ini. Shift yang masih terbuka lebih dari 12 jam dianggap lupa ditutup (notifikasi ke manager).
+- **Tutup shift dengan konfirmasi:** uang tunai di laci wajib dihitung dan diisi (server menolak bila kosong); selisih wajib beralasan; menekan Tutup shift membuka dialog ringkasan (kas seharusnya, dihitung, selisih, ditinggal, disetor) dengan tombol Kembali / Ya, tutup shift. Setelah ditutup, transaksi baru memerlukan shift baru.
+- **Pembalikan shift (buka kembali):** izin `reopen-shift` (default owner, manager, kasir). Kartu "Salah tutup shift?" di halaman Shift membuka kembali shift terakhir dengan dialog konfirmasi dan alasan opsional: jurnal selisih kas dan setoran saat tutup dibalik, angka penutupan dihapus, shift terbuka lagi untuk semua staf, manager diberi tahu, dicatat di jejak aktivitas. Tanpa izin Kelola shift orang lain, hanya untuk shift yang ditutup sendiri dalam 30 menit. Tidak bisa bila sudah ada shift sesudahnya atau hari bisnisnya sudah ditutup. Laporan harian yang sudah terkirim dikirim ulang sebagai "(diperbarui)" bila angkanya berubah setelah ditutup lagi.
 - **Laporan Harian** bisa dilihat untuk tanggal mana pun, diunduh (Excel/PDF), dan dikirim ulang ke Telegram, email, atau WhatsApp.
 - **Bunyi notifikasi** di perangkat kasir dengan pengaturan volume dan mute; butuh satu ketukan untuk mengaktifkan audio.
 

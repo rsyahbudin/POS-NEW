@@ -615,9 +615,25 @@ export default function PosPage(props: Props) {
     const orderId = order?.id ?? null;
 
     // On phones the order lives in a bottom sheet; close it when a dialog (payment, receipt...) opens.
+    // Two layers (sheet + dialog) cannot be open together, so the sheet steps aside and comes back when the dialog is
+    // done: applying a discount or voiding an item should not send the cashier back to the cart button.
+    const sheetState = useRef({ open: false, hasOrder: false, reopen: false });
+    sheetState.current.open = sheet;
+    sheetState.current.hasOrder = ctx !== null || cart.length > 0;
     useEffect(() => {
+        const st = sheetState.current;
+
         if (dialog) {
-            setSheet(false);
+            if (st.open) {
+                st.reopen = true;
+                setSheet(false);
+            }
+        } else if (st.reopen) {
+            st.reopen = false;
+
+            if (st.hasOrder) {
+                setSheet(true);
+            }
         }
     }, [dialog]);
 

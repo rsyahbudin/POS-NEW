@@ -251,7 +251,7 @@ export function OrderPanel({
                                                         type="button"
                                                         variant="ghost"
                                                         size="sm"
-                                                        className="h-9 text-xs"
+                                                        className="h-8 px-2 text-xs md:h-9"
                                                         onClick={() =>
                                                             actions.voidItem(i)
                                                         }
@@ -262,7 +262,7 @@ export function OrderPanel({
                                                         type="button"
                                                         variant="ghost"
                                                         size="sm"
-                                                        className="h-9 text-xs"
+                                                        className="h-8 px-2 text-xs md:h-9"
                                                         onClick={() =>
                                                             actions.discount(i)
                                                         }
@@ -274,7 +274,7 @@ export function OrderPanel({
                                                             type="button"
                                                             variant="ghost"
                                                             size="sm"
-                                                            className="h-9 text-xs"
+                                                            className="h-8 px-2 text-xs md:h-9"
                                                             onClick={() =>
                                                                 actions.comp(i)
                                                             }
@@ -418,7 +418,7 @@ export function OrderPanel({
                 )}
             </div>
 
-            <footer className="grid gap-2 border-t p-4">
+            <footer className="grid gap-2 border-t p-3 md:p-4">
                 {order && liveItems.length > 0 && (
                     <dl className="grid gap-0.5 text-sm">
                         <Row
@@ -468,7 +468,7 @@ export function OrderPanel({
                                 value={rupiah(order.rounding)}
                             />
                         )}
-                        <div className="mt-1 flex items-center justify-between border-t pt-2 text-xl font-semibold tracking-tight">
+                        <div className="mt-1 flex items-center justify-between border-t pt-1.5 text-lg font-semibold tracking-tight md:pt-2 md:text-xl">
                             <dt>{t('Total')}</dt>
                             <dd className="tabular-nums">
                                 {rupiah(order.grand_total)}
@@ -491,7 +491,7 @@ export function OrderPanel({
                         </p>
                         <Button
                             type="button"
-                            className="h-14 text-base"
+                            className="h-12 text-base md:h-14"
                             disabled={actions.sending}
                             onClick={actions.send}
                         >
@@ -539,7 +539,7 @@ export function OrderPanel({
                                         <Button
                                             key={b.id}
                                             type="button"
-                                            className="h-14 text-base"
+                                            className="h-12 text-base md:h-14"
                                             disabled={!!unallocated}
                                             onClick={() => actions.pay(b)}
                                         >
@@ -558,11 +558,11 @@ export function OrderPanel({
                                     {t('Tutup order (Rp0)')}
                                 </Button>
                             )}
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="flex [scrollbar-width:none] gap-2 overflow-x-auto md:grid md:grid-cols-2 md:overflow-visible">
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    className="h-11"
+                                    className="h-10 shrink-0 px-3 md:h-11"
                                     onClick={actions.billRequest}
                                 >
                                     {t('Pre-bill')}
@@ -571,7 +571,7 @@ export function OrderPanel({
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        className="h-11"
+                                        className="h-10 shrink-0 px-3 md:h-11"
                                         onClick={() => actions.discount(null)}
                                     >
                                         {t('Diskon')}
@@ -581,7 +581,7 @@ export function OrderPanel({
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        className="h-11"
+                                        className="h-10 shrink-0 px-3 md:h-11"
                                         onClick={actions.split}
                                     >
                                         {t('Split bill')}
@@ -591,7 +591,7 @@ export function OrderPanel({
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        className="h-11"
+                                        className="h-10 shrink-0 px-3 md:h-11"
                                         onClick={actions.move}
                                     >
                                         {t('Pindah / gabung')}
@@ -609,7 +609,7 @@ export function OrderPanel({
                                                 key={b.id}
                                                 type="button"
                                                 variant="outline"
-                                                className="h-11"
+                                                className="h-10 shrink-0 px-3 md:h-11"
                                                 onClick={() =>
                                                     actions.allocate(b)
                                                 }
@@ -620,7 +620,7 @@ export function OrderPanel({
                                 <Button
                                     type="button"
                                     variant="ghost"
-                                    className="h-11 text-destructive"
+                                    className="h-10 shrink-0 px-3 text-destructive md:h-11"
                                     onClick={actions.voidOrder}
                                 >
                                     {t('Void order')}
@@ -861,7 +861,7 @@ function PickSummary({ pick }: { pick: PickState }) {
             )}
             <Button
                 type="button"
-                className="h-14 text-base"
+                className="h-12 text-base md:h-14"
                 disabled={count === 0 || pick.busy || !p}
                 onClick={pick.submit}
             >

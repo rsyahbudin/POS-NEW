@@ -1,4 +1,4 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { PageHeader, ResponsiveTable } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
@@ -93,6 +93,13 @@ export default function ReceiptExportsPage({
                 <PageHeader
                     title="Struk bulanan (PDF)"
                     subtitle="Satu PDF berisi struk semua transaksi lunas di bulan yang dipilih. Bulan dan tahun yang sudah lewat bisa. Berkas disimpan 30 hari."
+                    actions={
+                        <Button asChild variant="outline" className="h-11">
+                            <Link href="/admin/reports/sales">
+                                ← Laporan penjualan
+                            </Link>
+                        </Button>
+                    }
                 />
                 <section className="grid gap-3 rounded-xl border bg-card p-4">
                     <div className="flex flex-wrap items-end gap-3">

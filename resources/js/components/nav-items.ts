@@ -159,12 +159,6 @@ export const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 feature: 'kds',
             },
             {
-                title: 'Struk Bulanan',
-                href: '/admin/receipt-exports',
-                icon: FileDown,
-                permission: 'export-receipts',
-            },
-            {
                 title: 'Laporan Waste',
                 href: '/admin/reports/waste',
                 icon: Trash2,

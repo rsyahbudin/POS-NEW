@@ -1,4 +1,4 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     BarList,
     ChartCard,
@@ -67,6 +67,13 @@ export default function SalesReport({
     const sum = (k: keyof Row) =>
         rows.reduce((a, r) => a + (Number(r[k]) || 0), 0);
     const totalOrders = sum('orders');
+    const user = usePage().props.auth.user as unknown as {
+        permissions?: string[];
+        roles?: string[];
+    } | null;
+    const canReceipts =
+        !!user?.roles?.includes('owner') ||
+        !!user?.permissions?.includes('export-receipts');
     const qs = (extra: Record<string, string> = {}) =>
         new URLSearchParams({ ...filters, ...extra }).toString();
 
@@ -78,6 +85,17 @@ export default function SalesReport({
                     title="Laporan penjualan"
                     actions={
                         <>
+                            {canReceipts && (
+                                <Button
+                                    asChild
+                                    variant="outline"
+                                    className="h-11"
+                                >
+                                    <Link href="/admin/receipt-exports">
+                                        Struk bulanan (PDF)
+                                    </Link>
+                                </Button>
+                            )}
                             <Button asChild variant="outline" className="h-11">
                                 <a
                                     href={`/admin/reports/export?${qs({ format: 'xlsx' })}`}

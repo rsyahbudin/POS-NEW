@@ -14,6 +14,10 @@ use Illuminate\Support\Carbon;
  * @property int $value
  * @property string $starts_at
  * @property string $ends_at
+ * @property string $scope
+ * @property array<int, int>|null $category_ids
+ * @property array<int, int>|null $product_ids
+ * @property bool $combinable
  * @property array<mixed>|null $days
  * @property Carbon|null $starts_on
  * @property Carbon|null $ends_on
@@ -27,7 +31,17 @@ class Promotion extends Model
 
     protected function casts(): array
     {
-        return ['days' => 'array', 'is_active' => 'boolean', 'starts_on' => 'date:Y-m-d', 'ends_on' => 'date:Y-m-d'];
+        return ['days' => 'array', 'category_ids' => 'array', 'product_ids' => 'array', 'combinable' => 'boolean', 'is_active' => 'boolean', 'starts_on' => 'date:Y-m-d', 'ends_on' => 'date:Y-m-d'];
+    }
+
+    /** Does this promo cover a menu item? Order-wide promos cover every item. */
+    public function covers(int $productId, int $categoryId): bool
+    {
+        return match ($this->scope) {
+            'category' => in_array($categoryId, array_map('intval', $this->category_ids ?? []), true),
+            'product' => in_array($productId, array_map('intval', $this->product_ids ?? []), true),
+            default => true,
+        };
     }
 
     /**

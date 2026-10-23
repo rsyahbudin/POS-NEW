@@ -9,6 +9,8 @@ import {
     FileBarChart,
     LayoutGrid,
     Monitor,
+    CreditCard,
+    Percent,
     QrCode,
     Printer,
     Package,
@@ -126,6 +128,12 @@ const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 permission: 'manage-inventory',
             },
             {
+                title: 'Diskon & Promo',
+                href: '/admin/discounts',
+                icon: Percent,
+                permission: 'manage-discount-presets',
+            },
+            {
                 title: 'Pemasok',
                 href: '/admin/suppliers',
                 icon: Truck,
@@ -203,6 +211,12 @@ const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 href: '/admin/expenses',
                 icon: ShoppingBasket,
                 permission: 'input-expense',
+            },
+            {
+                title: 'Pembayaran & Pajak',
+                href: '/admin/payment-settings',
+                icon: CreditCard,
+                permission: 'manage-pricing',
             },
             {
                 title: 'Akuntansi',

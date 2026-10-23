@@ -3,12 +3,14 @@
 use App\Http\Controllers\Admin\AccountingController;
 use App\Http\Controllers\Admin\ActivityController;
 use App\Http\Controllers\Admin\DayCloseController;
+use App\Http\Controllers\Admin\DiscountController;
 use App\Http\Controllers\Admin\DiscountPresetController;
 use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\FloorController;
 use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\MenuController;
 use App\Http\Controllers\Admin\OnlinePaymentController;
+use App\Http\Controllers\Admin\PaymentSettingsController;
 use App\Http\Controllers\Admin\PrinterController;
 use App\Http\Controllers\Admin\RecipeController;
 use App\Http\Controllers\Admin\ReportController;
@@ -268,22 +270,26 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::delete('printers/{printer}', [PrinterController::class, 'destroy'])->name('printers.destroy');
         });
 
-        Route::middleware(['permission:manage-settings', 'permission:manage-discount-presets'])->group(function () {
+        Route::middleware('permission:manage-discount-presets')->group(function () {
+            Route::get('discounts', [DiscountController::class, 'index'])->name('discounts');
             Route::post('discount-presets', [DiscountPresetController::class, 'save'])->name('discount-presets.store');
             Route::put('discount-presets/{preset}', [DiscountPresetController::class, 'save'])->name('discount-presets.update');
+            Route::post('promotions', [SettingsController::class, 'savePromotion'])->name('promotions.store');
+            Route::put('promotions/{promotion}', [SettingsController::class, 'savePromotion'])->name('promotions.update');
+            Route::delete('promotions/{promotion}', [SettingsController::class, 'deletePromotion'])->name('promotions.destroy');
+        });
+        Route::middleware('permission:manage-pricing')->group(function () {
+            Route::get('payment-settings', [PaymentSettingsController::class, 'index'])->name('payment-settings');
+            Route::post('payment-methods', [SettingsController::class, 'savePaymentMethod'])->name('payment-methods.store');
+            Route::put('payment-methods/{method}', [SettingsController::class, 'savePaymentMethod'])->name('payment-methods.update');
+            Route::post('tax-rules', [SettingsController::class, 'saveTaxRule'])->name('tax-rules.store');
+            Route::put('tax-rules/{rule}', [SettingsController::class, 'saveTaxRule'])->name('tax-rules.update');
         });
         Route::middleware('permission:manage-settings')->group(function () {
             Route::get('settings', [SettingsController::class, 'show'])->name('settings');
             Route::post('settings/outlet', [SettingsController::class, 'updateOutlet'])->name('settings.outlet');
             Route::post('settings', [SettingsController::class, 'updateSettings'])->name('settings.update');
             Route::post('settings/test-notification', [SettingsController::class, 'testNotification'])->name('settings.test-notification');
-            Route::post('payment-methods', [SettingsController::class, 'savePaymentMethod'])->name('payment-methods.store');
-            Route::put('payment-methods/{method}', [SettingsController::class, 'savePaymentMethod'])->name('payment-methods.update');
-            Route::post('tax-rules', [SettingsController::class, 'saveTaxRule'])->name('tax-rules.store');
-            Route::put('tax-rules/{rule}', [SettingsController::class, 'saveTaxRule'])->name('tax-rules.update');
-            Route::post('promotions', [SettingsController::class, 'savePromotion'])->name('promotions.store');
-            Route::put('promotions/{promotion}', [SettingsController::class, 'savePromotion'])->name('promotions.update');
-            Route::delete('promotions/{promotion}', [SettingsController::class, 'deletePromotion'])->name('promotions.destroy');
             Route::post('expense-categories', [ExpenseController::class, 'saveCategory'])->name('expense-categories.store');
             Route::put('expense-categories/{category}', [ExpenseController::class, 'saveCategory'])->name('expense-categories.update');
         });

@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Domain\Accounting\Models\Account;
+use App\Domain\Catalog\Models\Category;
+use App\Domain\Catalog\Models\Product;
 use App\Domain\Notification\Jobs\DeliverMessageJob;
 use App\Domain\Notification\ReportDelivery;
 use App\Domain\Payment\Models\PaymentMethod;
-use App\Domain\Pricing\Models\DiscountPreset;
 use App\Domain\Pricing\Models\Promotion;
 use App\Domain\Pricing\Models\TaxRule;
 use App\Domain\Settings\Models\Outlet;
@@ -32,7 +32,7 @@ class SettingsController extends Controller
 {
     public function __construct(private OutletContext $outlet, private SettingsRepository $settings) {}
 
-    public function show(Request $request): Response
+    public function show(): Response
     {
         $id = $this->outlet->id();
         $values = $this->settings->withDefaults();
@@ -47,11 +47,6 @@ class SettingsController extends Controller
             'outlet' => Outlet::find($id)?->only(['name', 'address', 'npwp']) + ['logo' => Outlet::find($id)?->logo_path ? MediaUrl::public(Outlet::find($id)->logo_path) : null],
             'settings' => $values,
             'catalog' => SettingsCatalog::tabs(),
-            'paymentMethods' => PaymentMethod::query()->where('outlet_id', $id)->orderBy('sort')->get(['id', 'name', 'type', 'account_id', 'is_active']),
-            'cashAccounts' => Account::query()->where('outlet_id', $id)->where('type', 'asset')->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
-            'taxRules' => TaxRule::query()->where('outlet_id', $id)->orderBy('sequence')->get(['id', 'name', 'kind', 'rate_bp', 'sequence', 'base', 'is_inclusive', 'is_active']),
-            'promotions' => Promotion::query()->where('outlet_id', $id)->get(),
-            'discountPresets' => $request->user()?->can('manage-discount-presets') ? DiscountPreset::query()->where('outlet_id', $id)->orderBy('sort')->orderBy('name')->get(['id', 'name', 'type', 'value', 'needs_pin', 'is_active']) : null,
         ]);
     }
 
@@ -148,8 +143,16 @@ class SettingsController extends Controller
         $data = $request->validate([
             'name' => 'required|string|max:60', 'type' => 'required|in:percent,fixed', 'value' => 'required|integer|min:1',
             'starts_at' => 'required|date_format:H:i', 'ends_at' => 'required|date_format:H:i', 'days' => 'nullable|array', 'days.*' => 'integer|min:1|max:7', 'starts_on' => 'nullable|date', 'ends_on' => 'nullable|date|after_or_equal:starts_on', 'is_active' => 'boolean',
+            'scope' => 'required|in:order,category,product', 'combinable' => 'boolean',
+            'category_ids' => 'nullable|array', 'category_ids.*' => 'integer', 'product_ids' => 'nullable|array', 'product_ids.*' => 'integer',
         ]);
-        $promotion ? $promotion->update($data) : Promotion::create($data + ['outlet_id' => $this->outlet->id()]);
+        $outletId = $this->outlet->id();
+        $data['category_ids'] = $data['scope'] === 'category' ? Category::query()->where('outlet_id', $outletId)->whereIn('id', $data['category_ids'] ?? [])->pluck('id')->all() : null;
+        $data['product_ids'] = $data['scope'] === 'product' ? Product::query()->where('outlet_id', $outletId)->whereIn('id', $data['product_ids'] ?? [])->pluck('id')->all() : null;
+        if ($data['scope'] !== 'order' && ($data['scope'] === 'category' ? $data['category_ids'] : $data['product_ids']) === []) {
+            return back()->withErrors(['scope' => 'Pilih minimal satu kategori atau menu untuk promo ini.']);
+        }
+        $promotion ? $promotion->update($data) : Promotion::create($data + ['outlet_id' => $outletId]);
         Audit::log('settings.promotion', $promotion, $data);
 
         return back()->with('success', 'Promo disimpan.');

@@ -47,6 +47,7 @@ class RecalculateOrderAction
 
             $subtotal = (int) $items->sum('line_total');
             $itemDiscountTotal = 0;
+            $taken = []; // several discounts on one item add up but never exceed its price
             foreach ($discounts->whereNotNull('order_item_id') as $d) {
                 $item = $items->firstWhere('id', $d->order_item_id);
                 if (! $item) {
@@ -57,6 +58,8 @@ class RecalculateOrderAction
                 $amount = $d->type === 'percent'
                     ? (int) round($item->line_total * $d->value / 10000)
                     : min((int) $d->value, $item->line_total);
+                $amount = max(0, min($amount, $item->line_total - ($taken[$item->id] ?? 0)));
+                $taken[$item->id] = ($taken[$item->id] ?? 0) + $amount;
                 $d->update(['amount' => $amount]);
                 $itemDiscountTotal += $amount;
             }

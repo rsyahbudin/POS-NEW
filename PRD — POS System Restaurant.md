@@ -196,7 +196,7 @@ Modul 4.1–4.15 adalah inti POS; 4.16–4.27 ditambahkan setelah MVP. Setiap kr
 - **Daftar diskon bernama:** owner mendaftarkan diskon seperti "Staff 10%" atau "Owner 20%" di Pengaturan › Promo (nominal atau persen, opsi minta PIN manager, bisa dinonaktifkan). Kasir cukup mengetuk satu diskon tanpa mengisi nilai atau alasan; nama diskon menjadi alasannya dan tercatat di audit log.
 - **Diskon manual** (kasir mengetik nilai sendiri) dikendalikan izin tersendiri "Diskon manual". Secara default hanya owner dan manager yang punya izin ini; kasir dan waiter hanya bisa memilih diskon terdaftar (waiter tidak memberi diskon sama sekali). Owner bisa memberikan izin ini ke peran lain kapan saja di Peran & Akses.
 - Diskon manual per item atau per order (nominal/persen), alasan wajib; batas diskon kasir tanpa PIN diatur (default 10%).
-- Promo terjadwal (Happy Hour) dari pengaturan.
+- Promo terjadwal (Happy Hour) di halaman Diskon & Promo: jam mulai-selesai (boleh melewati tengah malam), hari tertentu, rentang tanggal, dan cakupan seluruh order, kategori, atau menu tertentu. Promo bertanda "boleh digabung" dijumlahkan (total diskon satu item tidak melebihi harganya); promo yang tidak digabung berdiri sendiri dan menggantikan promo lain selama berlaku. Promo yang dihapus kasir dari order tidak dipasang lagi pada ronde berikutnya.
 - Void sebelum bayar: butuh PIN manager bila diatur, alasan wajib.
 - Komplimen dan staff meal: nilai tidak masuk omzet, tercatat di laporan.
 - Refund setelah bayar: manager/owner, membuat jurnal pembalik.
@@ -241,7 +241,8 @@ Modul 4.1–4.15 adalah inti POS; 4.16–4.27 ditambahkan setelah MVP. Setiap kr
 ### 4.14 Pengaturan, User & Peran
 
 - Profil outlet, jam operasional; metode bayar, pajak, promo.
-- Layar Pengaturan terbagi tab: Operasional (hari bisnis, pembulatan, tutup hari otomatis, shift bersama, batas diskon, **warna aksen aplikasi**), Pesanan QR, Stok & HPP, Dapur (KDS), Kasir & struk, Keamanan, QRIS Online, Notifikasi, Metode bayar, Pajak & biaya, Promo.
+- Layar Pengaturan hanya berisi opsi sistem, terbagi tab: Operasional (hari bisnis, pembulatan, tutup hari otomatis, shift bersama, batas diskon, **warna aksen aplikasi**), Pesanan QR, Stok & HPP, Dapur (KDS), Kasir & struk, Keamanan, QRIS Online, Notifikasi.
+- Yang sering diubah punya halaman sendiri di menu, dengan izin masing-masing: **Diskon & Promo** (izin "Kelola diskon & promo") dan **Pembayaran & Pajak** (metode bayar, pajak, service charge; izin "Pembayaran & pajak").
 - Manajemen user: buat, nonaktifkan, reset password, set PIN, set peran.
 - **Peran & Akses:** owner membuat peran baru dan mencentang izin per kelompok; peran bawaan bisa diubah (owner tidak). Opsi login PIN per peran.
 - Semua perubahan pengaturan tercatat di audit log.
@@ -637,6 +638,7 @@ Navigasi staf (sidebar), dengan izin yang menampilkannya:
 | Kelola | **Menu** | Owner, manager | Kategori, produk, varian, modifier, stok porsi, foto, impor. |
 | Kelola | **Stok & Bahan** | Manager | Tab Bahan, Pembelian (setujui/tolak), Opname staf, Riwayat; ubah/tambah bahan, kemasan, impor. |
 | Kelola | **Resep & HPP** | Manager | Resep per menu/varian, biaya dan margin. |
+| Kelola | **Diskon & Promo** | Owner | Diskon bernama untuk kasir (Staff 10%, Owner 20%) dan promo terjadwal per jam/hari/tanggal, per kategori atau menu, dengan opsi digabung. |
 | Kelola | **Pemasok** | Manager | Tabel pemasok, riwayat, perbandingan harga, impor. |
 | Kelola | **Aset & Alat** | Manager | Daftar alat, kondisi, riwayat servis. |
 | Kelola | **Meja & QR** | Owner, manager | Area, meja, QR, cetak PDF QR, aktif/nonaktif. |
@@ -644,9 +646,10 @@ Navigasi staf (sidebar), dengan izin yang menampilkannya:
 | Laporan | **Pembayaran Online** | Manager | Daftar transaksi QRIS online, status, catat ulang, simulasi; petunjuk aktivasi. |
 | Laporan | **Jejak Aktivitas** | Owner, manager | Daftar aksi dengan pencarian dan filter. |
 | Keuangan | **Pengeluaran** | Manager | Input pengeluaran, kategori, ekspor. |
+| Keuangan | **Pembayaran & Pajak** | Owner | Metode bayar dan rekening penerima, pajak dan service charge. |
 | Keuangan | **Akuntansi** | Owner | Chart of accounts, jurnal, buku besar, laba rugi, neraca, arus kas, tutup buku. |
 | Keuangan | **Laporan Harian** | Owner, manager | Ringkasan hari bisnis, shift, riwayat, kirim laporan. |
-| Pengaturan | **Pengaturan** | Owner | Tab Operasional, Pesanan QR, Stok & HPP, Dapur, Kasir & struk, Keamanan, QRIS Online, Notifikasi, Metode bayar, Pajak, Promo. |
+| Pengaturan | **Pengaturan** | Owner | Tab Operasional, Pesanan QR, Stok & HPP, Dapur, Kasir & struk, Keamanan, QRIS Online, Notifikasi. |
 | Pengaturan | **Printer**, **User**, **Peran & Akses** | Owner | Perangkat dan routing cetak; akun dan PIN; peran dengan centang izin. |
 
 Halaman publik (tanpa login):

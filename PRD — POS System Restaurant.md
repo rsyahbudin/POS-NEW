@@ -1,582 +1,658 @@
 # PRD — POS System Restaurant
 
-Oct 20, 2026 · @Syahbudin
+Versi 2.0 · 23 Okt 2026 · @Syahbudin
+
+> **Status dokumen.** Versi ini menggantikan PRD MVP (20 Okt 2026) dan mencerminkan aplikasi yang sudah dibangun, termasuk fase stok/HPP, notifikasi, laporan harian otomatis, dan QRIS online. Bagian 13 dan 14 adalah brief khusus untuk perancang UI/UX (daftar layar, komponen, dan aturan tampilan).
 
 ## 1. Executive Summary
 
-Sistem POS web untuk satu outlet kafe/restoran, dibangun dengan Laravel + React (Inertia) dan PostgreSQL, di-deploy ke VPS Hostinger, dengan jurnal akuntansi otomatis dari setiap transaksi.
+Sistem POS web untuk satu outlet kafe/restoran, dibangun dengan Laravel + React (Inertia) dan PostgreSQL, di-deploy ke VPS, dengan jurnal akuntansi otomatis dari setiap transaksi, stok bahan dan HPP per menu, serta notifikasi per peran.
 
-**Problem statement.** Kafe baru butuh pencatatan order, pembayaran, dan keuangan yang rapi sejak hari pertama. POS open source yang tersedia tidak ada yang cocok: yang matang bukan POS kasir, yang fiturnya F&B belum teruji.
+**Problem statement.** Kafe kecil butuh pencatatan order, pembayaran, stok, dan keuangan yang rapi sejak hari pertama, tanpa harus memakai beberapa aplikasi terpisah. POS yang ada di pasaran biasanya mahal, tidak fleksibel soal hak akses, atau tidak menyambungkan penjualan dengan stok dan keuangan.
 
-**Proposed solution.** POS milik sendiri yang mencakup kasir, self-order via QR meja, layar dapur, shift kasir, serta laporan penjualan dan akuntansi double-entry ringan. Kode dibangun modular agar fitur baru bisa ditambah tanpa membongkar inti.
+**Proposed solution.** POS milik sendiri yang mencakup kasir, self-order via QR meja, layar dapur, shift kasir, laporan penjualan, akuntansi double-entry ringan, stok bahan/resep/HPP, belanja dan pemasok, stok opname, pencatatan waste, impor Excel, serta pusat notifikasi. Kode modular: fitur baru ditambah tanpa membongkar inti, dan setiap fitur opsional bisa dimatikan dari pengaturan.
+
+**Prinsip produk.**
+
+- **Sederhana untuk karyawan, ketat untuk uang.** Layar harian dibuat sedikit ketukan; semua perhitungan uang, harga, dan stok diputuskan di server.
+- **Setiap fitur punya izin sendiri.** Owner mengatur peran dan izin dari layar Peran & Akses; tidak ada peran yang dikunci di kode.
+- **Fitur opsional default mati.** Stok, jurnal stok, QRIS online, dan pengiriman laporan dinyalakan owner saat siap.
+- **Jelas siapa melakukan apa.** Order, pembayaran, shift, belanja, opname, dan waste mencatat pelaku; ada jejak aktivitas yang bisa dicari.
+- **Notifikasi ringan.** Hanya hal yang perlu ditindak oleh peran itu; data lama dibersihkan otomatis.
 
 **Success criteria (diukur 30 hari setelah go-live):**
 
 - Waktu input order oleh kasir untuk pesanan 3 item ≤ 30 detik (median).
 - Selisih kas saat tutup shift ≤ Rp0 untuk ≥ 95% shift, dan setiap selisih tercatat dengan alasan.
-- 100% transaksi lunas menghasilkan jurnal akuntansi yang seimbang (debit = kredit), diverifikasi oleh test otomatis.
+- 100% transaksi lunas menghasilkan jurnal akuntansi yang seimbang (debit = kredit), diverifikasi test otomatis.
 - Pesanan dari QR meja muncul di layar kasir dan dapur ≤ 3 detik setelah dikirim customer.
-- Semua halaman operasional (kasir, dapur, self-order) lolos skor Lighthouse Performance ≥ 85 dan Accessibility ≥ 90 di profil mobile.
+- Semua halaman operasional (kasir, dapur, self-order) lolos Lighthouse Performance ≥ 85 dan Accessibility ≥ 90 di profil mobile.
+- Setelah stok diaktifkan: selisih stok opname bulanan ≤ 5% dari nilai stok, dan HPP per menu tersedia untuk ≥ 90% menu terjual.
+- Laporan harian terkirim otomatis ke saluran owner untuk ≥ 95% hari bisnis.
 
 ## 2. Keputusan yang Dikunci & Asumsi
 
-Enam keputusan berikut sudah final dan menjadi dasar skema database serta alur aplikasi.
-
 | Area | Keputusan |
 | --- | --- |
-| Skala | 1 outlet. Semua tabel transaksi tetap punya kolom `outlet_id` agar multi-outlet bisa ditambah tanpa migrasi besar. |
-| Stack | Laravel 13, React + Inertia, TypeScript, Tailwind CSS, PostgreSQL. |
-| Self-order QR | Customer pesan dari meja; pesanan wajib dikonfirmasi kasir sebelum masuk dapur, dengan notifikasi visual dan suara. Pembayaran di kasir. |
-| Pembayaran | Tunai, QRIS, atau transfer bank. Non-tunai hanya pencatatan: kasir memilih akun penerima agar tercatat uang masuk ke rekening mana. Daftar metode dan rekening diatur dari pengaturan karena belum ditentukan. Tidak ada integrasi payment gateway. |
-| Pajak & biaya | Saat ini belum ada pajak. Semua tarif (PB1, service charge, PPN) diatur dari pengaturan dan default nonaktif. Mode harga sudah termasuk pajak atau belum bisa dipilih. |
-| Akuntansi | Double-entry ringan: chart of accounts, jurnal otomatis dari penjualan dan pengeluaran, laba rugi, neraca sederhana. Tanpa HPP/inventori di MVP. |
+| Skala | 1 outlet. Semua tabel transaksi tetap punya `outlet_id` agar multi-outlet bisa ditambah tanpa migrasi besar. Multi-outlet ditunda. |
+| Stack | Laravel 13, React 19 + Inertia 2, TypeScript, Tailwind CSS 4, PostgreSQL 17. |
+| Self-order QR | Customer pesan dari meja; pesanan wajib dikonfirmasi kasir sebelum masuk dapur (atau otomatis bila owner menyalakan konfirmasi otomatis). Pembayaran di kasir, atau lewat QRIS online bila diaktifkan. |
+| Pembayaran | Tunai, QRIS, transfer bank sebagai pencatatan oleh kasir. QRIS dinamis dari HP pelanggan tersedia sebagai fitur opsional lewat payment gateway (Midtrans atau mode simulasi), default mati. |
+| Pajak & biaya | Semua tarif (PB1, service charge, PPN) diatur dari pengaturan dan default nonaktif. Mode harga termasuk pajak atau belum bisa dipilih. |
+| Akuntansi | Double-entry ringan: chart of accounts, jurnal otomatis dari penjualan, pengeluaran, shift, dan (opsional) kejadian stok; laba rugi, neraca sederhana. |
+| Stok & HPP | Opsional, default mati. Satuan dasar hanya g, ml, pcs; kemasan beli (botol, karung) dikonversi otomatis. HPP memakai biaya rata-rata bergerak dan dibekukan per item order. |
+| Hak akses | Permission per aksi, dikelola per peran dari UI. Lima peran bawaan, peran tambahan bisa dibuat. |
+| Notifikasi | Lonceng dalam aplikasi per izin, plus teruskan peringatan penting ke Telegram, email, atau WhatsApp bila diaktifkan. |
+| Pengaturan | Semua opsi bisa diubah di layar Pengaturan tanpa ubah kode; tiap perubahan tercatat. |
+| Hutang pemasok | Tidak dibuat sekarang (ditunda atas keputusan owner). Belanja dianggap dibayar saat dicatat. |
 
 **Asumsi yang perlu divalidasi:**
 
-- Kafe punya koneksi internet stabil. Saat internet putus, POS tidak bisa dipakai karena berjalan di VPS (lihat Risiko).
-- Mata uang tunggal: Rupiah, tanpa desimal. Semua nominal disimpan sebagai `bigint` rupiah.
-- Zona waktu operasional Asia/Jakarta. Hari bisnis dimulai pada jam batas yang bisa diatur (default 04.00), sehingga operasional yang lewat tengah malam tetap masuk tanggal bisnis yang sama.
-- Printer belum ditentukan, jadi sistem mendukung printer thermal ESC/POS 58 mm dan 80 mm, koneksi USB maupun LAN. Dapur dan bar saat ini satu stasiun; stasiun baru bisa ditambah dari pengaturan.
+- Kafe punya koneksi internet stabil. Saat internet putus, POS tidak bisa dipakai karena berjalan di VPS; ada indikator "Offline" dan prosedur manual darurat.
+- Mata uang tunggal Rupiah tanpa desimal; nominal disimpan sebagai `bigint`. Kuantitas bahan memakai desimal 3 angka.
+- Zona waktu Asia/Jakarta. Hari bisnis dimulai pada jam batas yang bisa diatur (default 04.00).
+- Printer thermal ESC/POS 58 mm dan 80 mm lewat QZ Tray, Bluetooth, atau RawBT; stasiun cetak bisa ditambah dan tiket/struk dirutekan per kategori atau menu.
 
 ## 3. Persona & Hak Akses
 
-Lima peran internal plus customer tamu; hak akses dikelola dengan permission per aksi, bukan per halaman.
+Lima peran bawaan plus customer tamu. Hak akses berupa permission per aksi yang dikelompokkan di layar Peran & Akses; owner selalu punya semua izin.
 
 | Persona | Perangkat utama | Kebutuhan inti |
 | --- | --- | --- |
-| Owner | HP, laptop | Melihat laporan penjualan dan keuangan dari mana saja, mengatur menu, harga, pajak, user. |
-| Manager / Supervisor | Tablet, laptop | Approve void dan diskon, buka/tutup shift, input pengeluaran, cek laporan harian. |
-| Kasir | Tablet 10", HP | Input order cepat, terima order QR, terima pembayaran, cetak struk. |
-| Waiter | HP | Input order dari meja, lihat status meja, antar pesanan yang sudah siap. |
-| Dapur / Bar | Tablet di dapur | Melihat antrean pesanan per stasiun, tandai sedang dibuat dan siap. |
-| Customer (tamu) | HP pribadi | Scan QR meja, lihat menu, pesan tanpa login. |
+| Owner | HP, laptop | Laporan penjualan, keuangan, dan stok dari mana saja; mengatur menu, harga, pajak, user, peran, dan pengaturan; menerima laporan harian. |
+| Manager / Supervisor | Tablet, laptop | Menyetujui belanja dan stok opname, void dan diskon, buka/tutup shift, input pengeluaran, cek laporan harian dan margin. |
+| Kasir | Tablet 10", HP | Input order cepat, terima order QR, terima pembayaran, cetak struk, buka/tutup shift sendiri. |
+| Waiter | HP | Input order dari meja, lihat status meja, antar pesanan yang siap. |
+| Dapur / Bar | Tablet di dapur | Antrean pesanan per stasiun, tandai sedang dibuat dan siap. |
+| Karyawan belanja / gudang | HP | Mencatat belanja bahan, menghitung stok opname, mencatat bahan terbuang. Izin diberikan lewat peran tambahan. |
+| Customer (tamu) | HP pribadi | Scan QR meja, lihat menu, pesan tanpa login, bayar (opsional QRIS online). |
 
-**Matriks permission (MVP):**
+**Daftar permission (dikelompokkan seperti di layar Peran & Akses):**
 
-| Permission | Owner | Manager | Kasir | Waiter | Dapur |
+| Kelompok | Permission |
+| --- | --- |
+| Pesanan & pembayaran | Buat / ubah order; Terima pembayaran; Diskon sampai batas kasir; Diskon di atas batas; Void & komplimen; Refund; Batalkan pesanan/item (belum dibayar); Pakai Stasiun Cetak; Update status dapur |
+| Shift & kas | Buka/tutup shift sendiri; Kelola shift orang lain & tutup hari; Lihat rekap shift sendiri; Input pengeluaran |
+| Laporan & akuntansi | Laporan penjualan & dashboard; Laporan kinerja dapur; Laporan margin & HPP; Jejak aktivitas; Lihat laporan akuntansi; Kelola akuntansi; Laporan waste |
+| Pengaturan & stok | Kelola menu; Kelola stok, bahan & resep; Kelola printer; Lihat daftar stok; Stok opname; Catat belanja bahan; Lihat dan kelola aset & alat; Impor dari Excel; Kelola data pemasok; Catat bahan/menu terbuang; Pembayaran QRIS online; Kelola meja & QR; Harga & pajak; Pengaturan outlet; Kelola user; Kelola peran & akses |
+
+**Default peran bawaan (ringkas):**
+
+| Kemampuan | Owner | Manager | Kasir | Waiter | Dapur |
 | --- | --- | --- | --- | --- | --- |
 | Buat / ubah order | Ya | Ya | Ya | Ya | Tidak |
 | Terima pembayaran | Ya | Ya | Ya | Tidak | Tidak |
-| Diskon ≤ batas kasir | Ya | Ya | Ya | Tidak | Tidak |
-| Diskon > batas kasir | Ya | Ya | PIN manager | Tidak | Tidak |
-| Void item / order | Ya | Ya | PIN manager | Tidak | Tidak |
+| Diskon > batas kasir / Void | Ya | Ya | PIN manager | Tidak | Tidak |
 | Refund | Ya | Ya | Tidak | Tidak | Tidak |
-| Buka / tutup shift | Ya | Ya | Ya (shift sendiri) | Tidak | Tidak |
+| Buka / tutup shift | Ya | Ya (termasuk shift orang lain) | Shift sendiri | Tidak | Tidak |
 | Update status dapur | Ya | Ya | Ya | Tidak | Ya |
-| Input pengeluaran | Ya | Ya | Tidak | Tidak | Tidak |
-| Laporan penjualan | Ya | Ya | Rekap shift sendiri | Tidak | Tidak |
-| Laporan akuntansi | Ya | Ya (baca) | Tidak | Tidak | Tidak |
-| Kelola menu, harga, pajak, user | Ya | Menu saja | Tidak | Tidak | Tidak |
+| Pengeluaran, laporan, akuntansi | Ya | Ya (akuntansi baca) | Rekap shift sendiri | Tidak | Tidak |
+| Stok, resep, pemasok, waste, impor | Ya | Ya | Sesuai izin tambahan | Tidak | Tidak |
+| Pengaturan, user, peran | Ya | Menu saja | Tidak | Tidak | Tidak |
 
-"PIN manager" berarti kasir bisa melakukan aksi itu setelah manager memasukkan PIN 6 digit di perangkat kasir; nama manager yang menyetujui tercatat di audit log.
+"PIN manager" berarti kasir bisa melakukan aksi itu setelah manager memasukkan PIN 6 digit di perangkat kasir; nama penyetuju tercatat di audit log. Peran bisa diberi opsi **login PIN** (staf masuk dengan PIN 6 angka); owner dan manager masuk dengan email + password (+ passkey/2FA).
 
 ## 4. User Stories & Acceptance Criteria
 
-Lima belas modul berikut membentuk MVP; setiap kriteria harus lolos test otomatis atau uji manual tertulis sebelum dianggap selesai.
+Modul 4.1–4.15 adalah inti POS; 4.16–4.27 ditambahkan setelah MVP. Setiap kriteria harus lolos test otomatis atau uji manual tertulis.
 
 ### 4.1 Menu, Kategori & Modifier
 
 **Story:** Sebagai owner, saya ingin mengatur menu beserta variasinya agar kasir dan customer melihat pilihan yang sama.
 
-- Produk punya: nama, kategori, harga dasar, foto (opsional), deskripsi, SKU/kode, stasiun dapur (Dapur/Bar), status tersedia/habis, urutan tampil.
-- Varian (misal Hot/Iced, Regular/Large) mengganti harga dasar; modifier group (misal Sugar Level, Extra Shot) menambah harga per opsi.
-- Modifier group punya aturan min/maks pilihan dan flag wajib/opsional; sistem menolak order yang melanggar aturan, di server.
-- Tombol "Habis" langsung menyembunyikan produk dari menu QR dan menandainya di layar kasir dalam ≤ 3 detik.
-- Perubahan harga tidak mengubah order lama: setiap item order menyimpan snapshot nama, harga, dan modifier saat dipesan.
+- Produk punya: nama, kategori, harga dasar, foto (opsional), deskripsi, SKU/kode, stasiun dapur, status tersedia/habis, urutan tampil.
+- Varian (Hot/Iced, Regular/Large) mengganti harga dasar; modifier group (Sugar Level, Extra Shot) menambah harga per opsi.
+- Modifier group punya aturan min/maks pilihan dan flag wajib/opsional; server menolak order yang melanggar.
+- Tombol "Habis" langsung menyembunyikan produk dari menu QR dan menandainya di layar kasir ≤ 3 detik.
+- Perubahan harga tidak mengubah order lama: setiap item order menyimpan snapshot nama, harga, dan modifier.
+- Menu bisa diisi dan diperbarui lewat impor Excel (lihat 4.21).
 
 ### 4.2 Area & Meja
 
-**Story:** Sebagai waiter, saya ingin melihat status semua meja agar tahu meja mana yang kosong, terisi, atau menunggu bayar.
+**Story:** Sebagai waiter, saya ingin melihat status semua meja agar tahu mana yang kosong, terisi, atau menunggu bayar.
 
-- Meja dikelompokkan per area (Indoor, Outdoor, Lantai 2) dengan kapasitas kursi.
+- Meja dikelompokkan per area (Indoor, Outdoor, dst.) dengan kapasitas kursi.
 - Status meja: Kosong, Terisi, Menunggu Bayar; berubah otomatis mengikuti order.
-- Setiap meja punya QR unik berisi token acak (bukan ID berurutan); owner bisa membuat ulang token jika QR bocor.
-- Fitur pindah meja dan gabung meja tersedia untuk kasir/manager, tercatat di audit log.
-- Halaman cetak QR menghasilkan PDF siap cetak, satu QR per meja dengan nama meja.
+- Setiap meja punya QR unik berisi token acak; owner bisa membuat ulang token jika QR bocor, dan menonaktifkan QR per meja.
+- Pindah meja, gabung meja, dan pindah item antar meja tersedia untuk kasir/manager, tercatat di audit log.
+- Halaman cetak QR menghasilkan PDF siap cetak, satu QR per meja.
 
 ### 4.3 POS Kasir & Input Order
 
-**Story:** Sebagai kasir, saya ingin memasukkan pesanan dengan sedikit ketukan agar antrean tidak menumpuk.
+**Story:** Sebagai kasir atau waiter, saya ingin memasukkan pesanan dengan sedikit ketukan agar antrean tidak menumpuk.
 
-- Tipe order: Dine-in (wajib pilih meja), Takeaway, dan Online/Ojol (label platform, tanpa integrasi).
-- Layar POS: tab kategori, grid produk, pencarian nama/kode, keranjang dengan qty, catatan per item, dan modal modifier.
-- Satu meja bisa punya beberapa ronde pesanan dalam satu order; tiap ronde dikirim ke dapur sebagai tiket terpisah.
-- Order bisa disimpan (open bill) dan dilanjutkan dari perangkat lain.
-- Total, pajak, service charge, dan diskon selalu dihitung ulang di server; angka dari browser hanya untuk tampilan.
-- Nomor order unik per hari dengan format `ORD-YYMMDD-NNNN`, dibuat di server dalam satu transaksi database.
+- Tipe order: Dine-in (pilih meja), Takeaway, Dine-in bayar dulu, dan Online/Ojol (label platform, tanpa integrasi).
+- Layar POS: tab Meja & order dan Menu, kategori, pencarian nama/kode, keranjang dengan qty, catatan per item, dan dialog varian/modifier.
+- Di HP, keranjang dan dialog muncul sebagai bottom sheet; tombol total melayang menunjukkan jumlah item dan nilai.
+- Satu meja bisa punya beberapa ronde pesanan dalam satu order; tiap ronde jadi tiket dapur terpisah.
+- Order disimpan (open bill) dan dilanjutkan dari perangkat lain.
+- Total, pajak, service charge, dan diskon selalu dihitung ulang di server.
+- Nomor order unik per hari `ORD-YYMMDD-NNNN`; takeaway mendapat nomor panggil harian (A-012).
+- Setiap order, ronde, item, dan pembayaran mencatat siapa yang membuat dan menerima.
 
 ### 4.4 Self-Order via QR Meja
 
 **Story:** Sebagai customer, saya ingin scan QR di meja dan memesan sendiri tanpa menunggu waiter.
 
-- Scan QR membuka halaman menu tanpa login dan tanpa instal aplikasi, dengan meja sudah terpilih otomatis.
+- Scan QR membuka halaman menu tanpa login dan tanpa instal aplikasi, meja sudah terpilih.
+- Halaman menu punya kolom cari (bila menu > 8 item), chip kategori yang menempel di atas, dan daftar menu dengan tombol tambah/pilih.
 - Customer memasukkan nama panggilan (wajib) sebelum kirim pesanan.
-- Pesanan QR masuk dengan status "Menunggu Konfirmasi" dan muncul di layar kasir ≤ 3 detik, berlabel "QR", disertai pop-up notifikasi dan bunyi.
-- Kasir menekan **Konfirmasi** (pesanan dikirim ke dapur) atau **Tolak** (alasan wajib, ditampilkan ke customer). Sebelum konfirmasi, kasir bisa mengubah item atau qty, misal karena menu habis.
-- Pesanan yang belum dikonfirmasi lebih dari 3 menit (bisa diatur) memicu notifikasi dan bunyi ulang sampai ditangani.
-- Setelah dikonfirmasi, jika meja sudah punya order terbuka, pesanan QR ditambahkan sebagai ronde baru ke order yang sama.
-- Customer melihat status pesanannya (Menunggu Konfirmasi, Diterima, Dibuat, Siap, Ditolak) dan total sementara di halaman yang sama.
-- Halaman QR menampilkan pesan "Pembayaran di kasir"; tidak ada tombol bayar.
-- Anti-spam: maksimal 5 pengiriman per meja per 10 menit, dan kasir bisa menonaktifkan QR per meja.
+- Pesanan masuk "Menunggu Konfirmasi", muncul di layar kasir ≤ 3 detik berlabel "QR" dengan pop-up dan bunyi. Kasir menekan **Konfirmasi** atau **Tolak** (alasan wajib, ditampilkan ke customer). Opsi konfirmasi otomatis tersedia di pengaturan.
+- Pesanan yang belum dikonfirmasi > 3 menit (bisa diatur) memicu notifikasi ulang.
+- Bila meja sudah punya order terbuka, pesanan QR menjadi ronde baru di order yang sama.
+- Customer melihat status (Menunggu Konfirmasi, Diterima, Dibuat, Siap, Ditolak) dan total sementara.
+- Pembayaran: "Pembayaran di kasir", atau tombol **Bayar dengan QRIS** bila QRIS online aktif (lihat 4.25).
+- Anti-spam: maksimal 5 pengiriman per meja per 10 menit.
 
 ### 4.5 Dapur / Kitchen Display (KDS)
 
 **Story:** Sebagai staf dapur, saya ingin melihat antrean pesanan untuk stasiun saya agar urutan pembuatan jelas.
 
-- Layar KDS per stasiun (default satu stasiun "Dapur & Bar", bisa ditambah dari pengaturan) menampilkan tiket dengan nomor meja/tipe order, item, modifier, catatan, dan umur tiket.
-- Status per item: Baru → Dibuat → Siap; staf mengetuk untuk memajukan status.
-- Tiket berubah warna setelah melewati ambang waktu yang bisa diatur (default 10 dan 20 menit).
-- Opsi cetak tiket ke printer dapur, selain atau sebagai pengganti layar. Tiket baru memicu bunyi notifikasi di KDS.
-- Item yang di-void setelah dikirim ke dapur muncul dengan coretan dan label VOID, tidak hilang diam-diam.
+- Layar KDS per stasiun menampilkan tiket dengan nomor meja/tipe order, item, modifier, catatan, dan umur tiket.
+- Status per item: Baru → Dibuat → Siap; staf mengetuk untuk memajukan.
+- Tiket berubah warna setelah ambang waktu (default 10 dan 20 menit, bisa diatur); bunyi untuk tiket baru.
+- Cetak tiket ke printer dapur sebagai tambahan atau pengganti layar.
+- Item yang di-void setelah dikirim muncul dengan coretan dan label VOID.
+- Laporan Kinerja Dapur: waktu penyajian per stasiun dan per menu.
 
-### 4.6 Pembayaran (Tunai / QRIS)
+### 4.6 Pembayaran
 
 **Story:** Sebagai kasir, saya ingin mencatat pembayaran beserta akun penerimanya agar owner tahu uang masuk ke mana.
 
-- Metode pembayaran dikelola sebagai data: setiap metode terhubung ke satu akun di chart of accounts (misal Tunai → Kas Laci, QRIS → Bank A, Transfer → Bank B). Metode dan rekening ditambah dari pengaturan tanpa ubah kode.
-- Tunai: input nominal diterima, sistem menghitung kembalian, dengan tombol cepat nominal (pas, 50.000, 100.000).
-- QRIS dan transfer bank: kasir memilih akun penerima dan bisa mengisi nomor referensi (opsional); tidak ada verifikasi otomatis ke bank. Pre-bill (cetak tagihan sebelum bayar) tersedia agar tamu bisa mengecek pesanan.
-- Split payment: satu order bisa dibayar dengan beberapa metode (misal sebagian tunai, sebagian QRIS).
-- Split bill: satu order bisa dipecah menjadi beberapa tagihan yang dibayar terpisah (detail di 4.6a).
-- Order berstatus Lunas hanya jika total pembayaran ≥ grand total; setelah lunas, order terkunci dari perubahan item.
-- Setiap pembayaran lunas otomatis membuat jurnal akuntansi dalam transaksi database yang sama.
+- Metode pembayaran adalah data, terhubung ke satu akun di chart of accounts; ditambah dari pengaturan.
+- Tunai: nominal diterima, kembalian dihitung, tombol cepat (uang pas, 50rb, 100rb, 150rb, 200rb).
+- QRIS dan transfer manual: kasir mengisi nomor referensi (opsional); tidak ada verifikasi otomatis.
+- Pre-bill (cetak tagihan sebelum bayar) dan pembayaran gabungan beberapa metode.
+- Order Lunas hanya jika total pembayaran ≥ grand total; setelah lunas order terkunci.
+- Setiap pembayaran lunas membuat jurnal dalam transaksi database yang sama.
+- Pembayaran ditolak bila tidak ada shift terbuka; manager/owner boleh memakai shift kasir yang sedang terbuka (pengaturan "shift bersama").
 
 ### 4.6a Split Bill
 
-**Story:** Sebagai kasir, saya ingin memecah satu tagihan meja menjadi beberapa tagihan agar setiap tamu bisa membayar bagiannya sendiri.
+**Story:** Sebagai kasir, saya ingin memecah tagihan meja agar tiap tamu membayar bagiannya.
 
-- Tiga mode pemecahan:
-  - **Per item**: kasir memilih item ke tagihan mana; qty bisa dipecah (2 kopi → 1 di tagihan A, 1 di tagihan B).
-  - **Bagi rata**: grand total dibagi N tagihan; sisa pembagian rupiah dibebankan ke tagihan terakhir.
-  - **Nominal bebas**: kasir mengisi nominal per tagihan; total semua tagihan harus sama dengan grand total.
-- Diskon order, service charge, dan pajak dibagi proporsional ke setiap tagihan sesuai porsi subtotalnya; pembulatan dihitung per tagihan.
-- Setiap tagihan punya label (misal "Tamu 1" atau nama), status sendiri (Belum Bayar, Lunas), dan bisa dibayar dengan metode berbeda.
-- Satu tagihan juga bisa dibayar dengan beberapa metode (split payment di dalam split bill).
-- Struk dicetak per tagihan, menampilkan item atau porsi yang dibayar dan nomor order induk.
-- Order berstatus Lunas hanya setelah semua tagihannya lunas; sebelum itu statusnya "Sebagian Dibayar" dan meja tetap "Menunggu Bayar".
-- Pemecahan bisa dibatalkan atau diubah selama belum ada tagihan yang lunas; setelah satu tagihan lunas, item di tagihan itu terkunci.
-- Item baru yang ditambahkan setelah split masuk ke tagihan "Belum dialokasikan" dan harus dialokasikan sebelum order bisa lunas.
-- Jurnal akuntansi dibuat per tagihan yang lunas, sehingga kas dan pendapatan tercatat sesuai waktu uang diterima.
-- Laporan penjualan tetap dihitung per order induk, sehingga jumlah transaksi tidak membengkak karena split.
+- Tiga mode: **Per item** (qty bisa dipecah), **Bagi rata**, **Nominal bebas**; plus **Bayar sebagian dulu** (pilih item dan jumlah yang dibayar sekarang, sisanya nanti).
+- Diskon, service charge, dan pajak dibagi proporsional; pembulatan per tagihan.
+- Tiap tagihan punya label, status, metode bayar sendiri; struk per tagihan.
+- Order Lunas setelah semua tagihan lunas; status antara "Sebagian Dibayar".
+- Pemecahan bisa diubah selama belum ada tagihan lunas; item baru setelah split masuk "Belum dialokasikan".
+- Jurnal dibuat per tagihan lunas; laporan penjualan tetap per order induk.
 
 ### 4.7 Shift Kasir & Rekap Kas
 
 **Story:** Sebagai manager, saya ingin setiap shift ditutup dengan hitungan kas fisik agar selisih langsung ketahuan.
 
-- Kasir tidak bisa menerima pembayaran tanpa shift terbuka di perangkatnya.
-- Buka shift: modal kembalian di laci terisi otomatis dari uang yang ditinggal shift sebelumnya; kasir menghitung dan mengonfirmasi atau mengoreksi.
-- Selama shift: catat kas masuk/keluar non-penjualan (misal beli es batu) dengan alasan.
-- Tutup shift: kasir input uang fisik per pecahan; sistem menampilkan kas seharusnya, kas fisik, dan selisih.
-- Saat tutup shift, kasir mengisi uang yang ditinggal di laci sebagai modal kembalian shift berikutnya; sisanya dicatat sebagai setoran ke owner atau bank.
-- Selisih ≠ 0 wajib diisi alasan; selisih otomatis dijurnal ke akun Selisih Kas.
-- Rekap shift bisa dicetak: total per metode bayar, jumlah order, void, diskon, komplimen, refund.
+- Pembayaran butuh shift terbuka. Buka shift: modal awal terisi dari uang yang ditinggal shift sebelumnya, dikonfirmasi atau dikoreksi.
+- Selama shift: kas masuk/keluar non-penjualan dengan alasan.
+- Tutup shift: uang fisik per pecahan; sistem menampilkan kas seharusnya, kas fisik, selisih; uang yang ditinggal dan yang disetor dicatat.
+- Selisih ≠ 0 wajib alasan dan dijurnal ke Selisih Kas; manager dinotifikasi.
+- Rekap shift bisa dicetak dan (opsional) dikirim ke Telegram/email/WhatsApp.
+- Shift yang lupa ditutup memicu notifikasi ke manager.
 
 ### 4.8 Diskon, Void & Refund
 
-**Story:** Sebagai owner, saya ingin setiap pengurangan nilai transaksi tercatat siapa yang melakukan dan siapa yang menyetujui.
+**Story:** Sebagai owner, saya ingin setiap pengurangan nilai tercatat siapa pelaku dan penyetujunya.
 
-- Diskon per item atau per order, nominal atau persentase, dengan alasan wajib. Batas diskon kasir tanpa PIN manager diatur dari pengaturan (default 10%).
-- Promo terjadwal (misal Happy Hour 15.00–17.00) dikonfigurasi dari pengaturan.
-- Void sebelum bayar: item atau order dibatalkan, butuh PIN manager, alasan wajib.
-- Refund setelah bayar: hanya manager/owner, membuat jurnal pembalik, order asli tidak diubah.
-- Tidak ada transaksi yang di-hard-delete; semua pembatalan tercatat sebagai status dan entri audit.
+- Diskon per item atau per order (nominal/persen), alasan wajib; batas diskon kasir tanpa PIN diatur (default 10%).
+- Promo terjadwal (Happy Hour) dari pengaturan.
+- Void sebelum bayar: butuh PIN manager bila diatur, alasan wajib.
+- Komplimen dan staff meal: nilai tidak masuk omzet, tercatat di laporan.
+- Refund setelah bayar: manager/owner, membuat jurnal pembalik.
+- Laporan Diskon/Void/Refund menampilkan pelaku dan penyetuju. Tidak ada hard delete.
 
 ### 4.9 Pajak, Service Charge & Pembulatan
 
-**Story:** Sebagai owner, saya ingin mengatur tarif pajak dan biaya tanpa mengubah kode.
+- Komponen biaya punya nama, tarif, aktif/nonaktif, urutan, dan basis; default semua nonaktif.
+- Mode harga inclusive atau exclusive (berlaku untuk order baru).
+- Pembulatan: tanpa, Rp100, atau Rp500; selisih di akun tersendiri.
+- Rincian per order disimpan sebagai snapshot.
 
-- Setiap komponen biaya punya: nama, tarif persen, aktif/nonaktif, urutan perhitungan, dan basis (subtotal setelah diskon, atau subtotal + komponen sebelumnya).
-- Default urutan: Subtotal → Diskon → Service Charge → Pajak (PB1 atau PPN).
-- Saat go-live tidak ada pajak aktif: semua komponen default nonaktif dan struk tidak menampilkan baris pajak. Mode harga dipilih dari pengaturan: harga menu sudah termasuk pajak (tax-inclusive) atau belum (tax-exclusive); perubahan mode hanya berlaku untuk order baru.
-- Pembulatan grand total bisa diatur: tanpa pembulatan, ke Rp100, atau ke Rp500; selisih pembulatan dicatat di akun tersendiri.
-- Rincian setiap komponen disimpan per order (snapshot tarif), sehingga perubahan tarif tidak mengubah laporan lama.
+### 4.10 Laporan Penjualan & Dashboard
 
-### 4.10 Laporan Penjualan
+**Story:** Sebagai owner, saya ingin melihat performa dari HP agar bisa ambil keputusan menu dan jadwal staf.
 
-**Story:** Sebagai owner, saya ingin melihat performa penjualan dari HP agar bisa ambil keputusan menu dan jadwal staf.
-
-- Dashboard: omzet hari ini, jumlah transaksi, rata-rata nilai transaksi, dan perbandingan dengan hari yang sama minggu lalu.
-- Laporan dengan filter rentang tanggal: penjualan per hari, per jam, per produk, per kategori, per metode bayar, per kasir, per tipe order.
-- Laporan diskon, void, dan refund dengan nama pelaku dan penyetuju.
-- Ekspor setiap laporan ke Excel (.xlsx) dan PDF.
-- Laporan 30 hari tampil ≤ 2 detik untuk data hingga 50.000 order.
+- Dashboard: omzet hari ini dengan tren vs minggu lalu, jumlah transaksi, rata-rata transaksi, grafik omzet 14 hari, penjualan per jam, produk terlaris.
+- Laporan dengan filter tanggal dan pengelompokan: per hari, jam, produk, kategori, metode bayar, kasir, tipe order.
+- Laporan Margin & HPP (4.16), Waste (4.19), Kinerja Dapur, Diskon/Void/Refund.
+- Ekspor ke Excel dan PDF. Laporan 30 hari tampil ≤ 2 detik untuk 50.000 order.
 
 ### 4.11 Akuntansi (Double-Entry Ringan)
 
-**Story:** Sebagai owner, saya ingin laba rugi dan posisi kas tersusun otomatis dari transaksi harian.
-
-- Chart of accounts bawaan (bisa diedit): Kas Laci, Bank per rekening QRIS, Pendapatan Penjualan, Pendapatan Service Charge, Utang Pajak, Diskon Penjualan, Selisih Kas, Selisih Pembulatan, Beban per kategori, Modal Pemilik.
-- Jurnal otomatis dari: pembayaran lunas, refund, selisih shift, kas masuk/keluar, pengeluaran.
-- Jurnal manual oleh owner untuk koreksi, dengan validasi debit = kredit. Saldo awal saat go-live (uang kembalian di laci, saldo rekening, modal) diisi sekali oleh owner sebagai jurnal pembuka terhadap Modal Pemilik.
-- Jurnal yang sudah diposting tidak bisa diedit; koreksi lewat jurnal pembalik.
-- Laporan: Buku Besar per akun, Jurnal Umum, Laba Rugi per periode, Neraca sederhana, Arus Kas per akun kas/bank.
-- Tutup buku bulanan mengunci periode dari jurnal baru.
+- Chart of accounts bawaan (bisa diedit) termasuk Persediaan Bahan, Kas Belanja Bahan, HPP, Beban Bahan Terbuang, Selisih Stok.
+- Jurnal otomatis dari pembayaran lunas, refund, selisih shift, kas masuk/keluar, pengeluaran, dan (opsional) kejadian stok.
+- Jurnal manual oleh owner dengan validasi debit = kredit; saldo awal sebagai jurnal pembuka.
+- Jurnal terposting tidak bisa diedit; koreksi lewat jurnal pembalik.
+- Laporan: Buku Besar, Jurnal Umum, Laba Rugi, Neraca sederhana, Arus Kas. Tutup buku bulanan mengunci periode.
 
 ### 4.12 Pengeluaran Operasional
 
-**Story:** Sebagai manager, saya ingin mencatat pengeluaran harian agar laba rugi akurat.
-
-- Input pengeluaran: tanggal, kategori beban, nominal, sumber dana (Kas Laci atau rekening bank), catatan, foto nota (opsional).
-- Setiap pengeluaran membuat jurnal otomatis: Debit Beban, Kredit akun sumber dana.
-- Kategori beban dikelola owner (misal Bahan Baku, Gaji, Listrik, Sewa).
+- Input: tanggal, kategori beban, nominal, sumber dana (kas laci atau bank), catatan, foto nota.
+- Jurnal otomatis: Debit Beban, Kredit akun sumber. Kategori dikelola owner/manager.
+- **Dipakai untuk belanja non-stok** (tissue, sabun, plastik, listrik, gaji). Belanja bahan stok dicatat lewat Belanja Bahan (4.17), bukan di sini.
 
 ### 4.13 Struk & Printer
 
-**Story:** Sebagai kasir, saya ingin mencetak struk dan tiket dapur tanpa dialog cetak browser.
+- Struk berisi outlet, nomor order, tanggal-jam, kasir, meja, item+modifier, rincian pajak/biaya, metode bayar, kembalian, catatan kaki.
+- Printer thermal 58/80 mm lewat QZ Tray, Bluetooth, atau RawBT; fallback cetak browser. Routing tiket/struk per stasiun cetak, kategori, dan menu; **Stasiun Cetak** adalah layar antrean cetak untuk perangkat tanpa printer langsung.
+- Cetak ulang tercatat berlabel "COPY". Struk digital: tautan publik bertoken, dibagikan via WhatsApp.
 
-- Struk berisi: nama dan alamat outlet, nomor order, tanggal-jam, kasir, meja, item + modifier, rincian pajak/biaya, metode bayar, kembalian, catatan kaki yang bisa diatur.
-- Mendukung printer thermal ESC/POS 58 mm dan 80 mm, koneksi USB maupun LAN, dicetak lewat QZ Tray; printer dan lebar kertas dipilih per perangkat dari pengaturan. Jika gagal, fallback ke cetak browser.
-- Cetak ulang struk tercatat di audit log dengan label "COPY".
-- Opsi kirim struk digital: link struk publik bertoken yang bisa dibagikan via WhatsApp.
+### 4.14 Pengaturan, User & Peran
 
-### 4.14 Pengaturan & User
-
-- Profil outlet: nama, alamat, logo, NPWP (opsional), jam operasional.
-- Manajemen user: buat, nonaktifkan (tidak dihapus), reset password, set PIN, set role.
-- Semua pengaturan tersimpan di tabel `settings` dengan cache; perubahan tercatat di audit log.
+- Profil outlet, jam operasional; metode bayar, pajak, promo.
+- Layar Pengaturan terbagi tab: Operasional (hari bisnis, pembulatan, tutup hari otomatis, shift bersama, batas diskon, **warna aksen aplikasi**), Pesanan QR, Stok & HPP, Dapur (KDS), Kasir & struk, Keamanan, QRIS Online, Notifikasi, Metode bayar, Pajak & biaya, Promo.
+- Manajemen user: buat, nonaktifkan, reset password, set PIN, set peran.
+- **Peran & Akses:** owner membuat peran baru dan mencentang izin per kelompok; peran bawaan bisa diubah (owner tidak). Opsi login PIN per peran.
+- Semua perubahan pengaturan tercatat di audit log.
 
 ### 4.15 Fitur Operasional Tambahan
 
-**Story:** Sebagai owner, saya ingin kasus sehari-hari di kafe tertangani di sistem, bukan dicatat manual di luar POS.
+- **Komplimen & staff meal**, **nomor panggil**, **stok porsi** (produk "Habis" saat 0), **pindah item antar meja**.
+- **Tutup hari otomatis:** setelah hari bisnis berganti dan semua shift ditutup, aplikasi membuat laporan harian sendiri; tidak ada tombol tutup hari wajib.
+- **Laporan Harian** bisa dilihat untuk tanggal mana pun, diunduh (Excel/PDF), dan dikirim ulang ke Telegram, email, atau WhatsApp.
+- **Bunyi notifikasi** di perangkat kasir dengan pengaturan volume dan mute; butuh satu ketukan untuk mengaktifkan audio.
 
-- **Komplimen & staff meal:** item bisa ditandai komplimen atau staff meal dengan alasan dan PIN manager. Nilainya tidak masuk omzet, tercatat di laporan komplimen dengan harga jual, dan belum dijurnal sampai HPP tersedia di v2.0.
-- **Nomor panggil:** order takeaway mendapat nomor panggil harian (misal A-012) yang tampil di struk, KDS, dan layar kasir.
-- **Stok porsi:** produk bisa diberi stok porsi (misal 20 croissant). Stok berkurang saat order dikonfirmasi, kembali saat item di-void, dan produk otomatis "Habis" saat stok 0. Produk tanpa stok porsi dianggap tidak terbatas.
-- **Pindah item antar meja:** kasir bisa memindahkan item yang belum dibayar ke meja atau order lain, tercatat di audit log.
-- **Tutup hari (Z-report):** setelah semua shift ditutup, manager menutup hari bisnis. Rekap omzet, metode bayar, void, diskon, komplimen, dan selisih kas dikirim otomatis ke Telegram owner.
-- **Pusat notifikasi:** kasir menerima pop-up dan bunyi untuk order QR baru, order QR yang belum dikonfirmasi, dan item yang sudah Siap. Bunyi bisa diatur volumenya dan dimatikan per perangkat. Browser butuh satu ketukan setelah login untuk mengizinkan audio.
+### 4.16 Stok Bahan, Resep & HPP
 
-## 5. Non-Goals (Tidak Dibangun di MVP)
+**Story:** Sebagai owner, saya ingin tahu stok bahan dan keuntungan per menu tanpa menghitung manual.
 
-Daftar ini sengaja dibatasi agar MVP selesai sebelum kafe buka; setiap item bisa masuk roadmap setelah go-live.
+- Opsional (Pengaturan › Stok & HPP). Nonaktif: menu stok disembunyikan dan penjualan tidak menyentuh stok.
+- **Bahan** punya nama, satuan dasar (hanya `g`, `ml`, `pcs`), batas menipis, stok, biaya rata-rata. Satuan dasar tidak bisa diubah bila sudah punya riwayat.
+- **Kemasan beli** per bahan (misal botol = 750 ml, karung = 25.000 g): saat belanja/opname orang memilih kemasan dan sistem mengonversi ke satuan dasar; konversi ditampilkan di bawah jumlah.
+- **Resep** per menu (dan per varian), plus bahan tambahan per modifier. Jumlah memakai satuan dasar.
+- **Konsumsi otomatis:** saat order dikonfirmasi, stok berkurang sesuai resep; saat item di-void, stok kembali. Opsi menolak pesanan jika bahan tidak cukup (default mati; stok bisa minus sebagai tanda perlu opname).
+- **HPP dibekukan** per item order (`cogs`); kenaikan harga bahan berikutnya tidak mengubah penjualan lama. Biaya rata-rata bergerak dihitung saat belanja disetujui.
+- **Peringatan kenaikan harga:** manager diberi tahu bila harga beli naik lebih dari persen tertentu (default 15%) dari biaya rata-rata.
+- Layar: **Stok & Bahan** (tab Bahan, Pembelian, Opname staf, Riwayat stok), **Resep & HPP** (daftar menu, biaya, margin), **Daftar Stok** (untuk staf, tanpa harga).
+- Laporan **Margin & HPP** per produk, kategori, dan hari dengan ekspor Excel/PDF.
 
-- Integrasi payment gateway atau verifikasi QRIS otomatis ke bank.
-- Inventori bahan baku, resep, dan HPP per menu.
-- Multi-outlet aktif (skema sudah siap, UI dan laporan lintas outlet belum).
+### 4.17 Belanja Bahan & Pemasok
+
+**Story:** Sebagai karyawan yang berbelanja, saya ingin mencatat bahan yang dibeli dengan cepat; sebagai manager, saya ingin menyetujuinya.
+
+- Karyawan dengan izin catat belanja membuka **Belanja Bahan**: tanggal, pemasok (pilihan dari data pemasok), baris bahan (jumlah, satuan, total harga), kirim.
+- Pilihan bahan bisa dicari dengan mengetik; hanya bahan terdaftar yang bisa dipilih (bahan baru didaftarkan manager atau lewat impor Excel).
+- Persetujuan: belanja staf menunggu manager (default aktif); stok dan biaya rata-rata berubah setelah disetujui. Manager dengan izin kelola stok langsung masuk. Penolakan wajib alasan, terlihat oleh pencatat. Tidak boleh menyetujui belanja sendiri kecuali owner.
+- **Data pemasok:** nama, telepon/WA, alamat, catatan, aktif/nonaktif; riwayat belanja per pemasok, total 30 hari, jumlah bahan; tombol chat WhatsApp.
+- **Perbandingan harga** antar pemasok per bahan (termurah di atas) dan peringatan kenaikan harga.
+- Hutang pemasok tidak termasuk (ditunda).
+
+### 4.18 Stok Opname
+
+- Karyawan dengan izin menghitung stok mengisi jumlah nyata per bahan (boleh dalam kemasan). Secara default stok sistem disembunyikan ("hitung buta") agar jujur.
+- Alur: draft → kirim → manager menyetujui atau menolak (alasan). Pengirim tidak boleh menyetujui sendiri kecuali owner; persetujuan otomatis bisa diaktifkan.
+- Setelah disetujui, stok disamakan dengan hitungan dan selisih dicatat sebagai pergerakan stok; manager dinotifikasi saat ada hitungan menunggu.
+- Mendukung impor Excel.
+
+### 4.19 Bahan & Menu Terbuang (Waste)
+
+- Layar **Bahan Terbuang**: tab Bahan baku (bahan, jumlah, satuan, alasan, catatan) dan Menu jadi (menu, varian, porsi; bahan di resep ikut berkurang).
+- Alasan dari daftar yang dikelola manager (Basi/busuk, Kadaluarsa, Tumpah, Rusak/pecah, Salah buat, Lainnya).
+- Nilai rupiah dibekukan pada biaya rata-rata saat itu; pelaku tercatat; manager dinotifikasi bila pencatat bukan pengelola stok.
+- **Laporan Waste:** nilai total, item dan alasan terbanyak, pengelompokan per item/alasan/pencatat/hari, rincian kejadian, ekspor Excel/PDF.
+
+### 4.20 Aset & Alat
+
+- Daftar peralatan (nama, kategori, lokasi, kondisi, tanggal beli, nilai) dengan riwayat servis dan perbaikan.
+- Peringatan ke manager untuk alat yang rusak atau perlu perhatian. Impor Excel tersedia.
+
+### 4.21 Impor Excel
+
+- Untuk: bahan, belanja, stok opname, resep, menu, aset, pemasok. Setiap jenis punya template yang sudah berisi data terkini dan lembar petunjuk.
+- Alur: unggah → **pratinjau** per baris (baru, ubah, ok, galat dengan penjelasan) → terapkan. Galat tidak membatalkan baris lain; tidak ada yang tersimpan sebelum disetujui pengguna.
+- Daftar pilihan (bahan, satuan, pemasok) divalidasi; bahan/pemasok baru boleh dibuat dari file bila satuan dasar valid. Butuh izin impor plus izin layar terkait.
+
+### 4.22 Pusat Notifikasi
+
+- Lonceng di header menampilkan notifikasi sesuai izin pengguna: belanja/opname menunggu persetujuan, stok menipis, kenaikan harga, selisih kas, shift lupa ditutup, alat rusak, refund, waste, pembayaran QRIS yang belum tercatat.
+- Notifikasi bisa ditandai dibaca, hilang otomatis saat urusannya selesai, dan dibersihkan berkala agar ringan. Pembaruan lewat realtime dengan polling cadangan yang hemat.
+- Peringatan penting (stok menipis, selisih kas, shift lupa, alat rusak, QRIS tertahan) dapat diteruskan ke Telegram/email/WhatsApp.
+
+### 4.23 Jejak Aktivitas (Audit Log)
+
+- Layar yang bisa dicari dan difilter: siapa, melakukan apa, kapan, pada apa (order, pembayaran, shift, stok, pengaturan, impor, login gagal).
+- Semua aksi sensitif tercatat dengan pelaku, penyetuju (bila ada), dan nilai sebelum/sesudah.
+
+### 4.24 Laporan Harian & Pengiriman Laporan
+
+- Laporan Harian: omzet bersih, diskon, void/komplimen, selisih kas, rincian per metode bayar, daftar shift, riwayat harian dengan grafik.
+- Dikirim otomatis (harian, dan opsional tiap shift ditutup) ke Telegram, email (SMTP), dan WhatsApp lewat gateway pihak ketiga; tombol "Kirim sekarang" untuk tanggal yang dipilih. Pengaturan saluran ada di tab Notifikasi.
+
+### 4.25 Pembayaran QRIS Online (Opsional)
+
+**Story:** Sebagai customer, saya ingin membayar dari HP setelah memesan, tanpa antre di kasir.
+
+- Default mati (Pengaturan › QRIS Online). Gateway: Midtrans (QRIS dinamis, bisa dibayar dari BCA, GoPay, OVO, Dana, dll) atau mode Simulasi untuk uji coba.
+- Setelah pesanan dikonfirmasi dan tagihan tidak dipecah, halaman QR menampilkan **Bayar dengan QRIS**; kode QR berlaku N menit (default 15) dan halaman otomatis berubah saat lunas.
+- Gateway memanggil webhook yang diverifikasi tanda tangan; pembayaran tercatat otomatis sebagai pembayaran QRIS di shift terbuka atas nama sistem "Pembayaran Online". Webhook ganda aman (idempotent).
+- Bila tidak ada shift terbuka, tagihan berubah, atau nominal berbeda, pembayaran **tertahan** dan manager mendapat peringatan; manager bisa **Catat ulang** dari layar **Pembayaran Online**, yang juga menampilkan daftar dan status semua transaksi serta cara mengaktifkan.
+- Pembayaran manual oleh kasir tetap berjalan seperti biasa.
+
+### 4.26 Peran & Akses
+
+- Lihat 4.14. Setiap fitur baru wajib datang dengan izinnya sendiri dan migrasi yang memberikannya ke peran yang sudah ada.
+
+### 4.27 Pengalaman Pakai di Semua Perangkat
+
+- Tabel di layar admin punya pencarian, filter dropdown otomatis, dan pengurutan dari kepala kolom; di HP berubah menjadi daftar kartu dengan kontrol Urutkan.
+- Pilihan dari daftar panjang (bahan, menu) memakai kolom ketik-untuk-cari.
+- Dialog di HP muncul sebagai bottom sheet; target sentuh ≥ 44 px.
+- Warna aksen aplikasi bisa dipilih owner (Biru, Hijau, Oranye, Ungu); warna status tidak ikut berubah.
+
+## 5. Non-Goals (Belum Dibangun)
+
+- Multi-outlet aktif (skema siap, UI dan laporan lintas outlet belum).
+- Mode offline penuh (PWA dengan sinkronisasi); saat ini butuh internet.
+- Hutang pemasok dan pembayaran bertahap ke pemasok.
+- Program loyalty, member, poin, dan voucher pelanggan.
 - Integrasi API GoFood, GrabFood, ShopeeFood.
-- Pembayaran online oleh customer dari halaman QR.
-- Program loyalty, member, poin, dan voucher.
-- Mode offline penuh (PWA dengan sinkronisasi). MVP butuh internet.
-- Aplikasi native Android/iOS. Semua akses lewat browser.
-- Payroll, absensi, dan penjadwalan staf.
+- Verifikasi otomatis QRIS statis ke bank (QRIS online hanya lewat gateway).
+- Aplikasi native Android/iOS; semua lewat browser.
+- Payroll, absensi, penjadwalan staf.
 - E-Faktur pajak dan pelaporan pajak otomatis.
+- Pemesanan ke pemasok otomatis (purchase order) dan stok per gudang.
 
 ## 6. Non-Functional Requirements
 
-Setiap requirement di bawah punya angka yang bisa diuji; yang tidak bisa diuji belum boleh dianggap requirement.
-
 ### 6.1 Responsive & Mobile-First
 
-Desain dimulai dari layar 360 px, lalu diperluas ke tablet dan desktop.
+Desain dimulai dari 360 px, lalu diperluas ke tablet dan desktop.
 
-| Layar | Lebar | Target utama | Layout POS |
+| Layar | Lebar | Target utama | Layout |
 | --- | --- | --- | --- |
-| HP | 360–767 px | Customer QR, waiter, owner cek laporan | Satu kolom; keranjang sebagai bottom sheet dengan tombol total melayang. |
-| Tablet | 768–1279 px | Kasir, KDS dapur | Dua kolom: grid produk kiri, keranjang kanan (tetap terlihat). |
-| Desktop | ≥ 1280 px | Owner, manager, admin | Dua kolom dengan sidebar navigasi tetap. |
+| HP | 360–767 px | Customer QR, waiter, karyawan belanja/opname, owner cek laporan | Satu kolom; keranjang dan dialog sebagai bottom sheet; header satu baris; tombol total melayang. |
+| Tablet | 768–1279 px | Kasir, KDS | Dua kolom: meja/menu kiri (grid menyesuaikan lebar), panel pesanan kanan 340–380 px. |
+| Desktop | ≥ 1280 px | Owner, manager, admin | Sidebar tetap, konten maks 1400 px, tabel penuh. |
 
-- Target sentuh minimal 44 × 44 px; tombol utama kasir minimal 48 px tinggi.
-- Tidak ada scroll horizontal di semua halaman pada lebar 360 px.
-- Tabel laporan di HP berubah menjadi daftar kartu, atau tabel dengan kolom pertama sticky.
-- Diuji di: Chrome Android, Safari iOS, Chrome desktop; minimal satu tablet Android 10" dan satu HP 6" fisik.
-- Mendukung mode terang dan gelap; KDS default gelap agar terbaca di dapur.
+- Target sentuh ≥ 44 × 44 px; tombol utama kasir ≥ 48 px tinggi.
+- Tidak ada scroll horizontal di 360 px; tabel menjadi kartu di HP.
+- Mode terang dan gelap; KDS default gelap.
+- Diuji di Chrome Android, Safari iOS, Chrome desktop; minimal satu tablet 10" dan satu HP 6".
 
 ### 6.2 Performa
 
-- Halaman QR menu: First Contentful Paint ≤ 1,8 detik di jaringan 4G lambat (profil Lighthouse "Slow 4G").
-- Bundle JavaScript halaman QR ≤ 150 KB gzip (code-splitting per halaman Inertia).
-- Respons API simpan order dan bayar ≤ 300 ms (p95) di server.
-- Update realtime (order baru ke KDS dan kasir) ≤ 3 detik end-to-end.
-- Foto produk dikonversi ke WebP, maksimal 800 px, ≤ 120 KB.
+- QR menu: FCP ≤ 1,8 detik di Slow 4G; JS halaman QR ≤ 150 KB gzip.
+- API simpan order dan bayar ≤ 300 ms (p95). Update realtime ≤ 3 detik.
+- Foto produk WebP ≤ 800 px ≤ 120 KB. Polling notifikasi hemat: tidak berjalan di tab tersembunyi.
 
 ### 6.3 Ketersediaan & Keandalan
 
-- Target uptime aplikasi 99,5% per bulan pada jam operasional.
-- Backup database otomatis setiap 6 jam, disalin ke penyimpanan di luar VPS, disimpan 30 hari.
-- Uji restore backup dilakukan minimal sekali sebulan, dicatat hasilnya.
-- Semua operasi uang (bayar, refund, tutup shift) idempotent: tombol ditekan dua kali tidak membuat dua transaksi.
+- Uptime 99,5% pada jam operasional. Backup DB tiap 6 jam ke luar VPS, simpan 30 hari; uji restore bulanan.
+- Semua operasi uang (bayar, refund, tutup shift, pembayaran online) idempotent.
+- Perintah penghapus database (`migrate:fresh`, `db:wipe`) ditolak di database yang bukan `*_testing`.
 
 ### 6.4 Aksesibilitas & Bahasa
 
-- Skor Lighthouse Accessibility ≥ 90 di halaman kasir, KDS, dan QR.
-- Kontras teks minimal 4,5:1 (WCAG AA).
-- Bahasa antarmuka Bahasa Indonesia; semua teks lewat file terjemahan agar Bahasa Inggris bisa ditambah tanpa ubah kode.
-- Format angka Rupiah `Rp12.500`, tanggal `20 Okt 2026`.
+- Lighthouse Accessibility ≥ 90; kontras ≥ 4,5:1; fokus terlihat; semua kontrol bisa dipakai dengan keyboard (termasuk kolom ketik-untuk-cari).
+- Bahasa Indonesia lewat file terjemahan; format `Rp12.500`, tanggal `20 Okt 2026`; angka tabel memakai angka tabular.
 
 ## 7. Technical Specifications
 
-Arsitekturnya modular monolith: satu aplikasi Laravel, dipecah per domain bisnis, agar sederhana di-deploy di satu VPS tapi tetap rapi untuk dikembangkan.
+Modular monolith: satu aplikasi Laravel dipecah per domain bisnis.
 
 ### 7.1 Stack
 
-| Lapisan | Pilihan | Alasan |
-| --- | --- | --- |
-| Backend | Laravel 13, PHP 8.4 | Ekosistem matang, sesuai keahlian tim. |
-| Frontend | React 19 + Inertia 2 + TypeScript, dari Laravel React starter kit | Satu repo, tanpa API terpisah untuk halaman internal. |
-| UI | Tailwind CSS 4 + shadcn/ui | Komponen aksesibel, mudah dikustom, ringan. |
-| Database | PostgreSQL 17 | Sesuai keputusan; mendukung `CHECK` constraint, partial index, JSONB. |
-| Cache, queue, session | Redis + Laravel Horizon | Queue untuk cetak, ekspor laporan, notifikasi. |
-| Realtime | Laravel Reverb (WebSocket) + Laravel Echo | Update KDS dan kasir ≤ 3 detik, self-hosted. |
-| Data object | spatie/laravel-data + typescript-transformer | Satu definisi DTO menghasilkan tipe TypeScript otomatis. |
-| Route typing | Laravel Wayfinder | Route dan controller ter-typing di sisi React. |
-| Permission | spatie/laravel-permission | Matriks hak akses di bagian 3. |
-| Audit | spatie/laravel-activitylog | Log siapa mengubah apa. |
-| Ekspor | maatwebsite/excel, barryvdh/laravel-dompdf | Laporan .xlsx dan PDF. |
-| Cetak | QZ Tray (di PC/tablet kasir) | Cetak langsung ke printer thermal ESC/POS. |
-| Test | Pest + Playwright | Unit, feature, dan alur end-to-end. |
-| Kualitas kode | Laravel Pint, Larastan level 8, ESLint, Prettier | Dijalankan otomatis di CI. |
+| Lapisan | Pilihan |
+| --- | --- |
+| Backend | Laravel 13, PHP 8.4 |
+| Frontend | React 19 + Inertia 2 + TypeScript, Vite |
+| UI | Tailwind CSS 4 + shadcn/ui (Radix), font Inter, ikon lucide |
+| Database | PostgreSQL 17 |
+| Cache, queue, session | Redis + Laravel Horizon |
+| Realtime | Laravel Reverb + Echo |
+| Permission & audit | spatie/laravel-permission, spatie/laravel-activitylog |
+| Ekspor & PDF | maatwebsite/excel, dompdf, bacon/bacon-qr-code |
+| Cetak | QZ Tray, Bluetooth/RawBT, antrean Stasiun Cetak |
+| Pembayaran online | Midtrans Core API (QRIS) melalui adapter gateway |
+| Test | Pest (PostgreSQL asli), Playwright (HP 360, tablet 768, desktop 1280) |
+| Kualitas | Pint, Larastan level 8, ESLint/oxlint, Prettier |
 
-Stack di atas final untuk MVP. Versi minor dikunci di `composer.json` dan `package-lock.json` saat proyek dimulai; upgrade major hanya lewat PR terpisah dengan seluruh test lulus.
-
-### 7.2 Struktur Kode (Clean Code)
-
-Setiap domain punya folder sendiri; controller tipis, logika bisnis di Action, data antar lapisan lewat DTO.
+### 7.2 Struktur Kode
 
 ```
-app/
-  Domain/
-    Catalog/        Product, Category, Variant, ModifierGroup
-    Floor/          Area, Table, TableToken
-    Ordering/       Order, OrderRound, OrderItem, OrderStatus
-    Kitchen/        KitchenTicket, Station
-    Payment/        Payment, PaymentMethod
-    Shift/          Shift, CashMovement
-    Accounting/     Account, JournalEntry, JournalLine, Period
-    Expense/        Expense, ExpenseCategory
-    Pricing/        TaxRule, Discount, Promotion, PriceCalculator
-    Reporting/      Query object per laporan
-    Settings/       Setting, OutletProfile
-      (per domain: Models/ Actions/ Data/ Enums/ Events/ Policies/ Exceptions/)
-  Http/
-    Controllers/    tipis: validasi -> panggil Action -> return Inertia/JSON
-    Requests/       FormRequest per endpoint
-  Support/
-    Money.php       value object Rupiah (bigint)
-resources/js/
-  pages/            satu folder per domain, mengikuti route
-  components/ui/    shadcn/ui
-  components/pos/   komponen khusus POS (Cart, ProductGrid, ModifierSheet)
-  types/generated/  hasil typescript-transformer, tidak diedit manual
+app/Domain/
+  Catalog/ Floor/ Ordering/ Kitchen/ Payment/ Shift/ Accounting/ Expense/
+  Pricing/ Reporting/ Settings/
+  Inventory/    Ingredient, IngredientUnit, RecipeLine, StockMovement, Purchase,
+                StockCount, Supplier, WasteEntry, InventoryService, WasteService,
+                StockCountService, InventoryJournal
+  Import/       Importer per jenis, ImportService, TemplateBuilder, SheetReader
+  Notification/ Notifier, ReportDelivery, DeliverMessageJob, Alerts
+  Printing/     PrintDispatcher, routing stasiun
+  Asset/        Asset, ServiceLog
+  Payment/Online/  QrisGateway, MidtransGateway, FakeGateway, OnlinePaymentService
 ```
 
-**Aturan coding:**
+**Aturan coding:** satu Action = satu use case; operasi uang di `DB::transaction()` dengan `lockForUpdate()`; controller tipis; status memakai Enum; jurnal dibuat sinkron dalam transaksi yang sama; semua uang integer; fitur baru = izin baru + migrasi pemberi izin + pengaturan opsional default mati.
 
-- Satu Action = satu use case dengan satu method publik `handle()`, misal `PlaceOrderAction`, `RecordPaymentAction`, `CloseShiftAction`.
-- Operasi uang dibungkus `DB::transaction()` dan memakai `lockForUpdate()` pada baris order/shift yang diubah.
-- Controller tidak boleh berisi query atau perhitungan; maksimal validasi, panggil Action, kembalikan respons.
-- Status memakai PHP Enum; transisi status hanya lewat method yang memvalidasi transisi yang diizinkan.
-- Antar domain berkomunikasi lewat Action publik atau Event, bukan saling mengakses model internal.
-- Jurnal akuntansi dibuat sinkron di dalam transaksi yang sama dengan pembayaran, bukan lewat queue, agar tidak ada pembayaran tanpa jurnal.
-- Semua uang memakai value object `Money` berbasis integer; float dilarang untuk nominal.
+### 7.3 Skema Database (ringkas)
 
-### 7.3 Skema Database (PostgreSQL)
-
-Primary key `bigint`; tabel yang terekspos ke publik (meja, struk) memakai kolom `public_id` ULID tambahan. Semua nominal `bigint` rupiah dengan `CHECK (amount >= 0)`.
+Tabel inti (outlets, users, categories, products, variants, modifiers, areas, tables, orders, order_rounds, order_items, order_charges, discounts, payments, payment_methods, refunds, shifts, cash_movements, tax_rules, accounts, journal_entries, journal_lines, periods, expenses, settings, activity_log, bills, bill_items) sama seperti PRD MVP. Tabel tambahan:
 
 | Tabel | Kolom penting | Catatan |
 | --- | --- | --- |
-| `outlets` | name, address, timezone | Satu baris di MVP. |
-| `users` | name, email, pin\_hash, is\_active | Soft deactivate, tidak dihapus. |
-| `categories` | outlet\_id, name, sort |  |
-| `products` | category\_id, name, sku, base\_price, station, is\_available, stock\_qty (null = tidak terbatas), image\_path | Soft delete. |
-| `product_variants` | product\_id, name, price | Mengganti harga dasar. |
-| `modifier_groups` | name, min\_select, max\_select, is\_required | Relasi many-to-many ke products. |
-| `modifiers` | modifier\_group\_id, name, price\_delta |  |
-| `areas`, `tables` | name, capacity, qr\_token, status, qr\_enabled | `qr_token` unik, bisa dibuat ulang. |
-| `orders` | outlet\_id, number, type, table\_id, status, customer\_name, subtotal, discount\_total, charge\_total, rounding, grand\_total, paid\_total, call\_number, business\_date, opened\_by, closed\_at, shift\_id | `UNIQUE(outlet_id, number)`. |
-| `order_rounds` | order\_id, source (pos/qr), status (pending/confirmed/rejected), confirmed\_by, reject\_reason, created\_by | Satu ronde = satu tiket dapur. |
-| `order_items` | order\_round\_id, product\_id, name\_snapshot, unit\_price, qty, modifiers\_snapshot (JSONB), note, line\_total, status, voided\_by, void\_reason, comp\_type (complimentary/staff\_meal), comp\_approved\_by | Snapshot harga, tidak berubah. |
-| `order_charges` | order\_id, tax\_rule\_id, name\_snapshot, rate, base, amount | Snapshot pajak/biaya. |
-| `discounts` | order\_id, order\_item\_id, type, value, amount, reason, approved\_by |  |
-| `payments` | order\_id, bill\_id, payment\_method\_id, amount, tendered, change, reference, idempotency\_key, shift\_id, received\_by | `UNIQUE(idempotency_key)`. |
-| `payment_methods` | name, type (cash/qris/transfer), account\_id, is\_active | Menentukan uang masuk ke akun mana. |
-| `refunds` | payment\_id, amount, reason, approved\_by |  |
-| `shifts` | user\_id, device\_label, opening\_cash, expected\_cash, counted\_cash, cash\_left, cash\_deposited, difference, difference\_reason, opened\_at, closed\_at | Satu shift terbuka per user (partial unique index). |
-| `cash_movements` | shift\_id, direction, amount, reason, account\_id |  |
-| `tax_rules` | name, rate\_bp, sequence, base, is\_inclusive, is\_active | Tarif dalam basis poin (1000 = 10%). |
-| `accounts` | code, name, type (asset/liability/equity/revenue/expense), is\_system |  |
-| `journal_entries` | date, period\_id, source\_type, source\_id, memo, posted\_at, reversed\_by | Polymorphic ke order/refund/expense/shift. |
-| `journal_lines` | journal\_entry\_id, account\_id, debit, credit | `CHECK` hanya salah satu > 0. |
-| `periods` | month, year, closed\_at | Periode tertutup menolak jurnal baru. |
-| `expenses`, `expense_categories` | date, category\_id, amount, source\_account\_id, note, receipt\_path |  |
-| `settings` | key, value (JSONB) | Di-cache. |
-| `activity_log` | dari spatie/activitylog | Audit semua aksi sensitif. |
+| `ingredients` | name, unit (g/ml/pcs), stock, avg\_cost, min\_stock, preferred\_supplier\_id, is\_active | Biaya rata-rata bergerak. |
+| `ingredient_units` | ingredient\_id, name, factor | Kemasan beli. |
+| `recipe_lines`, `modifier_ingredients` | product/variant/modifier → ingredient, qty | Resep dan bahan tambahan. |
+| `stock_movements` | ingredient\_id, type (purchase/sale/void\_return/waste/opname), qty, unit\_cost, order\_item\_id, purchase\_id, waste\_entry\_id, user\_id | Buku besar stok. |
+| `order_items` (tambahan) | cogs, inventory\_consumed | HPP dibekukan. |
+| `purchases`, `purchase_items` | supplier\_id, supplier, status (pending/approved/rejected), reviewed\_by, review\_note, total | Persetujuan belanja. |
+| `stock_counts`, `stock_count_lines` | status (draft/submitted/approved/rejected), reviewer | Opname. |
+| `suppliers` | name, phone, address, note, is\_active | Unik per outlet. |
+| `waste_reasons`, `waste_entries` | kind (ingredient/product), qty, unit, reason, cost, user\_id | Waste. |
+| `assets`, `asset_services` | kondisi, lokasi, servis | Aset & alat. |
+| `app_notifications`, `notification_reads` | kind, title, body, url, level, permissions, dedupe\_key, resolved\_at | Notifikasi per izin. |
+| `online_payments` | public\_id, order\_id, bill\_id, provider, provider\_ref, amount, status, qr\_string, expires\_at, paid\_at, payment\_id, applied\_at, error | Pembayaran QRIS online. |
+| `printers`, routing | stasiun cetak dan aturan | Tiket/struk per stasiun. |
+| kolom pelaku | `*_by` pada order, ronde, pembayaran, bill, shift | Jejak "siapa". |
 
-**Tabel split bill:**
-
-| Tabel | Kolom penting | Catatan |
-| --- | --- | --- |
-| `bills` | order\_id, label, split\_mode (item/equal/amount), subtotal, discount\_total, charge\_total, rounding, grand\_total, paid\_total, status | Order tanpa split tetap punya satu `bill` default agar alur bayar seragam. |
-| `bill_items` | bill\_id, order\_item\_id, qty, line\_total | Untuk mode per item; `SUM(qty)` per order\_item tidak boleh melebihi qty item. |
-
-Konsistensi jurnal dijaga dua lapis: Action menolak entri yang tidak seimbang, dan constraint trigger PostgreSQL memastikan jumlah debit sama dengan jumlah kredit per `journal_entry` saat commit.
+Konsistensi jurnal: Action menolak entri tidak seimbang, dan constraint trigger PostgreSQL memastikan debit = kredit per entri saat commit.
 
 ### 7.4 Pemetaan Jurnal Otomatis
 
 | Kejadian | Debit | Kredit |
 | --- | --- | --- |
-| Order lunas | Kas Laci / Bank per metode bayar; Diskon Penjualan | Pendapatan Penjualan (subtotal kotor); Pendapatan Service Charge; Utang Pajak; Selisih Pembulatan (atau sebaliknya jika minus) |
-| Refund | Kebalikan proporsional dari jurnal order | Kas Laci / Bank |
-| Kas keluar di shift | Beban sesuai kategori | Kas Laci |
-| Kas masuk di shift | Kas Laci | Akun sesuai alasan (misal Modal Pemilik) |
-| Selisih kas kurang | Selisih Kas | Kas Laci |
-| Selisih kas lebih | Kas Laci | Selisih Kas |
+| Order lunas | Kas Laci / Bank per metode; Diskon Penjualan | Pendapatan Penjualan; Service Charge; Utang Pajak; Selisih Pembulatan |
+| Refund | Kebalikan proporsional | Kas Laci / Bank |
+| Kas keluar/masuk shift | Beban / Kas Laci | Kas Laci / akun sesuai alasan |
+| Selisih kas | Selisih Kas / Kas Laci | Kas Laci / Selisih Kas |
 | Pengeluaran | Beban sesuai kategori | Kas Laci atau Bank |
-| Setor kas laci ke bank | Bank | Kas Laci |
+| Belanja bahan disetujui (opsional) | Persediaan Bahan | Kas Belanja Bahan |
+| Penjualan dengan resep (opsional) | HPP | Persediaan Bahan (dibalik saat void) |
+| Waste (opsional) | Beban Bahan Terbuang | Persediaan Bahan |
+| Selisih opname (opsional) | Persediaan Bahan / Selisih Stok | Selisih Stok / Persediaan Bahan |
 
-### 7.5 Integrasi & Realtime
+Jurnal stok aktif hanya bila Pengaturan › Stok & HPP › "Catat stok ke jurnal akuntansi" dinyalakan; berlaku sejak diaktifkan.
 
-- Channel Reverb: `outlet.{id}.orders` untuk kasir, `outlet.{id}.kitchen.{station}` untuk KDS, `table.{public_id}` untuk halaman status customer.
-- Event yang di-broadcast: `QrOrderSubmitted`, `OrderRoundConfirmed`, `OrderItemStatusChanged`, `OrderPaid`, `ProductAvailabilityChanged`.
-- Jika WebSocket putus, frontend polling setiap 10 detik sampai koneksi pulih, dan menampilkan indikator "Offline".
-- Halaman QR customer memakai route publik terpisah dengan rate limit dan tanpa sesi admin.
-- QZ Tray: sertifikat penandatanganan disimpan di server, request cetak ditandatangani backend agar tidak muncul dialog izin di setiap cetak.
+### 7.5 Integrasi, Realtime & Terjadwal
+
+- Channel Reverb: pesanan kasir, KDS per stasiun, status meja, notifikasi outlet. Polling cadangan bila WebSocket putus; indikator "Offline".
+- Webhook gateway: `POST /webhooks/qris/{provider}` tanpa sesi, dengan verifikasi tanda tangan gateway.
+- Terjadwal: backup DB, tutup hari otomatis (tiap 30 menit), pembersihan notifikasi (harian), penyapuan QRIS (tiap menit).
+- Pengiriman laporan dan peringatan: Telegram bot, SMTP, gateway WhatsApp, lewat queue.
 
 ### 7.6 Siklus Status Order
 
-&#91;embedded content: siklus status order · 2 sumber, 7 status\]
-
-Order dari POS dan QR masuk ke order yang sama; setelah lunas, order hanya bisa dikoreksi lewat refund dengan jurnal pembalik.
+Order dari POS dan QR masuk ke order yang sama. Status: Terbuka → Sebagian Dibayar → Lunas, atau Dibatalkan; item: Menunggu konfirmasi → Baru → Dibuat → Siap, atau VOID/Ditolak. Setelah lunas, order hanya bisa dikoreksi lewat refund dengan jurnal pembalik.
 
 ## 8. Security & Privacy
 
-Prinsip utamanya: setiap rupiah bisa dilacak ke orang dan waktu, dan halaman publik QR tidak membuka akses ke data internal.
-
 **Autentikasi & otorisasi**
 
-- Login staf dengan email + password (bcrypt/argon2), sesi berbasis cookie, timeout 12 jam atau saat shift ditutup.
-- PIN manager 6 digit di-hash, maksimal 5 percobaan salah lalu terkunci 15 menit.
-- Setiap aksi dicek lewat Policy + permission di server; menyembunyikan tombol di UI bukan pengamanan.
-- 2FA (TOTP) wajib untuk akun owner.
+- Email + password untuk owner/manager (passkey dan 2FA TOTP didukung; 2FA wajib untuk owner); staf dapat login PIN 6 digit bila perannya mengizinkan.
+- PIN manager di-hash; 5 percobaan salah mengunci 15 menit (bisa diatur).
+- Semua aksi dicek lewat Policy + permission di server; menyembunyikan tombol bukan pengamanan.
 
-**Halaman publik QR**
+**Halaman publik (QR, struk, webhook)**
 
-- Token meja acak 32 karakter, bisa dibuat ulang; token lama langsung tidak berlaku.
-- Rate limit per IP dan per meja; customer hanya bisa menambah item dan melihat order mejanya sendiri.
-- Harga, ketersediaan, dan aturan modifier divalidasi ulang di server; payload dari customer tidak dipercaya.
+- Token meja acak 32 karakter, bisa dibuat ulang; rate limit per IP dan per meja; payload customer tidak dipercaya.
+- Webhook pembayaran diverifikasi tanda tangan dan nominal; tidak bergantung pada login.
 
 **Integritas data**
 
-- Tidak ada hard delete untuk order, pembayaran, jurnal, shift, dan user.
-- Idempotency key pada pembayaran mencegah transaksi ganda saat koneksi lambat atau tombol ditekan dua kali.
-- Audit log mencatat: void, refund, diskon, cetak ulang, ubah harga, ubah pajak, buka/tutup shift, jurnal manual, login gagal.
+- Tidak ada hard delete untuk order, pembayaran, jurnal, shift, user.
+- Idempotency key pada pembayaran; persetujuan dua orang untuk belanja dan opname (pengirim tidak menyetujui sendiri, kecuali owner).
+- Audit log mencatat void, refund, diskon, cetak ulang, perubahan harga/pajak/pengaturan, shift, jurnal manual, persetujuan stok, impor, login gagal.
+- Rahasia (token bot, kunci gateway) tidak pernah ditampilkan lagi setelah disimpan.
 
 **Infrastruktur**
 
-- HTTPS wajib (Let's Encrypt), HSTS aktif.
-- Firewall hanya membuka port 22, 80, 443; SSH login dengan key, password login dimatikan, Fail2ban aktif.
-- PostgreSQL dan Redis hanya mendengarkan localhost.
-- File `.env` di luar web root, `APP_DEBUG=false` di produksi.
+- HTTPS wajib; firewall hanya 22/80/443; SSH key; Fail2ban; PostgreSQL dan Redis hanya localhost; `.env` di luar web root; `APP_DEBUG=false`.
+- Database dev dilindungi dari perintah penghapus; tes memakai database terpisah.
 
 **Privasi**
 
-- Data customer yang disimpan hanya nama panggilan dari QR order; tidak ada nomor HP atau email di MVP.
-- Jika nanti menyimpan nomor HP untuk struk WhatsApp, perlu persetujuan eksplisit sesuai UU Pelindungan Data Pribadi (UU 27/2022).
+- Data customer hanya nama panggilan. Nomor HP/email pelanggan tidak disimpan. Bila nanti disimpan, butuh persetujuan eksplisit sesuai UU 27/2022.
 
-## 9. Deployment ke VPS Hostinger
+## 9. Deployment
 
-Satu VPS menjalankan seluruh stack; deploy otomatis dari GitHub dengan zero-downtime dan backup ke luar server.
-
-**Spesifikasi server minimum**
-
-| Komponen | Minimum | Catatan |
-| --- | --- | --- |
-| vCPU / RAM | 2 vCPU / 8 GB | Cukup untuk 1 outlet; PostgreSQL, Redis, Reverb, dan PHP-FPM dalam satu mesin. |
-| Disk | 100 GB NVMe | Termasuk foto produk dan backup lokal 7 hari. |
-| OS | Ubuntu 24.04 LTS |  |
-| Region | Asia (terdekat ke Indonesia) | Latensi rendah untuk kasir dan KDS. |
-
-**Layanan yang berjalan**
-
-- Nginx (reverse proxy + proxy WebSocket ke Reverb), PHP 8.4-FPM, PostgreSQL, Redis.
-- Supervisor menjalankan: Horizon (queue), Reverb (WebSocket).
-- Cron: `php artisan schedule:run` setiap menit (backup, tutup periode, bersihkan token kedaluwarsa).
-
-**Alur deploy**
-
-1. Push ke branch `main` memicu GitHub Actions: Pint, Larastan, ESLint, test Pest.
-2. Jika lulus, build aset frontend di CI lalu deploy lewat Deployer via SSH ke folder rilis baru.
-3. Jalankan `migrate --force`, cache config/route/view, lalu ganti symlink `current` ke rilis baru (zero-downtime).
-4. Restart Horizon dan Reverb dengan perintah graceful; simpan 5 rilis terakhir untuk rollback cepat.
-5. Migrasi yang mengubah data uang wajib punya rencana rollback tertulis di PR.
-
-**Lingkungan**
-
-- `local` (Laravel Herd untuk PHP dan Nginx, DBngin untuk PostgreSQL 17 dan Redis), `staging` (subdomain di VPS yang sama, database terpisah), `production`.
-- Versi PostgreSQL di DBngin harus sama dengan produksi (17) agar perilaku query, index, dan constraint identik. Database test terpisah (`pos_testing`) dibuat di instance DBngin yang sama.
-- Reverb dan queue di lokal dijalankan dengan `composer run dev` (server, queue, Vite, Reverb sekaligus); CI di GitHub Actions memakai service container PostgreSQL 17 dan Redis.
-- Staging dipakai untuk uji coba staf sebelum fitur masuk produksi.
-
-**Backup & monitoring**
-
-- `pg_dump` terkompresi setiap 6 jam via spatie/laravel-backup, dikirim ke Cloudflare R2, retensi 30 hari.
-- Aktifkan juga snapshot VPS mingguan dari panel Hostinger sebagai lapisan kedua.
-- UptimeRobot cek `/up` setiap 1 menit, notifikasi ke WhatsApp/Telegram owner.
-- Error tracking dengan Sentry (paket gratis), metrik server dengan Laravel Pulse.
-- Log rotasi harian, disimpan 14 hari.
+- **Server:** satu VPS (Ubuntu 24.04, 2 vCPU/8 GB minimum) menjalankan Nginx, PHP-FPM, PostgreSQL, Redis, Horizon, Reverb (Supervisor). Cron `schedule:run` tiap menit.
+- **Alur:** push ke `main` → CI (Pint, Larastan, lint, Pest) → build aset → deploy zero-downtime lewat Deployer → `migrate --force` → restart Horizon dan Reverb. Pengembangan fitur baru dilakukan di branch `dev` dan digabung ke `main` setelah tes lulus; setiap rilis dengan migrasi baru wajib menjalankan `php artisan migrate --force`.
+- **Lingkungan:** local (Herd + DBngin), staging, production; database tes `pos_testing` terpisah (`.env.testing`).
+- **Backup & monitoring:** `pg_dump` tiap 6 jam ke Cloudflare R2 (retensi 30 hari), snapshot VPS mingguan, UptimeRobot di `/up`, Sentry, Laravel Pulse.
 
 ## 10. Testing & Definition of Done
 
-Modul yang menyentuh uang (Pricing, Payment, Shift, Accounting) wajib coverage test ≥ 90%; modul lain ≥ 70%.
+Modul uang (Pricing, Payment, Shift, Accounting, Inventory, Online) wajib coverage ≥ 90%; modul lain ≥ 70%.
 
 | Level | Alat | Wajib menguji |
 | --- | --- | --- |
-| Unit | Pest | `PriceCalculator` (semua kombinasi pajak inclusive/exclusive, diskon, pembulatan), `Money`, transisi status order. |
-| Feature | Pest + database PostgreSQL asli (bukan SQLite) | Setiap Action: place order, tambah ronde QR, bayar split, void, refund, tutup shift, jurnal seimbang. |
-| Konkurensi | Pest, dua proses paralel | Dua kasir membayar order yang sama; dua pembayaran dengan idempotency key sama. |
-| End-to-end | Playwright | Alur QR order → KDS → bayar → struk, di viewport 360 px, 768 px, dan 1280 px. |
-| Uji staf | Manual di staging | 1–2 minggu simulasi operasional sebelum go-live. |
+| Unit | Pest | `PriceCalculator`, `Money`, transisi status, konversi satuan. |
+| Feature | Pest + PostgreSQL asli | Setiap Action: order, ronde QR, bayar, split, void, refund, shift, jurnal, belanja dan persetujuan, opname, waste, impor, notifikasi, QRIS online (webhook, tanda tangan, shift tertahan). |
+| Konkurensi | Pest | Dua kasir membayar order yang sama; idempotency key ganda. |
+| End-to-end | Playwright | QR order → KDS → bayar → struk; bayar sebagian; di 360, 768, 1280 px. |
+| Uji staf | Manual di staging | 1–2 minggu simulasi sebelum go-live. |
 
-**Test invariant akuntansi (wajib, dijalankan di setiap CI):**
+**Invariant akuntansi (setiap CI):** debit = kredit per entri; saldo Kas Laci per shift sesuai rumus; pendapatan Laba Rugi = penjualan lunas − pajak − refund; saldo Persediaan Bahan = nilai stok (bila jurnal stok aktif).
 
-- Total debit = total kredit untuk setiap `journal_entry`.
-- Saldo akun Kas Laci per shift = modal awal + penjualan tunai + kas masuk − kas keluar − refund tunai.
-- Total pendapatan di Laba Rugi = total grand total order lunas − pajak − refund untuk periode yang sama.
-
-**Definition of Done per fitur:**
-
-- [ ] Acceptance criteria di bagian 4 terpenuhi dan ada test-nya.
-- [ ] Lolos Pint, Larastan level 8, ESLint, tanpa warning baru.
-- [ ] Tampilan dicek di 360 px, 768 px, dan 1280 px.
-- [ ] Aksi sensitif tercatat di audit log.
-- [ ] Migrasi bisa di-rollback, atau rencana rollback ditulis di PR.
-- [ ] Sudah diuji di staging oleh minimal satu staf non-developer.
+**Definition of Done per fitur:** kriteria bagian 4 terpenuhi dan ada test; lolos Pint, Larastan, lint; tampilan dicek di 360/768/1280 px; aksi sensitif masuk audit log; izin baru dibuat dan diberikan ke peran lama lewat migrasi; pengaturan opsional default mati; migrasi bisa di-rollback; diuji staf non-developer.
 
 ## 11. Risiko & Roadmap
-
-Risiko terbesar adalah internet kafe putus, karena seluruh POS berjalan di VPS dan MVP tidak punya mode offline.
 
 ### 11.1 Risiko Teknis
 
 | Risiko | Dampak | Mitigasi |
 | --- | --- | --- |
-| Internet kafe putus | Kasir, KDS, dan QR order berhenti total. | Router dengan failover modem 4G; prosedur manual darurat (nota tulis) dan input susulan; mode offline dipertimbangkan di v2.0. |
-| VPS down atau rusak | Operasional berhenti, risiko kehilangan data. | Backup 6 jam ke luar VPS, snapshot mingguan, runbook restore yang sudah diuji ≤ 60 menit. |
-| Selisih perhitungan pajak/pembulatan | Laporan dan jurnal tidak cocok dengan uang nyata. | Satu `PriceCalculator` untuk semua, unit test semua kombinasi, snapshot tarif per order. |
-| Pembayaran ganda saat koneksi lambat | Omzet dan kas tercatat lebih. | Idempotency key, `lockForUpdate`, tombol bayar dikunci setelah ditekan. |
-| QR meja disalahgunakan (order iseng dari luar kafe) | Dapur membuat pesanan palsu. | Rate limit, kasir bisa menonaktifkan QR per meja, token bisa dibuat ulang, dan setiap order QR wajib dikonfirmasi kasir sebelum masuk dapur. |
-| QZ Tray gagal di perangkat kasir | Struk dan tiket dapur tidak tercetak. | Fallback cetak browser dan KDS layar sebagai jalur utama dapur. |
-| Scope creep | MVP tidak selesai sebelum kafe buka. | Non-goals di bagian 5 dikunci; fitur baru masuk backlog v1.1. |
-| Developer tunggal | Pengembangan berhenti jika developer berhalangan. | Struktur domain yang konsisten, README per domain, CI wajib lulus. |
+| Internet kafe putus | Kasir, KDS, QR berhenti. | Failover modem 4G; nota tulis darurat; mode offline di roadmap. |
+| VPS down | Operasional berhenti. | Backup 6 jam, snapshot, runbook restore. |
+| Selisih pajak/pembulatan | Laporan tidak cocok. | Satu `PriceCalculator`, unit test, snapshot tarif. |
+| Pembayaran ganda | Omzet lebih. | Idempotency, `lockForUpdate`, tombol terkunci. |
+| QR meja disalahgunakan | Order palsu. | Rate limit, konfirmasi kasir, token bisa diganti. |
+| Data stok tidak rapi | HPP dan laporan margin menyesatkan. | Satuan dikunci, konversi otomatis, opname rutin dengan persetujuan, peringatan stok minus. |
+| Pembayaran QRIS online tertahan | Uang masuk tapi order belum lunas. | Tahan dan peringatan ke manager, penyapuan tiap menit, tombol catat ulang. |
+| Kunci gateway bocor | Penyalahgunaan akun gateway. | Rahasia disembunyikan di UI, rotasi kunci, mode sandbox untuk uji. |
+| Developer tunggal | Pengembangan berhenti. | Struktur domain konsisten, test, CI. |
 
 ### 11.2 Roadmap
 
-| Fase | Cakupan | Gate untuk lanjut |
+| Fase | Cakupan | Status |
 | --- | --- | --- |
-| MVP | Modul 4.1–4.14 di bagian 4. | Semua acceptance criteria lulus; 1–2 minggu uji staf di staging tanpa selisih kas yang tidak terjelaskan. |
-| v1.1 | Harga per kanal ojol + pencatatan komisi, kasbon/piutang, pencatatan tip, reservasi meja dengan DP, promo lebih lengkap, struk WhatsApp, dashboard owner yang lebih kaya, setor kas ke bank dari UI. | 30 hari operasional stabil, KPI di bagian 1 tercapai. |
-| v2.0 | Inventori bahan baku dan HPP per menu, mode offline (PWA + sinkronisasi), multi-outlet, integrasi payment gateway QRIS dinamis, integrasi ojol. | Kebutuhan bisnis tervalidasi; data penjualan v1.x cukup untuk menentukan prioritas. |
-
-&#91;Low Confidence\] Estimasi MVP 6–10 minggu untuk satu developer full-time, ditambah 1–2 minggu uji staf. Angka ini berdasarkan perkiraan umum ukuran cakupan, bukan data historis tim; perbarui setelah sprint pertama selesai.
+| MVP | Modul 4.1–4.14. | Selesai. |
+| v1.1 | Stok/resep/HPP, belanja dan pemasok, opname, waste, aset, impor Excel, notifikasi, jejak aktivitas, laporan harian otomatis dan pengiriman, peran & akses, jurnal stok, QRIS online (opsional), penyegaran UI. | Selesai di branch `dev`; digabung ke `main` setelah uji staf. |
+| Berikutnya | Uji staf dan go-live di staging; hutang pemasok; pelanggan, voucher, dan poin; harga per kanal ojol dan komisi; reservasi meja; setor kas ke bank dari UI. | Direncanakan. |
+| v2.0 | Mode offline (PWA + sinkronisasi), multi-outlet, integrasi ojol, QRIS dinamis langsung dipakai produksi. | Menunggu validasi kebutuhan. |
 
 ## 12. Open Questions
 
-Pertanyaan ini perlu dijawab sebelum sprint pertama karena memengaruhi skema atau prioritas.
+- [ ] Model printer thermal dan metode koneksi per perangkat.
+- [ ] Jumlah meja, area, dan nominal modal kembalian awal.
+- [ ] Gateway pembayaran: pilihan final dan status verifikasi akun usaha (perorangan atau badan usaha).
+- [ ] Apakah karyawan perlu bisa mencatat belanja non-stok (tissue dll) dengan persetujuan manager.
+- [ ] Apakah karyawan boleh mengusulkan bahan baru dari form belanja.
+- [ ] Rencana jualan via ojol (menentukan harga per kanal).
+- [ ] Pendaftaran pajak (PB1/PKP) di masa depan.
+- [ ] Warna aksen default final (saat ini Biru) setelah desain baru diputuskan.
 
-- [ ] Daftar akun QRIS dan rekening transfer. Diisi dari pengaturan saat setup, tidak menghambat development.
-- [ ] Model printer thermal. Tentukan sebelum uji staf agar bisa dites fisik.
-- [ ] Jumlah meja dan area. Diisi dari pengaturan saat setup.
-- [ ] Batas diskon kasir final (default 10%).
-- [ ] Nominal modal kembalian awal di laci.
-- [ ] Rencana jualan via ojol, yang menentukan prioritas harga per kanal di v1.1.
-- [ ] Pendaftaran pajak (PB1/PKP) di masa depan. Sistem sudah siap, tinggal diaktifkan dari pengaturan.
+## 13. Brief Desain UI/UX
+
+Bagian ini untuk perancang (manusia atau alat desain). Tujuannya: antarmuka modern, sederhana, dan mudah dipakai di HP, tablet, dan desktop, terutama untuk **customer, kasir, dan waiter**.
+
+### 13.1 Prinsip
+
+1. **Kecepatan di atas hiasan.** Kasir dan waiter bekerja sambil berdiri; setiap layar utama menyelesaikan tugasnya dalam sedikit ketukan.
+2. **Satu tindakan utama per layar**, ditandai tombol solid warna aksen; tindakan lain berupa tombol outline atau teks.
+3. **Jangan terlihat seperti template AI:** tanpa gradien, tanpa efek kaca/glow, tanpa emoji dekoratif, tanpa kartu di dalam kartu, tanpa ikon di setiap baris, tanpa bayangan tebal. Kejelasan dan hierarki lewat tipografi, jarak, dan garis tipis.
+4. **Tabel untuk data, kartu seperlunya.** Di desktop data berbentuk tabel dengan pencarian, filter, dan pengurutan; di HP berubah menjadi daftar kartu.
+5. **Warna punya arti.** Warna aksen untuk aksi dan navigasi aktif; hijau/kuning/merah hanya untuk status (kosong/terisi/menunggu bayar, siap/dibuat, peringatan). Status tidak ikut berubah saat aksen diganti.
+6. **Ramah jempol.** Target sentuh ≥ 44 px, aksi utama di bawah layar di HP, dialog sebagai bottom sheet.
+7. **Bahasa Indonesia ringkas**, kalimat aksi jelas ("Kirim ke dapur", "Catat terbuang"), tanpa istilah teknis.
+8. **Tetap terbaca saat ramai:** kontras ≥ 4,5:1, ukuran teks minimal 14 px (16 px untuk input di HP), angka tabular.
+
+### 13.2 Token Visual (nilai saat ini; boleh disempurnakan)
+
+| Token | Nilai |
+| --- | --- |
+| Font | Inter 400/500/600/700; judul halaman 20–24 px semibold, tracking rapat; badan 14 px; label kecil 12–13 px. |
+| Latar | Netral dingin sangat terang (`oklch(0.982 0.003 250)`); kartu putih dengan garis 1 px (`oklch(0.915 0.005 250)`). Mode gelap tersedia. |
+| Aksen (default Biru) | `oklch(0.5 0.19 262)`; pilihan lain: Hijau, Oranye, Ungu. Teks di atas aksen putih. |
+| Status | Hijau (kosong/siap/lunas), Kuning (terisi/dibuat/menunggu), Merah (menunggu bayar/void/bahaya), Biru muda (baru), Abu (menunggu konfirmasi). Selalu dengan teks atau titik, tidak hanya warna. |
+| Radius | 8–12 px untuk kontrol dan kartu; 16 px untuk bottom sheet. |
+| Bayangan | Hampir tidak ada; hanya pada elemen melayang (tombol total, dropdown, sheet). |
+| Jarak | Skala 4 px; padding halaman 16 px di HP, 24 px di desktop; konten admin maks 1400 px. |
+| Gerak | Transisi singkat 150–200 ms untuk hover, buka sheet, dan pilih; tidak ada animasi dekoratif. |
+
+### 13.3 Komponen yang Perlu Dirancang
+
+- Tombol (utama, outline, ghost, destruktif) dengan tinggi 40/44/48/56 px; tombol ikon.
+- Input teks, angka, rupiah (rata kanan, pemisah ribuan), tanggal, area catatan; **kolom ketik-untuk-cari** (combobox) dengan daftar hasil, sorotan baris aktif, dan pesan "tidak ada yang cocok".
+- Select/dropdown, tab (garis bawah untuk halaman; segmented untuk dua pilihan besar di POS), chip kategori.
+- **Tabel responsif**: kolom pencarian, filter dropdown otomatis, kepala kolom yang bisa diurutkan, baris hover, kolom Aksi dengan tombol diam (teks/ghost), keadaan kosong, dan versi kartu di HP.
+- Kartu statistik (label kecil, angka besar, petunjuk tren dengan ikon naik/turun).
+- Grafik sederhana: garis (tren), kolom (per jam), batang horizontal tipis (peringkat), semuanya dengan label sumbu terbaca dan alternatif teks.
+- Dialog: tengah layar di tablet/desktop, bottom sheet di HP dengan handle dan **footer menempel** untuk tombol utama.
+- Kartu meja (status dengan titik warna, nomor, kapasitas, total), tile menu (nama, harga, sisa stok, label HABIS), baris item pesanan (qty × nama, modifier, catatan, status, aksi Void/Diskon/Komplimen).
+- Panel pesanan (header, daftar item per ronde, ringkasan Subtotal/Diskon/Pajak/Total, tombol bayar), dialog bayar (nominal besar, metode, tombol nominal cepat, kembalian), dialog split bill (tiga mode + bayar sebagian).
+- Lonceng notifikasi dengan badge dan daftar, toast, banner peringatan (shift belum dibuka, bunyi belum aktif), badge status.
+- Sidebar dengan grup (Harian, Kelola, Laporan, Keuangan, Pengaturan), tooltip saat ciut, dan item aktif bertinta aksen.
+- Kerangka muat (skeleton), keadaan kosong dengan ajakan tindakan, pesan galat inline dan toast.
+
+### 13.4 Aturan per Perangkat
+
+| Perangkat | Pengguna | Aturan tata letak |
+| --- | --- | --- |
+| HP (360–767) | Customer, waiter, karyawan belanja/opname | Satu kolom; header satu baris; tab segmented Meja & order / Menu; tiga tombol cepat (Takeaway, Dine-in bayar dulu, Online/Ojol); tombol total melayang di bawah; keranjang, modifier, bayar sebagai bottom sheet; chip kategori menempel; tabel menjadi kartu. |
+| Tablet (768–1279) | Kasir, dapur | Dua kolom: kiri meja/menu dengan grid menyesuaikan lebar, kanan panel pesanan tetap terlihat; target sentuh besar; KDS gelap dengan tiket berwarna menurut umur. |
+| Desktop (≥1280) | Owner, manager | Sidebar tetap + konten maks 1400 px; tabel penuh dengan toolbar; laporan dengan grafik di atas tabel; dialog di tengah. |
+
+### 13.5 Keadaan yang Harus Didesain
+
+Kosong (belum ada data), memuat, galat (jaringan putus, validasi), sukses (toast), tidak ada izin (menu tersembunyi, bukan error), offline (indikator di header), shift belum dibuka (banner + tombol Buka shift), stok habis, stok menipis, menunggu persetujuan, ditolak dengan alasan, QRIS menunggu/lunas/kedaluwarsa.
+
+## 14. Inventaris Layar
+
+Navigasi staf (sidebar), dengan izin yang menampilkannya:
+
+| Grup | Layar | Pengguna utama | Isi inti |
+| --- | --- | --- | --- |
+| Harian | **Dashboard** | Owner, manager | Kartu omzet/transaksi/rata-rata, grafik 14 hari dan per jam, produk terlaris. |
+| Harian | **Kasir (POS)** | Kasir, waiter | Peta meja, menu, panel pesanan, dialog varian/modifier, bayar, split, diskon, void, komplimen, pindah/gabung meja, inbox pesanan QR, struk. |
+| Harian | **Shift** | Kasir, manager | Buka/tutup shift, hitung pecahan, kas masuk/keluar, rekap, selisih. |
+| Harian | **Dapur (KDS)** | Dapur | Antrean tiket per stasiun, ubah status item. |
+| Harian | **Daftar Stok** | Karyawan | Daftar bahan dan jumlah tanpa harga. |
+| Harian | **Stok Opname** | Karyawan, manager | Hitung per bahan (boleh kemasan), kirim, lihat status persetujuan. |
+| Harian | **Belanja Bahan** | Karyawan belanja | Form belanja dengan pencarian bahan, riwayat dan status persetujuan, isi dari Excel. |
+| Harian | **Bahan Terbuang** | Karyawan, manager | Tab bahan/menu jadi, alasan, catatan; kelola daftar alasan (manager). |
+| Harian | **Stasiun Cetak** | Perangkat cetak | Antrean cetak untuk printer tanpa koneksi langsung. |
+| Kelola | **Menu** | Owner, manager | Kategori, produk, varian, modifier, stok porsi, foto, impor. |
+| Kelola | **Stok & Bahan** | Manager | Tab Bahan, Pembelian (setujui/tolak), Opname staf, Riwayat; ubah/tambah bahan, kemasan, impor. |
+| Kelola | **Resep & HPP** | Manager | Resep per menu/varian, biaya dan margin. |
+| Kelola | **Pemasok** | Manager | Tabel pemasok, riwayat, perbandingan harga, impor. |
+| Kelola | **Aset & Alat** | Manager | Daftar alat, kondisi, riwayat servis. |
+| Kelola | **Meja & QR** | Owner, manager | Area, meja, QR, cetak PDF QR, aktif/nonaktif. |
+| Laporan | **Laporan Penjualan**, **Margin & HPP**, **Kinerja Dapur**, **Laporan Waste**, **Diskon/Void/Refund** | Owner, manager | Filter tanggal, pengelompokan, grafik, tabel, ekspor Excel/PDF. |
+| Laporan | **Pembayaran Online** | Manager | Daftar transaksi QRIS online, status, catat ulang, simulasi; petunjuk aktivasi. |
+| Laporan | **Jejak Aktivitas** | Owner, manager | Daftar aksi dengan pencarian dan filter. |
+| Keuangan | **Pengeluaran** | Manager | Input pengeluaran, kategori, ekspor. |
+| Keuangan | **Akuntansi** | Owner | Chart of accounts, jurnal, buku besar, laba rugi, neraca, arus kas, tutup buku. |
+| Keuangan | **Laporan Harian** | Owner, manager | Ringkasan hari bisnis, shift, riwayat, kirim laporan. |
+| Pengaturan | **Pengaturan** | Owner | Tab Operasional, Pesanan QR, Stok & HPP, Dapur, Kasir & struk, Keamanan, QRIS Online, Notifikasi, Metode bayar, Pajak, Promo. |
+| Pengaturan | **Printer**, **User**, **Peran & Akses** | Owner | Perangkat dan routing cetak; akun dan PIN; peran dengan centang izin. |
+
+Halaman publik (tanpa login):
+
+| Layar | Pengguna | Isi inti |
+| --- | --- | --- |
+| **Menu QR meja** (`/m/{token}`) | Customer | Header outlet dan nomor meja; cari menu; chip kategori; daftar menu dengan tombol + atau Pilih; sheet varian/modifier; keranjang; nama panggilan; status pesanan per ronde; total sementara; tombol Bayar dengan QRIS (bila aktif) dengan kode QR, hitung mundur, dan status lunas. |
+| **Struk digital** (`/r/{id}`) | Customer | Struk bertoken yang bisa dibagikan. |
+| **Login** | Staf | Login PIN untuk staf; email + password (+ passkey) untuk owner/manager. |
+
+**Alur kunci yang harus mulus:** (1) Customer scan → pilih → pesan → status → (opsional) bayar QRIS. (2) Kasir/waiter pilih meja → tambah menu (varian/modifier) → kirim ke dapur → tambah ronde → bayar → struk. (3) Karyawan belanja: cari bahan → jumlah/satuan/harga → kirim → lihat status persetujuan. (4) Manager: lonceng → setujui belanja/opname → lihat laporan.

@@ -111,7 +111,7 @@ function Body({
     };
 
     return (
-        <div className="grid gap-4">
+        <div className="grid gap-5">
             {product.variants.length > 0 && (
                 <fieldset className="grid gap-2">
                     <legend className="mb-1 text-sm font-medium">
@@ -184,47 +184,49 @@ function Body({
                 aria-label={t('Catatan')}
             />
 
-            <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
+            <div className="sticky -bottom-6 z-10 -mx-6 -mb-6 grid gap-2 border-t bg-background px-6 pt-3 pb-4 max-sm:-bottom-6">
+                {problems.length > 0 && (
+                    <p className="text-xs text-destructive">{problems[0]}</p>
+                )}
+                <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="size-12"
+                            aria-label={t('Kurangi')}
+                            onClick={() => setQty((q) => Math.max(1, q - 1))}
+                        >
+                            −
+                        </Button>
+                        <span
+                            className="w-9 text-center text-lg font-semibold tabular-nums"
+                            aria-live="polite"
+                        >
+                            {qty}
+                        </span>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="size-12"
+                            aria-label={t('Tambah')}
+                            onClick={() => setQty((q) => Math.min(99, q + 1))}
+                        >
+                            +
+                        </Button>
+                    </div>
                     <Button
                         type="button"
-                        variant="outline"
-                        size="icon"
-                        className="size-12"
-                        aria-label={t('Kurangi')}
-                        onClick={() => setQty((q) => Math.max(1, q - 1))}
+                        className="h-12 flex-1 text-base"
+                        disabled={problems.length > 0}
+                        onClick={submit}
                     >
-                        −
-                    </Button>
-                    <span
-                        className="w-8 text-center text-lg font-semibold tabular-nums"
-                        aria-live="polite"
-                    >
-                        {qty}
-                    </span>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="size-12"
-                        aria-label={t('Tambah')}
-                        onClick={() => setQty((q) => Math.min(99, q + 1))}
-                    >
-                        +
+                        {t('Tambah')} · {rupiah(unit * qty)}
                     </Button>
                 </div>
-                <Button
-                    type="button"
-                    className="h-12 flex-1"
-                    disabled={problems.length > 0}
-                    onClick={submit}
-                >
-                    {t('Tambah')} · {rupiah(unit * qty)}
-                </Button>
             </div>
-            {problems.length > 0 && (
-                <p className="text-xs text-destructive">{problems[0]}</p>
-            )}
         </div>
     );
 }

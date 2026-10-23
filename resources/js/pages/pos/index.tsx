@@ -998,7 +998,7 @@ export default function PosPage(props: Props) {
 
                 {/* Phone: cart is a bottom sheet opened from a floating total button (PRD 6.1). */}
                 {(ctx || cart.length > 0) && (
-                    <div className="fixed inset-x-3 bottom-3 z-30 md:hidden">
+                    <div className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 md:hidden">
                         <Button
                             type="button"
                             className="h-14 w-full justify-between text-base shadow-lg"
@@ -1023,12 +1023,22 @@ export default function PosPage(props: Props) {
                     </div>
                 )}
                 <Sheet open={sheet} onOpenChange={setSheet}>
-                    <SheetContent side="bottom" className="h-[88dvh] p-3">
+                    <SheetContent
+                        side="bottom"
+                        className="h-[88dvh] rounded-t-2xl p-0 pt-5"
+                        onOpenAutoFocus={(e) => e.preventDefault()}
+                    >
+                        <div
+                            aria-hidden
+                            className="absolute top-2 left-1/2 h-1 w-10 -translate-x-1/2 rounded-full bg-border"
+                        />
                         <SheetHeader className="sr-only">
                             <SheetTitle>{t('Pesanan')}</SheetTitle>
                             <SheetDescription>{title}</SheetDescription>
                         </SheetHeader>
-                        {panel}
+                        <div className="h-full min-h-0 [&_header]:pr-12 [&>section]:rounded-none [&>section]:border-0">
+                            {panel}
+                        </div>
                     </SheetContent>
                 </Sheet>
             </div>

@@ -1,6 +1,12 @@
-import { Minus, Plus, Trash2 } from 'lucide-react';
+import { MoreVertical, Minus, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { t } from '@/lang';
 import { rupiah, timeId } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -229,6 +235,18 @@ export function OrderPanel({
                                                     </span>
                                                 )}
                                             </div>
+                                            {editable &&
+                                                !pick?.active &&
+                                                [
+                                                    'new',
+                                                    'preparing',
+                                                    'ready',
+                                                ].includes(i.status) && (
+                                                    <ItemMenu
+                                                        item={i}
+                                                        actions={actions}
+                                                    />
+                                                )}
                                         </div>
                                         {pick?.active &&
                                             [
@@ -246,7 +264,7 @@ export function OrderPanel({
                                                 'preparing',
                                                 'ready',
                                             ].includes(i.status) && (
-                                                <div className="mt-1 flex flex-wrap gap-1">
+                                                <div className="mt-1 hidden flex-wrap gap-1 md:flex">
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
@@ -646,6 +664,53 @@ export function OrderPanel({
                 )}
             </footer>
         </section>
+    );
+}
+
+/** Phone: Void / Diskon / Komplimen behind one button so each order line stays a single, readable row. */
+function ItemMenu({
+    item: i,
+    actions,
+}: {
+    item: OrderItem;
+    actions: PanelActions;
+}) {
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="-mt-1 -mr-1 size-10 shrink-0 text-muted-foreground md:hidden"
+                    aria-label={`${t('Aksi')} ${i.name}`}
+                >
+                    <MoreVertical />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-40">
+                <DropdownMenuItem
+                    className="h-11 text-base"
+                    onSelect={() => actions.discount(i)}
+                >
+                    {t('Diskon')}
+                </DropdownMenuItem>
+                {!i.comp_type && (
+                    <DropdownMenuItem
+                        className="h-11 text-base"
+                        onSelect={() => actions.comp(i)}
+                    >
+                        {t('Komplimen')}
+                    </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                    className="h-11 text-base text-destructive focus:text-destructive"
+                    onSelect={() => actions.voidItem(i)}
+                >
+                    {t('Void')}
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 }
 

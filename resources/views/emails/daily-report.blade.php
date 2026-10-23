@@ -4,6 +4,14 @@
 @php
     $m = fn (int $v) => 'Rp'.number_format($v, 0, ',', '.');
     $change = $compare['change_percent'];
+    $short = function (int $v) {
+        if ($v >= 1000000) { return rtrim(rtrim(number_format($v / 1000000, 1, ',', '.'), '0'), ',').' jt'; }
+        if ($v >= 1000) { return round($v / 1000).' rb'; }
+        return (string) $v;
+    };
+    $hourMax = max(1, collect($hours)->max('total') ?? 1);
+    $weekMax = max(1, collect($week)->max('total') ?? 1);
+    $topMax = max(1, collect($top)->max('total') ?? 1);
 @endphp
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 12px;">
 <tr><td align="center">
@@ -34,6 +42,48 @@
             @endforeach
         </tr></table>
     </td></tr>
+    @if ($hours !== [])
+    <tr><td style="padding:0 24px 16px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px;">Penjualan per jam</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;">
+            <tr>
+            @foreach ($hours as $h)
+                @php $bar = $h['total'] > 0 ? max(3, (int) round($h['total'] / $hourMax * 90)) : 1; @endphp
+                <td valign="bottom" align="center" style="padding:0 1px;height:112px;">
+                    <div style="font-size:9px;color:#6b7280;line-height:12px;">{{ $h['total'] > 0 ? $short($h['total']) : '' }}</div>
+                    <div style="height:{{ $bar }}px;background:{{ $h['total'] === $hourMax ? '#111827' : '#9ca3af' }};border-radius:3px 3px 0 0;font-size:0;line-height:0;">&nbsp;</div>
+                </td>
+            @endforeach
+            </tr>
+            <tr>
+            @foreach ($hours as $h)
+                <td align="center" style="font-size:10px;color:#6b7280;padding-top:3px;border-top:1px solid #e5e7eb;">{{ $h['hour'] }}</td>
+            @endforeach
+            </tr>
+        </table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;margin-top:10px;">
+            <tr><td style="padding:4px 0;color:#6b7280;">Jam</td><td align="right" style="padding:4px 0;color:#6b7280;">Order</td><td align="right" style="padding:4px 0;color:#6b7280;">Penjualan</td></tr>
+            @foreach ($hours as $h)
+                @continue($h['orders'] === 0)
+                <tr><td style="padding:4px 0;border-top:1px solid #f3f4f6;">{{ $h['hour'] }}:00–{{ $h['hour'] }}:59</td><td align="right" style="padding:4px 0;border-top:1px solid #f3f4f6;">{{ $h['orders'] }}</td><td align="right" style="padding:4px 0;border-top:1px solid #f3f4f6;">{{ $m($h['total']) }}</td></tr>
+            @endforeach
+        </table>
+    </td></tr>
+    @endif
+    @if (count($week) > 1)
+    <tr><td style="padding:0 24px 16px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px;">7 hari terakhir</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
+            @foreach ($week as $d)
+                <tr>
+                    <td width="96" style="padding:4px 0;color:{{ $d['today'] ? '#111827' : '#6b7280' }};{{ $d['today'] ? 'font-weight:600;' : '' }}">{{ $d['name'] }}</td>
+                    <td style="padding:4px 8px;"><div style="height:10px;width:{{ max(1, (int) round($d['total'] / $weekMax * 100)) }}%;background:{{ $d['today'] ? '#111827' : '#d1d5db' }};border-radius:3px;font-size:0;line-height:0;">&nbsp;</div></td>
+                    <td width="84" align="right" style="padding:4px 0;{{ $d['today'] ? 'font-weight:600;' : '' }}">{{ $m($d['total']) }}</td>
+                </tr>
+            @endforeach
+        </table>
+    </td></tr>
+    @endif
     @if ($s->byMethod !== [])
     <tr><td style="padding:0 24px 16px;">
         <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Per metode bayar</div>
@@ -46,12 +96,34 @@
     @endif
     @if ($top !== [])
     <tr><td style="padding:0 24px 16px;">
-        <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Menu terlaris</div>
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px;">Menu terlaris</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
             @foreach ($top as $p)
-                <tr><td style="padding:5px 0;border-top:1px solid #f3f4f6;">{{ $p['name'] }} <span style="color:#6b7280;">× {{ $p['qty'] }}</span></td><td align="right" style="padding:5px 0;border-top:1px solid #f3f4f6;">{{ $m($p['total']) }}</td></tr>
+                <tr>
+                    <td colspan="2" style="padding:5px 0 2px;border-top:1px solid #f3f4f6;">{{ $p['name'] }} <span style="color:#6b7280;">× {{ $p['qty'] }}</span></td>
+                    <td align="right" style="padding:5px 0 2px;border-top:1px solid #f3f4f6;">{{ $m($p['total']) }}</td>
+                </tr>
+                <tr><td colspan="3" style="padding:0 0 4px;"><div style="height:6px;width:{{ max(1, (int) round($p['total'] / $topMax * 100)) }}%;background:#6b7280;border-radius:3px;font-size:0;line-height:0;">&nbsp;</div></td></tr>
             @endforeach
         </table>
+    </td></tr>
+    @endif
+    @if (count($types) > 0 || count($cashiers) > 0)
+    <tr><td style="padding:0 24px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+        @foreach ([['Per tipe order', $types], ['Per kasir', $cashiers]] as [$title, $rows])
+            @if (count($rows) > 0)
+            <td valign="top" width="50%" style="padding-right:8px;">
+                <div style="font-size:13px;font-weight:600;margin-bottom:6px;">{{ $title }}</div>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
+                    @foreach ($rows as $r)
+                        <tr><td style="padding:4px 0;border-top:1px solid #f3f4f6;">{{ $r['name'] }} <span style="color:#6b7280;">({{ $r['orders'] }})</span></td><td align="right" style="padding:4px 0;border-top:1px solid #f3f4f6;">{{ $m($r['total']) }}</td></tr>
+                    @endforeach
+                </table>
+            </td>
+            @endif
+        @endforeach
+        </tr></table>
     </td></tr>
     @endif
     <tr><td style="padding:0 24px 16px;">

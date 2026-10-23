@@ -15,6 +15,7 @@ use App\Domain\Shift\ZReportSummary;
 use App\Models\User;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 
 /**
  * Sends reports and important alerts to the owner's phone or inbox: Telegram, email and WhatsApp (through a
@@ -93,16 +94,59 @@ class ReportDelivery
             'average' => $s->orders > 0 ? intdiv($s->net, $s->orders) : 0,
             'compare' => $sales->dashboard($date),
             'top' => $sales->by('product', $date, $date)->take(5)->map(fn ($r) => ['name' => $r->label, 'qty' => $r->orders, 'total' => $r->total])->values()->all(),
+            'hours' => $this->hourly($sales->by('hour', $date, $date)),
+            'week' => $this->week($sales, $day),
+            'types' => $sales->by('type', $date, $date)->map(fn ($r) => ['name' => $r->display, 'orders' => $r->orders, 'total' => $r->total])->values()->all(),
+            'cashiers' => $sales->by('cashier', $date, $date)->map(fn ($r) => ['name' => $r->label, 'orders' => $r->orders, 'total' => $r->total])->values()->all(),
             'url' => url("/admin/reports/sales?from={$date}&to={$date}"),
         ])->render();
     }
 
-    public function dailyText(BusinessDay $day): string
+    /**
+     * Every hour from the first to the last sale, so quiet hours in between show as gaps in the chart.
+     *
+     * @param  Collection<int, \stdClass>  $rows
+     * @return list<array{hour: string, orders: int, total: int}>
+     */
+    private function hourly($rows): array
     {
-        return $this->dailyTextFor($day->date->format('d M Y'), ZReportSummary::fromArray($day->summary));
+        $by = $rows->keyBy(fn ($r) => (int) substr($r->label, 0, 2));
+        if ($by->isEmpty()) {
+            return [];
+        }
+        $out = [];
+        for ($h = (int) $by->keys()->min(); $h <= (int) $by->keys()->max(); $h++) {
+            $row = $by->get($h);
+            $out[] = ['hour' => sprintf('%02d', $h), 'orders' => $row->orders ?? 0, 'total' => $row->total ?? 0];
+        }
+
+        return $out;
     }
 
-    public function dailyTextFor(string $label, ZReportSummary $s): string
+    /**
+     * The 7 days up to and including the report day; days without sales count as zero.
+     *
+     * @return list<array{name: string, orders: int, total: int, today: bool}>
+     */
+    private function week(SalesReports $sales, CarbonImmutable $day): array
+    {
+        $by = $sales->by('day', $day->subDays(6)->toDateString(), $day->toDateString())->keyBy('label');
+        $out = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $d = $day->subDays($i);
+            $row = $by->get($d->toDateString());
+            $out[] = ['name' => $d->translatedFormat('D, d M'), 'orders' => (int) ($row->orders ?? 0), 'total' => (int) ($row->total ?? 0), 'today' => $i === 0];
+        }
+
+        return $out;
+    }
+
+    public function dailyText(BusinessDay $day): string
+    {
+        return $this->dailyTextFor($day->date->format('d M Y'), ZReportSummary::fromArray($day->summary), $day->date->toDateString());
+    }
+
+    public function dailyTextFor(string $label, ZReportSummary $s, ?string $date = null): string
     {
         $m = fn (int $v) => Money::formatRupiah($v);
         $lines = ["Laporan harian {$label}", "Order: {$s->orders}", "Omzet kotor: {$m($s->gross)}", "Diskon: {$m($s->discounts)}", "Refund: {$m($s->refunds)}", "Omzet bersih: {$m($s->net)}"];
@@ -112,6 +156,16 @@ class ReportDelivery
         $lines[] = "Void: {$s->voidItems} item ({$m($s->voidValue)})";
         $lines[] = "Komplimen/staff meal: {$s->compItems} item ({$m($s->compValue)})";
         $lines[] = "Selisih kas: {$m($s->cashDifference)}";
+        $hours = $date === null ? [] : $this->hourly(app(SalesReports::class)->by('hour', $date, $date));
+        if ($hours !== []) {
+            $lines[] = '';
+            $lines[] = 'Penjualan per jam:';
+            foreach ($hours as $h) {
+                if ($h['orders'] > 0) {
+                    $lines[] = "  {$h['hour']}:00  {$h['orders']} order  {$m($h['total'])}";
+                }
+            }
+        }
 
         return implode("\n", $lines);
     }

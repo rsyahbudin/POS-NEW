@@ -13,12 +13,6 @@ function preset(string $name, string $type, int $value, bool $pin = false): Disc
     return DiscountPreset::create(['outlet_id' => (int) Outlet::query()->value('id'), 'name' => $name, 'type' => $type, 'value' => $value, 'needs_pin' => $pin, 'is_active' => true]);
 }
 
-function revoke(string $role, string $permission): void
-{
-    Role::findByName($role)->revokePermissionTo($permission);
-    app(PermissionRegistrar::class)->forgetCachedPermissions();
-}
-
 it('lets a cashier apply a registered discount in one tap, even above the manual limit, with the preset as the reason', function () {
     $order = placeOrder(); // 44.000
     $owner20 = preset('Owner 20%', 'percent', 2000);
@@ -49,15 +43,22 @@ it('refuses inactive or foreign discounts', function () {
     expect(fn () => app(ApplyDiscountAction::class)->preset($order, userWithRole('cashier'), $off))->toThrow(OrderException::class, 'tidak tersedia');
 });
 
-it('blocks typing a discount yourself once the cashier role loses the manual permission, but presets still work', function () {
-    revoke('cashier', 'discount-custom');
+it('keeps cashier and waiter to registered discounts by default: no typing a discount, waiter gives none at all', function () {
     $order = placeOrder();
     $cashier = userWithRole('cashier');
     $svc = app(ApplyDiscountAction::class);
 
     expect(fn () => $svc->handle($order, $cashier, 'percent', 500, 'bebas'))->toThrow(OrderException::class, 'manual');
-    $svc->preset($order, $cashier, preset('Staff 10%', 'percent', 1000));
+    $staff = preset('Staff 10%', 'percent', 1000);
+    expect(fn () => $svc->preset($order, userWithRole('waiter'), $staff))->toThrow(OrderException::class, 'tidak boleh');
+    $svc->preset($order, $cashier, $staff);
     expect($order->fresh()->discount_total)->toBe(4400);
+
+    // the owner can opt a role back in later from Peran & Akses
+    Role::findByName('cashier')->givePermissionTo('discount-custom');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+    $svc->handle($order, userWithRole('cashier'), 'percent', 500, 'diizinkan owner');
+    expect($order->fresh()->discount_total)->toBeGreaterThan(4400);
 });
 
 it('serves the discount list to the POS and applies a preset over HTTP', function () {
@@ -66,11 +67,10 @@ it('serves the discount list to the POS and applies a preset over HTTP', functio
     $cashier = userWithRole('cashier');
     $order = placeOrder($cashier);
 
-    $this->actingAs($cashier)->get('/pos')->assertInertia(fn ($p) => $p->where('can.discount_custom', true)->has('discountPresets', 1)->where('discountPresets.0.name', 'Staff 10%'));
+    $this->actingAs($cashier)->get('/pos')->assertInertia(fn ($p) => $p->where('can.discount_custom', false)->has('discountPresets', 1)->where('discountPresets.0.name', 'Staff 10%'));
     $id = DiscountPreset::query()->value('id');
     $this->actingAs($cashier)->postJson("/pos/orders/{$order->id}/discount-presets/{$id}")->assertOk()->assertJsonPath('order.discount_total', 4400);
 
-    revoke('cashier', 'discount-custom');
     $this->actingAs($cashier)->postJson("/pos/orders/{$order->id}/discounts", ['type' => 'percent', 'value' => 500, 'reason' => 'x'])->assertUnprocessable();
 });
 

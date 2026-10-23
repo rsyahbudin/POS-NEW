@@ -7,6 +7,8 @@ use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Pricing\Actions\ApplyDiscountAction;
 use App\Support\ApprovalGate;
 use Spatie\Activitylog\Models\Activity;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 it('lets a cashier void only with a valid manager PIN when the setting requires it', function () {
     setting('security.cancel_needs_pin', true);
@@ -48,6 +50,8 @@ it('does not accept a cashier PIN as a manager approval', function () {
 it('applies a discount within the cashier limit without a PIN, above it only with PIN', function () {
     $order = placeOrder(); // 44.000
     $cashier = userWithRole('cashier');
+    Role::findByName('cashier')->givePermissionTo('discount-custom'); // not a default: the owner opts in
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
     $discount = app(ApplyDiscountAction::class);
 
     $d = $discount->handle($order, $cashier, 'percent', 1000, 'member'); // 10% = limit

@@ -194,7 +194,7 @@ Modul 4.1–4.15 adalah inti POS; 4.16–4.27 ditambahkan setelah MVP. Setiap kr
 **Story:** Sebagai owner, saya ingin setiap pengurangan nilai tercatat siapa pelaku dan penyetujunya.
 
 - **Daftar diskon bernama:** owner mendaftarkan diskon seperti "Staff 10%" atau "Owner 20%" di Pengaturan › Promo (nominal atau persen, opsi minta PIN manager, bisa dinonaktifkan). Kasir cukup mengetuk satu diskon tanpa mengisi nilai atau alasan; nama diskon menjadi alasannya dan tercatat di audit log.
-- **Diskon manual** (kasir mengetik nilai sendiri) dikendalikan izin tersendiri "Diskon manual". Cabut izin itu dari peran Kasir agar kasir hanya bisa memilih diskon yang sudah terdaftar.
+- **Diskon manual** (kasir mengetik nilai sendiri) dikendalikan izin tersendiri "Diskon manual". Secara default hanya owner dan manager yang punya izin ini; kasir dan waiter hanya bisa memilih diskon terdaftar (waiter tidak memberi diskon sama sekali). Owner bisa memberikan izin ini ke peran lain kapan saja di Peran & Akses.
 - Diskon manual per item atau per order (nominal/persen), alasan wajib; batas diskon kasir tanpa PIN diatur (default 10%).
 - Promo terjadwal (Happy Hour) dari pengaturan.
 - Void sebelum bayar: butuh PIN manager bila diatur, alasan wajib.

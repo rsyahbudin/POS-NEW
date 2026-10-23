@@ -90,7 +90,7 @@ class ApplyDiscountAction
         if (! $preset->is_active || $preset->outlet_id !== $order->outlet_id) {
             throw new OrderException('Diskon ini tidak tersedia.');
         }
-        if (! $actor->can('discount-within-limit') && ! $actor->can('create-order')) {
+        if (! $actor->can('discount-within-limit')) {
             throw new OrderException('Anda tidak boleh memberi diskon.');
         }
 

@@ -27,7 +27,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'cancel-order', 'use-print-station', 'view-kitchen-report', 'view-margin-report',
             'view-stock', 'count-stock', 'view-assets', 'manage-assets', 'import-data', 'record-purchase', 'view-activity-log', 'manage-suppliers', 'record-waste', 'view-waste-report', 'manage-online-payments',
         ],
-        'cashier' => ['create-order', 'receive-payment', 'discount-within-limit', 'discount-custom', 'open-close-shift', 'update-kitchen-status', 'view-own-shift-recap', 'cancel-order', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
+        'cashier' => ['create-order', 'receive-payment', 'discount-within-limit', 'open-close-shift', 'update-kitchen-status', 'view-own-shift-recap', 'cancel-order', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
         'waiter' => ['create-order', 'cancel-order', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
         'kitchen' => ['update-kitchen-status', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
     ];

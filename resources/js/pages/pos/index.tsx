@@ -123,6 +123,9 @@ type Dialog =
     | { kind: 'shift' }
     | null;
 
+/** An unconfirmed QR order nags this many times, then leaves it to the red QR button. */
+const MAX_REALERTS = 3;
+
 export default function PosPage(props: Props) {
     const { menu, paymentMethods, can, settings } = props;
     const [state, setState] = useState<PosState>(props.state);
@@ -165,6 +168,7 @@ export default function PosPage(props: Props) {
     };
     const sound = useSound();
     const alerted = useRef<Record<number, number>>({});
+    const alertCount = useRef<Record<number, number>>({});
     const pendingCount = state.pending_qr.length;
 
     // One notification per QR round, whichever arrives first: WebSocket event or the polled state.
@@ -296,9 +300,12 @@ export default function PosPage(props: Props) {
 
                 if (
                     waited >= settings.qr_alert_seconds &&
-                    now - last >= settings.qr_alert_seconds * 1000
+                    now - last >= settings.qr_alert_seconds * 1000 &&
+                    (alertCount.current[r.id] ?? 0) < MAX_REALERTS
                 ) {
                     alerted.current[r.id] = now;
+                    alertCount.current[r.id] =
+                        (alertCount.current[r.id] ?? 0) + 1;
                     sound.beep('alert');
                     toast.warning(
                         `${t('QR belum dikonfirmasi')}: ${r.table ?? ''} · ${r.customer_name}`,
@@ -884,7 +891,7 @@ export default function PosPage(props: Props) {
                     </div>
                 </header>
 
-                {!sound.unlocked && !sound.prefs.muted && (
+                {sound.hintVisible && (
                     <div
                         role="status"
                         className="fixed inset-x-3 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-40 flex items-center justify-between gap-2 rounded-xl bg-sky-100 px-3 py-2 text-sm text-sky-950 shadow-lg md:bottom-3"
@@ -904,6 +911,15 @@ export default function PosPage(props: Props) {
                             }}
                         >
                             {t('Aktifkan bunyi')}
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-10 shrink-0"
+                            onClick={sound.dismissHint}
+                        >
+                            {t('Nanti')}
                         </Button>
                     </div>
                 )}

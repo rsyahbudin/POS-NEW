@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+    useSyncExternalStore,
+} from 'react';
 
 const STORE = 'pos.sound';
 
@@ -62,17 +68,105 @@ function wavFor(kind: Kind, volume: number): string {
     return `data:audio/wav;base64,${btoa(bin)}`;
 }
 
+type Shared = { ctx: AudioContext | null; unlocked: boolean; hintOff: boolean };
+const shared: Shared = { ctx: null, unlocked: false, hintOff: false };
+const listeners = new Set<() => void>();
+const emit = () => listeners.forEach((l) => l());
+const HINT_KEY = 'pos.sound.hint-off';
+
+try {
+    shared.hintOff = sessionStorage.getItem(HINT_KEY) === '1';
+} catch {
+    // private mode: the hint may come back after a reload
+}
+
+/**
+ * The audio engine and its "unlocked" flag live for the whole tab, not per screen: going from Kasir to Shift and back
+ * must not ask for the sound again. Whenever the browser already allows sound (an earlier tap, or a site it trusts),
+ * the context starts running by itself and no hint is shown at all.
+ */
+function engine(): AudioContext | null {
+    if (shared.ctx) {
+        return shared.ctx;
+    }
+
+    try {
+        const Ctor =
+            window.AudioContext ??
+            (window as unknown as { webkitAudioContext?: typeof AudioContext })
+                .webkitAudioContext;
+
+        if (Ctor) {
+            shared.ctx = new Ctor();
+        }
+    } catch {
+        shared.ctx = null;
+    }
+
+    return shared.ctx;
+}
+
+function markUnlocked() {
+    if (!shared.unlocked) {
+        shared.unlocked = true;
+        emit();
+    }
+}
+
+function tryResume() {
+    const ac = engine();
+
+    if (!ac) {
+        return;
+    }
+
+    if (ac.state === 'running') {
+        markUnlocked();
+
+        return;
+    }
+
+    void ac
+        .resume()
+        .then(() => {
+            if (ac.state === 'running') {
+                markUnlocked();
+            }
+        })
+        .catch(() => undefined);
+}
+
+if (typeof window !== 'undefined') {
+    // A page that already had a tap (or a trusted site) starts unlocked without any hint.
+    tryResume();
+}
+
 /**
  * Notification sounds with per-device mute + volume (PRD 4.15).
  *
- * Browsers only allow audio after a user gesture, so the first tap, key press
- * or touch anywhere on the page unlocks it (no need to hit a special button);
- * `unlocked` drives a visible "tap to enable sound" hint until then.
+ * Browsers only allow audio after a user gesture, so the first tap, key press or touch anywhere unlocks it. Until then a
+ * small hint is offered; it can be dismissed and then stays away for the rest of the session.
  */
 export function useSound() {
     const [prefs, setPrefs] = useState<SoundPrefs>(read);
-    const [unlocked, setUnlocked] = useState(false);
-    const ctx = useRef<AudioContext | null>(null);
+    const unlocked = useSyncExternalStore(
+        (cb) => {
+            listeners.add(cb);
+
+            return () => listeners.delete(cb);
+        },
+        () => shared.unlocked,
+        () => false,
+    );
+    const hintOff = useSyncExternalStore(
+        (cb) => {
+            listeners.add(cb);
+
+            return () => listeners.delete(cb);
+        },
+        () => shared.hintOff,
+        () => true,
+    );
     const prefsRef = useRef(prefs);
 
     useEffect(() => {
@@ -92,7 +186,7 @@ export function useSound() {
             return;
         }
 
-        const ac = ctx.current;
+        const ac = shared.ctx;
 
         if (ac && ac.state === 'running') {
             let at = ac.currentTime;
@@ -117,32 +211,25 @@ export function useSound() {
     }, []);
 
     const unlock = useCallback(() => {
-        try {
-            const Ctor =
-                window.AudioContext ??
-                (
-                    window as unknown as {
-                        webkitAudioContext?: typeof AudioContext;
-                    }
-                ).webkitAudioContext;
-
-            if (Ctor) {
-                ctx.current ??= new Ctor();
-                void ctx.current.resume().then(() => {
-                    if (ctx.current?.state === 'running') {
-                        setUnlocked(true);
-                    }
-                });
-            }
-        } catch {
-            // fall back to <audio>
-        }
+        tryResume();
 
         // Also prime the <audio> path (iOS Safari): a silent-ish play inside the gesture.
         void new Audio(wavFor('order', 0.0001))
             .play()
-            .then(() => setUnlocked(true))
+            .then(() => markUnlocked())
             .catch(() => undefined);
+    }, []);
+
+    const dismissHint = useCallback(() => {
+        shared.hintOff = true;
+
+        try {
+            sessionStorage.setItem(HINT_KEY, '1');
+        } catch {
+            // ignore
+        }
+
+        emit();
     }, []);
 
     // First interaction anywhere unlocks audio.
@@ -163,5 +250,13 @@ export function useSound() {
 
     const beep = useCallback((kind: Kind = 'order') => play(kind), [play]);
 
-    return { prefs, setPrefs, unlock, unlocked, beep };
+    return {
+        prefs,
+        setPrefs,
+        unlock,
+        unlocked,
+        hintVisible: !unlocked && !hintOff && !prefs.muted,
+        dismissHint,
+        beep,
+    };
 }

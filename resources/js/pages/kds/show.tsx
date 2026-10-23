@@ -235,7 +235,7 @@ export default function KdsPage({
                     </div>
                 </header>
 
-                {!sound.unlocked && !sound.prefs.muted && (
+                {sound.hintVisible && (
                     <div
                         role="status"
                         className="fixed inset-x-3 bottom-3 z-50 flex items-center justify-between gap-2 rounded-xl bg-sky-900 px-3 py-2 text-sm text-sky-50 shadow-lg"
@@ -255,6 +255,15 @@ export default function KdsPage({
                             }}
                         >
                             {t('Aktifkan bunyi')}
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-10 shrink-0"
+                            onClick={sound.dismissHint}
+                        >
+                            {t('Nanti')}
                         </Button>
                     </div>
                 )}

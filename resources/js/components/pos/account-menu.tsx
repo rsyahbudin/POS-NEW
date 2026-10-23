@@ -12,6 +12,7 @@ import {
 import { useInitials } from '@/hooks/use-initials';
 import { t } from '@/lang';
 import { logout } from '@/routes';
+import { canSee, sections, top } from '@/components/nav-items';
 
 /** Who is signed in, plus the way out. The POS, kitchen and shift screens have no sidebar, so this is their account menu. */
 export function AccountMenu({
@@ -24,9 +25,19 @@ export function AccountMenu({
     onSoldOut?: () => void;
 }) {
     const user = usePage().props.auth.user;
-    const canToday = (
-        (usePage().props.auth.user?.permissions as string[] | undefined) ?? []
-    ).includes('view-today-summary');
+    const page = usePage();
+    const who = user as unknown as {
+        permissions?: string[];
+        roles?: string[];
+    } | null;
+    const canToday = (who?.permissions ?? []).includes('view-today-summary');
+    const features = page.props.features as
+        | { kds: boolean; inventory: boolean }
+        | undefined;
+    // The screens that have no sidebar still reach every page this person may use.
+    const pages = [...top, ...sections.flatMap((s) => s.items)].filter(
+        (i) => canSee(who, features, i) && i.href !== page.url.split('?')[0],
+    );
     const initials = useInitials();
 
     if (!user) {
@@ -46,7 +57,10 @@ export function AccountMenu({
                     {initials(user.name)}
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-60">
+            <DropdownMenuContent
+                align="end"
+                className="max-h-[80dvh] w-64 overflow-y-auto"
+            >
                 <DropdownMenuLabel className="font-normal">
                     <p className="truncate text-sm font-semibold">
                         {user.name}
@@ -90,6 +104,29 @@ export function AccountMenu({
                         <Printer className="mr-2" />
                         {t('Pengaturan printer')}
                     </DropdownMenuItem>
+                )}
+                {pages.length > 0 && (
+                    <>
+                        <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
+                            {t('Halaman lain')}
+                        </DropdownMenuLabel>
+                        {pages.map((i) => (
+                            <DropdownMenuItem
+                                key={i.title}
+                                asChild
+                                className="h-11 text-base"
+                            >
+                                <Link
+                                    className="w-full cursor-pointer"
+                                    href={i.href}
+                                >
+                                    {i.icon && <i.icon className="mr-2" />}
+                                    {i.title}
+                                </Link>
+                            </DropdownMenuItem>
+                        ))}
+                        <DropdownMenuSeparator />
+                    </>
                 )}
                 <DropdownMenuItem asChild className="h-11 text-base">
                     <Link

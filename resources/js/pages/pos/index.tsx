@@ -1087,6 +1087,10 @@ export default function PosPage(props: Props) {
                         setDialog(null);
                         setPickOn(true);
                         setPickQty({});
+                        // phone: bring the order sheet back so items can be ticked
+                        setSheet(
+                            window.matchMedia('(max-width: 767px)').matches,
+                        );
                     }}
                     onClose={() => setDialog(null)}
                     onDone={(o) => {

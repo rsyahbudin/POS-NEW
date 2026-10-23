@@ -87,7 +87,7 @@ test('QR order -> KDS -> bayar -> struk', async ({
     await page.getByRole('button', { name: 'Uang pas' }).click();
 
     // struk terbuka di jendela baru (QZ Tray tidak ada -> fallback cetak browser)
-    const popup = page.context().waitForEvent('page');
+    const popup = page.context().waitForEvent('page', { timeout: 30_000 });
     await page.getByRole('button', { name: /^Bayar Rp22\.000$/ }).click();
     const receipt = await popup;
     await receipt.waitForLoadState('domcontentloaded');

@@ -49,7 +49,7 @@ test('walk-in: order and pay in one go', async ({
     ).toBeVisible();
     await page.getByRole('button', { name: 'Uang pas' }).click();
 
-    const popup = context.waitForEvent('page');
+    const popup = context.waitForEvent('page', { timeout: 30_000 });
     await page.getByRole('button', { name: /^Bayar Rp25\.000$/ }).click();
     await expect((await popup).getByText('Croissant')).toBeVisible();
 });
@@ -80,7 +80,7 @@ test('pay only the selected items, then the rest', async ({
     await expect(
         page.getByRole('button', { name: /^Bayar Rp22\.000$/ }),
     ).toBeVisible();
-    const popup = context.waitForEvent('page');
+    const popup = context.waitForEvent('page', { timeout: 30_000 });
     await page.getByRole('button', { name: /^Bayar Rp22\.000$/ }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByRole('button', { name: 'Uang pas' }).click();

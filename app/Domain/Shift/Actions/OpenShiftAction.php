@@ -38,6 +38,11 @@ class OpenShiftAction
                 throw new OrderException('Hari bisnis ini sudah ditutup.');
             }
 
+            $open = Shift::query()->where('outlet_id', $outletId)->whereNull('closed_at')->lockForUpdate()->with('user:id,name')->first();
+            if ($open !== null) {
+                throw new OrderException("Shift sudah dibuka oleh {$open->user?->name} pukul {$open->opened_at->format('H.i')}. Pakai shift itu.");
+            }
+
             $suggested = $this->suggestedOpeningCash();
             $hasPrevious = Shift::query()->where('outlet_id', $outletId)->whereNotNull('closed_at')->exists();
 
@@ -47,7 +52,7 @@ class OpenShiftAction
                     'business_date' => $date, 'opening_cash' => $openingCash, 'opened_at' => now(),
                 ]);
             } catch (UniqueConstraintViolationException) {
-                throw new OrderException('Kamu sudah punya shift yang terbuka.');
+                throw new OrderException('Shift sudah terbuka.');
             }
 
             // Counting a different float than the one left behind is a variance.

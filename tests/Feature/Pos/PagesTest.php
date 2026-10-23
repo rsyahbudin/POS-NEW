@@ -64,7 +64,6 @@ it('prints a PDF of QR codes for the tables', function () {
 
 it('reports sales per order not per bill and nets out refunds', function () {
     openShiftFor(userWithRole('cashier'), 0);
-    openShiftFor(userWithRole('manager'), 0);
     $o = placeOrder();
     $p = pay($o);
     app(RefundPaymentAction::class)->handle($p, userWithRole('manager'), 4000, 'komplain', 'r');

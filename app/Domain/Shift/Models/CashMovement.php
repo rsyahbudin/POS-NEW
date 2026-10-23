@@ -2,7 +2,9 @@
 
 namespace App\Domain\Shift\Models;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
@@ -19,4 +21,10 @@ use Illuminate\Support\Carbon;
 class CashMovement extends Model
 {
     protected $guarded = [];
+
+    /** @return BelongsTo<User, $this> */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 }

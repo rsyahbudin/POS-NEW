@@ -47,6 +47,12 @@ class Shift extends Model
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<User, $this> */
+    public function closer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'closed_by');
+    }
+
     /** @return HasMany<CashMovement, $this> */
     public function movements(): HasMany
     {

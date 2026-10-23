@@ -40,9 +40,6 @@ class CloseShiftAction
                 }
                 throw new OrderException('Shift sudah ditutup.');
             }
-            if ($shift->user_id !== $user->id && ! $user->can('manage-shifts-any')) {
-                throw new OrderException('Hanya pemilik shift atau manager yang bisa menutup shift ini.');
-            }
 
             if ($countedCash < 0) {
                 throw new OrderException('Kas fisik tidak boleh negatif.');

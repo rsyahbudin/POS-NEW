@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Shift;
 
 use App\Domain\Accounting\Models\Account;
+use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Settings\OutletContext;
 use App\Domain\Shift\Actions\AddCashMovementAction;
 use App\Domain\Shift\Actions\CloseShiftAction;
@@ -21,29 +22,24 @@ class ShiftController extends Controller
 {
     public function __construct(private OutletContext $outlet) {}
 
-    public function index(Request $request, ShiftCash $cash, OpenShiftAction $open): Response
+    public function index(Request $request, ShiftCash $cash, OpenShiftAction $open, ShiftResolver $resolver): Response
     {
         $user = $this->actor($request);
-        $shift = Shift::query()->where('user_id', $user->id)->whereNull('closed_at')->first();
-
+        $operate = $user->can('open-close-shift');
+        $shift = $resolver->current();
         $outletId = $this->outlet->id();
 
         return Inertia::render('shift/index', [
+            // One shift for the whole store: shown to every role, only people with the shift permission can act on it.
             'shift' => $shift ? $this->present($shift, $cash) : null,
             'suggestedOpening' => $open->suggestedOpeningCash(),
-            'accounts' => [
+            'accounts' => $operate ? [
                 'expense' => Account::query()->where('outlet_id', $outletId)->whereIn('type', ['expense'])->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
                 'other' => Account::query()->where('outlet_id', $outletId)->whereIn('type', ['equity', 'revenue', 'liability'])->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
                 'bank' => Account::query()->where('outlet_id', $outletId)->where('type', 'asset')->where('system_key', null)->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
-            ],
-            'recent' => Shift::query()->where('user_id', $user->id)->whereNotNull('closed_at')->latest('closed_at')->limit(5)->get()->map(fn ($s) => $this->present($s, $cash))->all(),
-            // Managers/owner see (and may close) shifts opened by others, e.g. the cashier's.
-            'others' => $user->can('manage-shifts-any')
-                ? Shift::query()->where('outlet_id', $outletId)->whereNull('closed_at')->where('user_id', '!=', $user->id)->with('user:id,name')->get()
-                    ->map(fn (Shift $s) => $this->present($s, $cash) + ['user' => $s->user?->name])->all()
-                : [],
-            'sharing' => app(ShiftResolver::class)->canShare($user),
-            'can' => ['any' => $user->can('manage-shifts-any')],
+            ] : ['expense' => [], 'other' => [], 'bank' => []],
+            'recent' => Shift::query()->where('outlet_id', $outletId)->whereNotNull('closed_at')->with(['user:id,name', 'closer:id,name'])->latest('closed_at')->limit(10)->get()->map(fn ($s) => $this->present($s, $cash))->all(),
+            'can' => ['operate' => $operate],
         ]);
     }
 
@@ -58,7 +54,7 @@ class ShiftController extends Controller
     public function movement(Request $request, AddCashMovementAction $action): RedirectResponse
     {
         $data = $request->validate(['direction' => 'required|in:in,out', 'amount' => 'required|integer|min:1', 'reason' => 'required|string|max:200', 'account_id' => 'required|integer|exists:accounts,id']);
-        $shift = Shift::query()->where('user_id', $this->actor($request)->id)->whereNull('closed_at')->firstOrFail();
+        $shift = app(ShiftResolver::class)->current() ?? throw new OrderException('Belum ada shift terbuka.');
         $action->handle($shift, $this->actor($request), $data['direction'], (int) $data['amount'], $data['reason'], (int) $data['account_id']);
 
         return back()->with('success', 'Kas dicatat.');
@@ -69,14 +65,10 @@ class ShiftController extends Controller
         $data = $request->validate([
             'counted_cash' => 'required|integer|min:0',
             'cash_left' => 'required|integer|min:0', 'deposit_account_id' => 'nullable|integer|exists:accounts,id',
-            'difference_reason' => 'nullable|string|max:200', 'close_key' => 'required|string|max:100', 'shift_id' => 'nullable|integer',
+            'difference_reason' => 'nullable|string|max:200', 'close_key' => 'required|string|max:100',
         ]);
         $actor = $this->actor($request);
-        // Managers/owner may close another person's shift; everybody else closes their own.
-        $shift = isset($data['shift_id']) && $actor->can('manage-shifts-any')
-            ? Shift::query()->whereKey((int) $data['shift_id'])->whereNull('closed_at')->firstOrFail()
-            : Shift::query()->where('user_id', $actor->id)->whereNull('closed_at')->firstOrFail();
-        $closedOwn = $shift->user_id === $actor->id;
+        $shift = app(ShiftResolver::class)->current() ?? throw new OrderException('Belum ada shift terbuka.');
         $action->handle(
             $shift, $this->actor($request),
             (int) $data['counted_cash'],
@@ -84,7 +76,7 @@ class ShiftController extends Controller
         );
 
         // Session ends when the cashier's shift closes (PRD 8).
-        if ($closedOwn && ! $actor->can('manage-shifts-any')) {
+        if (! $actor->can('manage-shifts-any')) {
             auth()->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
@@ -113,7 +105,8 @@ class ShiftController extends Controller
             'summary' => $summary,
             'by_method' => $byMethod->map(fn ($r) => ['name' => $r->name, 'type' => $r->type, 'total' => (int) $r->total, 'count' => (int) $r->count])->all(),
             'orders' => $orders, 'voids' => $voids, 'discounts' => $discounts, 'comps' => $comps,
-            'movements' => $shift->movements()->latest()->get(['direction', 'amount', 'reason', 'created_at'])->all(),
+            'opened_by' => $shift->user?->name, 'closed_by' => $shift->closer?->name,
+            'movements' => $shift->movements()->with('creator:id,name')->latest()->get()->map(fn ($m) => ['direction' => $m->direction, 'amount' => $m->amount, 'reason' => $m->reason, 'created_at' => $m->created_at, 'by' => $m->creator?->name])->all(),
         ];
     }
 }

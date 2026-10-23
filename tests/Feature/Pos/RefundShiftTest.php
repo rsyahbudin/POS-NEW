@@ -24,7 +24,6 @@ it('lets only manager or owner refund, with a reversing journal and the original
     $cashier = userWithRole('cashier');
     openShiftFor($cashier, 0);
     $manager = userWithRole('manager');
-    openShiftFor($manager, 0);
 
     enableTax();
     $order = placeOrder();
@@ -48,7 +47,6 @@ it('lets only manager or owner refund, with a reversing journal and the original
 it('is idempotent on refunds and rejects over-refunds', function () {
     $manager = userWithRole('manager');
     openShiftFor(userWithRole('cashier'), 0);
-    openShiftFor($manager, 0);
     $payment = pay(placeOrder());
 
     $a = app(RefundPaymentAction::class)->handle($payment, $manager, 1000, 'r', 'same');
@@ -107,7 +105,6 @@ it('holds the Kas Laci invariant per shift: opening + cash sales + in - out - ca
     $cashier = userWithRole('cashier');
     $manager = userWithRole('manager');
     $shift = openShiftFor($cashier, 75000);
-    openShiftFor($manager, 0);
 
     $p1 = pay(placeOrder());
     pay(placeOrder(tableId: Table::query()->skip(1)->value('id')), amount: 50000);
@@ -115,7 +112,7 @@ it('holds the Kas Laci invariant per shift: opening + cash sales + in - out - ca
     app(AddCashMovementAction::class)->handle($shift, $cashier, 'out', 3000, 'parkir', Account::query()->where('code', '5-5000')->value('id'));
 
     $s = app(ShiftCash::class)->summarize($shift->fresh());
-    expect($s['expected'])->toBe($s['opening'] + 44000 + 44000 + 0 - 3000)->toBe(75000 + 88000 - 3000);
+    expect($s['expected'])->toBe($s['opening'] + 44000 + 44000 - 10000 - 3000)->toBe(75000 + 88000 - 10000 - 3000); // the manager's cash refund leaves the same drawer
 });
 
 it('blocks opening a shift on a closed business day, and closing the day needs all shifts closed', function () {

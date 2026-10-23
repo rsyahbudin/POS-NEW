@@ -84,7 +84,6 @@ it('holds all accounting invariants after a mixed day', function () {
     $cashier = userWithRole('cashier');
     $manager = userWithRole('manager');
     openShiftFor($cashier, 0);
-    openShiftFor($manager, 0);
     $tables = Table::query()->orderBy('id')->get();
 
     // 1) plain, cash

@@ -8,7 +8,6 @@ use App\Domain\Ordering\Actions\VoidItemAction;
 use App\Domain\Ordering\Actions\VoidOrderAction;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Ordering\Models\OrderRound;
-use App\Domain\Payment\Models\Payment;
 use App\Domain\Printing\Models\Printer;
 use App\Domain\Printing\Models\PrintJob;
 use App\Domain\Printing\PrintDispatcher;
@@ -77,57 +76,49 @@ it('lists pending QR rounds in the polled state and keeps manually confirmed one
     expect(OrderRound::query()->count())->toBe(1);
 });
 
-// ---------------------------------------------------------------- shared shift
+// ---------------------------------------------------------------- one shift for the whole store
 
-it('lets the owner take payments through the cashier\'s open shift', function () {
+it('lets the owner take payments through the shift the cashier opened', function () {
     $cashier = userWithRole('cashier');
     $shift = openShiftFor($cashier, 100000);
     $owner = userWithRole('owner');
 
     $this->actingAs($owner)->get('/pos')->assertInertia(fn ($p) => $p->where('shift.id', $shift->id)->where('shift.mine', false)->where('shift.owner', $cashier->name));
-
-    $payment = pay(placeOrder($owner), $owner);
+    $payment = pay(placeOrder(), $owner);
     expect($payment->shift_id)->toBe($shift->id)->and($payment->received_by)->toBe($owner->id);
     expect(app(ShiftCash::class)->summarize($shift->fresh())['cash_sales'])->toBe(44000);
 });
 
-it('needs an open shift for everybody, and an own one for everybody once sharing is switched off', function () {
-    expect(fn () => pay(placeOrder(), userWithRole('cashier')))->toThrow(OrderException::class, 'shift'); // nobody opened a shift
+it('needs the one open shift for everybody, and refuses a second one', function () {
+    expect(fn () => pay(placeOrder(), userWithRole('cashier')))->toThrow(OrderException::class, 'shift'); // nobody opened it
 
-    $cashier = userWithRole('cashier');
-    openShiftFor($cashier, 0);
-    setting('shift.shared_for_managers', false);
-    expect(fn () => pay(placeOrder(), userWithRole('owner')))->toThrow(OrderException::class, 'shift');
-    expect(Payment::query()->count())->toBe(0);
+    $first = openShiftFor(userWithRole('cashier'), 0);
+    expect(fn () => openShiftFor(userWithRole('manager'), 0))->toThrow(OrderException::class, 'sudah dibuka');
+    expect(Shift::query()->whereNull('closed_at')->count())->toBe(1)->and(pay(placeOrder(), userWithRole('owner'))->shift_id)->toBe($first->id);
 });
 
-it('prefers the user\'s own shift over the shared one', function () {
-    openShiftFor(userWithRole('cashier'), 0);
-    $mine = openShiftFor(userWithRole('manager'), 0);
-    expect(pay(placeOrder(), userWithRole('manager'))->shift_id)->toBe($mine->id);
-});
-
-it('shows other open shifts to the owner and lets them close one without being logged out', function () {
+it('lets whoever has the shift permission close the store\'s shift, and records both names', function () {
     $cashier = userWithRole('cashier');
     $shift = openShiftFor($cashier, 100000);
-    pay(placeOrder());
     $owner = userWithRole('owner');
+    pay(placeOrder(), $owner); // 44.000 cash
 
-    $this->actingAs($owner)->get('/shift')->assertInertia(fn ($p) => $p->where('others.0.id', $shift->id)->where('others.0.user', $cashier->name)->where('sharing', true)->where('shift', null));
+    $this->actingAs($owner)->get('/shift')->assertOk()->assertInertia(fn ($p) => $p->where('shift.id', $shift->id)->where('shift.opened_by', $cashier->name)->where('can.operate', true));
+    $this->actingAs($owner)->post('/shift/close', ['counted_cash' => 144000, 'cash_left' => 100000, 'close_key' => 'k'])->assertRedirect(route('shift.index'));
 
-    $this->actingAs($owner)->post('/shift/close', ['shift_id' => $shift->id, 'counted_cash' => 144000, 'cash_left' => 100000, 'close_key' => 'k'])->assertRedirect(route('shift.index'));
-    $this->assertAuthenticatedAs($owner);
-    expect($shift->fresh()->closed_at)->not->toBeNull()->and($shift->fresh()->difference)->toBe(0);
+    $shift->refresh();
+    expect($shift->closed_at)->not->toBeNull()->and($shift->closed_by)->toBe($owner->id)->and($shift->difference)->toBe(0);
+    $this->actingAs($owner)->get('/shift')->assertInertia(fn ($p) => $p->where('shift', null)->where('recent.0.opened_by', $cashier->name)->where('recent.0.closed_by', $owner->name));
 });
 
-it('does not let a cashier close someone else\'s shift by passing its id', function () {
-    $manager = userWithRole('manager');
-    $theirs = openShiftFor($manager, 0);
+it('shows the shift and its history to every staff role but lets only the shift permission act', function () {
     $cashier = userWithRole('cashier');
     openShiftFor($cashier, 0);
 
-    $this->actingAs($cashier)->post('/shift/close', ['shift_id' => $theirs->id, 'counted_cash' => 0, 'cash_left' => 0, 'close_key' => 'x']);
-    expect($theirs->fresh()->closed_at)->toBeNull();
+    $this->actingAs(userWithRole('waiter'))->get('/shift')->assertOk()->assertInertia(fn ($p) => $p->where('shift.opened_by', $cashier->name)->where('can.operate', false));
+    $this->actingAs(userWithRole('waiter'))->post('/shift/close', ['counted_cash' => 0, 'cash_left' => 0, 'close_key' => 'x'])->assertForbidden();
+    $this->actingAs(userWithRole('waiter'))->post('/shift/open', ['opening_cash' => 0])->assertForbidden();
+    $this->actingAs(userWithRole('kitchen'))->get('/shift')->assertForbidden();
 });
 
 // ---------------------------------------------------------------- optional kitchen display

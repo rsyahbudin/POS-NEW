@@ -115,11 +115,14 @@ Route::middleware(['auth', 'staff'])->group(function () {
     });
 
     // Shift
-    Route::prefix('shift')->name('shift.')->middleware('permission:open-close-shift')->group(function () {
-        Route::get('/', [ShiftController::class, 'index'])->name('index');
-        Route::post('open', [ShiftController::class, 'open'])->name('open');
-        Route::post('movements', [ShiftController::class, 'movement'])->name('movement');
-        Route::post('close', [ShiftController::class, 'close'])->name('close');
+    // One shift per store. Every staff role may look at it (and its history); only the shift permission acts on it.
+    Route::prefix('shift')->name('shift.')->group(function () {
+        Route::get('/', [ShiftController::class, 'index'])->middleware('permission:open-close-shift|manage-shifts-any|view-own-shift-recap|create-order|receive-payment')->name('index');
+        Route::middleware('permission:open-close-shift')->group(function () {
+            Route::post('open', [ShiftController::class, 'open'])->name('open');
+            Route::post('movements', [ShiftController::class, 'movement'])->name('movement');
+            Route::post('close', [ShiftController::class, 'close'])->name('close');
+        });
     });
 
     // Print station: a device that serves the queued print jobs of its printers

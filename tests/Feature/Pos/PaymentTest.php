@@ -9,13 +9,14 @@ use App\Domain\Payment\Actions\CloseZeroOrderAction;
 use App\Domain\Payment\Actions\RecordPaymentAction;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Pricing\Models\TaxRule;
+use App\Domain\Shift\Models\Shift;
 use Illuminate\Support\Str;
 
 beforeEach(fn () => openShiftFor(userWithRole('cashier'), 0));
 
 it('refuses payment without an open shift', function () {
-    setting('shift.shared_for_managers', false);
     $order = placeOrder(userWithRole('manager'));
+    Shift::query()->update(['closed_at' => now()]); // the store's shift was closed
     expect(fn () => pay($order, userWithRole('manager')))->toThrow(OrderException::class, 'shift');
 });
 

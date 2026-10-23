@@ -38,11 +38,14 @@ type ShiftData = {
     voids: number;
     discounts: number;
     comps: number;
+    opened_by: string | null;
+    closed_by: string | null;
     movements: {
         direction: 'in' | 'out';
         amount: number;
         reason: string;
         created_at: string;
+        by: string | null;
     }[];
 };
 type Acc = { id: number; code: string; name: string };
@@ -52,9 +55,7 @@ type Props = {
     suggestedOpening: number;
     accounts: { expense: Acc[]; other: Acc[]; bank: Acc[] };
     recent: ShiftData[];
-    others: (ShiftData & { user: string | null })[];
-    sharing: boolean;
-    can: { any: boolean };
+    can: { operate: boolean };
 };
 
 export default function ShiftPage({
@@ -62,8 +63,7 @@ export default function ShiftPage({
     suggestedOpening,
     accounts,
     recent,
-    others,
-    sharing,
+    can,
 }: Props) {
     const errors = usePage().props.errors as Record<string, string> | undefined;
 
@@ -72,10 +72,10 @@ export default function ShiftPage({
             <Head title="Shift" />
             <div className="mx-auto grid max-w-3xl gap-4 p-4">
                 <PageHeader
-                    title="Shift kasir"
+                    title="Shift toko"
                     subtitle={
                         shift
-                            ? `${t('Dibuka')} ${dateId(shift.opened_at)} ${timeId(shift.opened_at)}`
+                            ? `${t('Dibuka oleh')} ${shift.opened_by ?? '-'} · ${dateId(shift.opened_at)} ${timeId(shift.opened_at)}`
                             : t('Belum ada shift terbuka')
                     }
                     actions={
@@ -93,53 +93,26 @@ export default function ShiftPage({
                     </p>
                 )}
                 {shift ? (
-                    <Open shift={shift} accounts={accounts} />
-                ) : (
+                    <Open
+                        shift={shift}
+                        accounts={accounts}
+                        operate={can.operate}
+                    />
+                ) : can.operate ? (
                     <OpenForm suggested={suggestedOpening} />
-                )}
-
-                {others.length > 0 && (
-                    <section
-                        aria-label={t('Shift orang lain yang masih terbuka')}
-                        className="grid gap-3"
-                    >
-                        <h2 className="font-semibold">
-                            {t('Shift orang lain yang masih terbuka')}
-                        </h2>
-                        {sharing && !shift && (
-                            <p className="rounded-xl bg-muted p-3 text-sm">
-                                {t(
-                                    'Kamu bisa menerima pembayaran memakai shift ini tanpa membuka shift sendiri.',
-                                )}
-                            </p>
+                ) : (
+                    <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
+                        {t(
+                            'Belum ada shift terbuka. Minta kasir atau manager membukanya.',
                         )}
-                        {others.map((o) => (
-                            <div
-                                key={o.id}
-                                className="grid gap-3 rounded-2xl border bg-card p-3"
-                            >
-                                <p className="font-medium">
-                                    {o.user ?? '-'} · {t('dibuka')}{' '}
-                                    {timeId(o.opened_at)} ·{' '}
-                                    {t('kas seharusnya')}{' '}
-                                    {rupiah(o.summary.expected)}
-                                </p>
-                                <SalesBreakdown shift={o} />
-                                <details className="rounded-xl border p-3">
-                                    <summary className="cursor-pointer text-sm font-semibold">
-                                        {t('Tutup shift ini')}
-                                    </summary>
-                                    <div className="mt-3">
-                                        <CloseForm
-                                            shift={o}
-                                            accounts={accounts.bank}
-                                            shiftId={o.id}
-                                        />
-                                    </div>
-                                </details>
-                            </div>
-                        ))}
-                    </section>
+                    </p>
+                )}
+                {shift && (
+                    <p className="text-xs text-muted-foreground">
+                        {t(
+                            'Satu shift dipakai bersama oleh semua staf toko. Tiap pembayaran dan kas tercatat atas nama orang yang melakukannya.',
+                        )}
+                    </p>
                 )}
 
                 {recent.length > 0 && (
@@ -170,6 +143,11 @@ export default function ShiftPage({
                                             {rupiah(s.difference ?? 0)}
                                         </span>
                                     </div>
+                                    <p className="text-muted-foreground">
+                                        {t('Dibuka oleh')} {s.opened_by ?? '-'}{' '}
+                                        · {t('ditutup oleh')}{' '}
+                                        {s.closed_by ?? '-'}
+                                    </p>
                                     <p className="text-muted-foreground">
                                         {s.orders} order · {t('kas seharusnya')}{' '}
                                         {rupiah(s.summary.expected)} ·{' '}
@@ -294,9 +272,11 @@ function SalesBreakdown({ shift }: { shift: ShiftData }) {
 function Open({
     shift,
     accounts,
+    operate,
 }: {
     shift: ShiftData;
     accounts: Props['accounts'];
+    operate: boolean;
 }) {
     const s = shift.summary;
 
@@ -323,8 +303,12 @@ function Open({
                 />
             </div>
             <SalesBreakdown shift={shift} />
-            <Movement accounts={accounts} movements={shift.movements} />
-            <CloseForm shift={shift} accounts={accounts.bank} />
+            <Movement
+                accounts={accounts}
+                movements={shift.movements}
+                operate={operate}
+            />
+            {operate && <CloseForm shift={shift} accounts={accounts.bank} />}
         </>
     );
 }
@@ -332,9 +316,11 @@ function Open({
 function Movement({
     accounts,
     movements,
+    operate,
 }: {
     accounts: Props['accounts'];
     movements: ShiftData['movements'];
+    operate: boolean;
 }) {
     const [dir, setDir] = useState<'in' | 'out'>('out');
     const [amount, setAmount] = useState<number | ''>('');
@@ -347,77 +333,90 @@ function Movement({
             <h2 className="font-semibold">
                 {t('Kas masuk / keluar (non-penjualan)')}
             </h2>
-            <div role="radiogroup" className="grid grid-cols-2 gap-2">
-                <Button
-                    type="button"
-                    role="radio"
-                    aria-checked={dir === 'out'}
-                    variant={dir === 'out' ? 'default' : 'outline'}
-                    className="h-11"
-                    onClick={() => {
-                        setDir('out');
-                        setAccount('');
-                    }}
-                >
-                    {t('Keluar')}
-                </Button>
-                <Button
-                    type="button"
-                    role="radio"
-                    aria-checked={dir === 'in'}
-                    variant={dir === 'in' ? 'default' : 'outline'}
-                    className="h-11"
-                    onClick={() => {
-                        setDir('in');
-                        setAccount('');
-                    }}
-                >
-                    {t('Masuk')}
-                </Button>
-            </div>
-            <Field label={t('Nominal')}>
-                <MoneyInput value={amount} onChange={setAmount} />
-            </Field>
-            <Field label={t('Alasan')}>
-                <Input
-                    className="h-11"
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    placeholder={t('mis. beli es batu')}
-                />
-            </Field>
-            <Field label={dir === 'out' ? t('Akun beban') : t('Akun lawan')}>
-                <Select
-                    value={account}
-                    onChange={(e) => setAccount(Number(e.target.value))}
-                >
-                    <option value="">{t('— pilih —')}</option>
-                    {list.map((a) => (
-                        <option key={a.id} value={a.id}>
-                            {a.name}
-                        </option>
-                    ))}
-                </Select>
-            </Field>
-            <Button
-                className="h-12"
-                disabled={!amount || !reason.trim() || !account}
-                onClick={() =>
-                    router.post(
-                        '/shift/movements',
-                        { direction: dir, amount, reason, account_id: account },
-                        {
-                            preserveScroll: true,
-                            onSuccess: () => {
-                                setAmount('');
-                                setReason('');
-                            },
-                        },
-                    )
-                }
-            >
-                {t('Catat')}
-            </Button>
+            {operate && (
+                <>
+                    <div role="radiogroup" className="grid grid-cols-2 gap-2">
+                        <Button
+                            type="button"
+                            role="radio"
+                            aria-checked={dir === 'out'}
+                            variant={dir === 'out' ? 'default' : 'outline'}
+                            className="h-11"
+                            onClick={() => {
+                                setDir('out');
+                                setAccount('');
+                            }}
+                        >
+                            {t('Keluar')}
+                        </Button>
+                        <Button
+                            type="button"
+                            role="radio"
+                            aria-checked={dir === 'in'}
+                            variant={dir === 'in' ? 'default' : 'outline'}
+                            className="h-11"
+                            onClick={() => {
+                                setDir('in');
+                                setAccount('');
+                            }}
+                        >
+                            {t('Masuk')}
+                        </Button>
+                    </div>
+                    <Field label={t('Nominal')}>
+                        <MoneyInput value={amount} onChange={setAmount} />
+                    </Field>
+                    <Field label={t('Alasan')}>
+                        <Input
+                            className="h-11"
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            placeholder={t('mis. beli es batu')}
+                        />
+                    </Field>
+                    <Field
+                        label={
+                            dir === 'out' ? t('Akun beban') : t('Akun lawan')
+                        }
+                    >
+                        <Select
+                            value={account}
+                            onChange={(e) => setAccount(Number(e.target.value))}
+                        >
+                            <option value="">{t('— pilih —')}</option>
+                            {list.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                    {a.name}
+                                </option>
+                            ))}
+                        </Select>
+                    </Field>
+                    <Button
+                        className="h-12"
+                        disabled={!amount || !reason.trim() || !account}
+                        onClick={() =>
+                            router.post(
+                                '/shift/movements',
+                                {
+                                    direction: dir,
+                                    amount,
+                                    reason,
+                                    account_id: account,
+                                },
+                                {
+                                    preserveScroll: true,
+                                    onSuccess: () => {
+                                        setAmount('');
+                                        setReason('');
+                                    },
+                                },
+                            )
+                        }
+                    >
+                        {t('Catat')}
+                    </Button>
+                </>
+            )}
             {movements.length > 0 && (
                 <ul className="text-sm">
                     {movements.map((m, i) => (
@@ -427,6 +426,12 @@ function Movement({
                         >
                             <span>
                                 {m.direction === 'in' ? '＋' : '－'} {m.reason}
+                                {m.by && (
+                                    <span className="text-muted-foreground">
+                                        {' '}
+                                        · {m.by}
+                                    </span>
+                                )}
                             </span>
                             <span className="tabular-nums">
                                 {rupiah(m.amount)}

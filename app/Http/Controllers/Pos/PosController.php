@@ -104,23 +104,25 @@ class PosController extends Controller
     }
 
     /**
-     * Today's bills (business day), newest first. Managers and owners (sales report permission) see the whole outlet;
-     * everybody else sees what they opened or took payment for.
+     * The transactions of the store's open shift (plus unpaid and cancelled bills of today). The shift is one unit for
+     * every staff role, so everybody sees all of it; with no open shift it falls back to today's bills.
      */
     public function history(Request $request): JsonResponse
     {
-        $user = $this->actor($request);
-        $all = $user->can('view-sales-reports');
+        $shift = app(ShiftResolver::class)->current();
+        $today = BusinessDate::for();
         $orders = Order::query()
-            ->where('outlet_id', $this->outlet->id())->where('business_date', BusinessDate::for())
-            ->when(! $all, fn ($q) => $q->where(fn ($w) => $w->where('opened_by', $user->id)->orWhereHas('payments', fn ($p) => $p->where('received_by', $user->id))))
-            ->with(['table:id,name', 'opener:id,name', 'bills:id,order_id,label,status,grand_total,is_unallocated'])
-            ->latest('id')->limit(200)->get();
+            ->where('outlet_id', $this->outlet->id())
+            ->where(fn ($q) => $shift !== null
+                ? $q->where('shift_id', $shift->id)->orWhere(fn ($w) => $w->whereNull('shift_id')->where('business_date', $today))
+                : $q->where('business_date', $today))
+            ->with(['table:id,name', 'opener:id,name', 'bills:id,order_id,label,status,grand_total,is_unallocated', 'payments:id,order_id,received_by', 'payments.receiver:id,name'])
+            ->latest('id')->limit(300)->get();
 
         $paid = $orders->whereIn('status', [OrderStatus::Paid, OrderStatus::Refunded]);
 
         return response()->json([
-            'scope' => $all ? 'all' : 'mine',
+            'shift' => $shift ? ['opened_by' => $shift->user?->name, 'opened_at' => $shift->opened_at->toIso8601String()] : null,
             'summary' => [
                 'paid' => $paid->count(),
                 'total' => (int) $paid->sum(fn (Order $o) => $o->grand_total - $o->refunded_total),
@@ -131,6 +133,7 @@ class PosController extends Controller
                 'id' => $o->id, 'number' => $o->number, 'where' => $o->table->name ?? $o->call_number ?? $o->platform ?? ucfirst((string) $o->type->value),
                 'at' => $o->created_at?->toIso8601String(), 'status' => $o->status->value, 'status_label' => $o->status->label(),
                 'total' => $o->grand_total, 'refunded' => $o->refunded_total, 'by' => $o->opener?->name,
+                'paid_by' => $o->payments->map(fn ($p) => $p->receiver?->name)->filter()->unique()->values()->all(),
                 'bills' => $o->bills->where('is_unallocated', false)->map(fn ($b) => ['id' => $b->id, 'label' => $b->label, 'status' => $b->status->value, 'total' => $b->grand_total])->values()->all(),
             ])->values()->all(),
         ]);

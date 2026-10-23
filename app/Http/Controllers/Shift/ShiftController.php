@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Shift;
 
 use App\Domain\Accounting\Models\Account;
 use App\Domain\Ordering\Exceptions\OrderException;
+use App\Domain\Ordering\Models\Order;
 use App\Domain\Settings\OutletContext;
 use App\Domain\Shift\Actions\AddCashMovementAction;
 use App\Domain\Shift\Actions\CloseShiftAction;
@@ -39,6 +40,13 @@ class ShiftController extends Controller
                 'bank' => Account::query()->where('outlet_id', $outletId)->where('type', 'asset')->where('system_key', null)->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
             ] : ['expense' => [], 'other' => [], 'bank' => []],
             'recent' => Shift::query()->where('outlet_id', $outletId)->whereNotNull('closed_at')->with(['user:id,name', 'closer:id,name'])->latest('closed_at')->limit(10)->get()->map(fn ($s) => $this->present($s, $cash))->all(),
+            // The transactions inside the shift are visible to everybody: the shift is one unit for the store.
+            'transactions' => $shift ? Order::query()->where('shift_id', $shift->id)->with(['table:id,name', 'payments.receiver:id,name'])->latest('id')->limit(300)->get()
+                ->map(fn ($o) => [
+                    'id' => $o->id, 'number' => $o->number, 'where' => $o->table->name ?? $o->call_number ?? $o->platform ?? ucfirst((string) $o->type->value),
+                    'at' => $o->created_at?->toIso8601String(), 'status' => $o->status->label(), 'total' => $o->grand_total - $o->refunded_total,
+                    'paid_by' => $o->payments->map(fn ($p) => $p->receiver?->name)->filter()->unique()->implode(', '),
+                ])->all() : [],
             'can' => ['operate' => $operate],
         ]);
     }

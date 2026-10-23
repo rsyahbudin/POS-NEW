@@ -1,31 +1,53 @@
 <?php
 
 use App\Domain\Ordering\Models\Order;
+use App\Domain\Shift\Actions\CloseShiftAction;
 
-it("shows a cashier today's bills they opened or took payment for, and managers the whole outlet", function () {
+it('shows every staff role all the transactions of the shift, whoever made them', function () {
     $cashier = userWithRole('cashier');
-    openShiftFor($cashier, 0);
+    $shift = openShiftFor($cashier, 0);
     $mine = placeOrder($cashier, type: 'takeaway');
-    pay($mine, $cashier);                                                 // opened and paid by the cashier
+    pay($mine, $cashier);
     $waiters = placeOrder(userWithRole('waiter'), type: 'takeaway');
-    pay($waiters, $cashier);                                              // opened by a waiter, paid by the cashier
-    $others = placeOrder(userWithRole('manager'), type: 'takeaway');      // nothing to do with the cashier
+    pay($waiters, userWithRole('manager'));                                  // taken by the manager
+    $open = placeOrder(userWithRole('waiter'), type: 'takeaway');            // still open, opened by the waiter
 
-    $this->actingAs($cashier)->getJson('/pos/history')->assertOk()
-        ->assertJsonPath('scope', 'mine')->assertJsonCount(2, 'orders')
-        ->assertJsonPath('summary.paid', 2)->assertJsonPath('summary.total', 88000)->assertJsonPath('summary.open', 0);
+    foreach (['cashier', 'waiter', 'manager', 'owner'] as $role) {
+        $this->actingAs(userWithRole($role))->getJson('/pos/history')->assertOk()
+            ->assertJsonPath('shift.opened_by', $cashier->name)->assertJsonCount(3, 'orders')
+            ->assertJsonPath('summary.paid', 2)->assertJsonPath('summary.total', 88000)->assertJsonPath('summary.open', 1);
+    }
 
-    $this->actingAs(userWithRole('manager'))->getJson('/pos/history')->assertOk()
-        ->assertJsonPath('scope', 'all')->assertJsonCount(3, 'orders')->assertJsonPath('summary.open', 1)
-        ->assertJsonPath('orders.0.id', $others->id)->assertJsonPath('orders.2.bills.0.status', 'paid');
+    $json = $this->actingAs(userWithRole('waiter'))->getJson('/pos/history')->json('orders');
+    $paidByManager = collect($json)->firstWhere('id', $waiters->id);
+    expect($paidByManager['paid_by'])->toBe([userWithRole('manager')->name])->and($paidByManager['by'])->toBe(userWithRole('waiter')->name);
+    expect($shift->id)->toBeInt();
 });
 
-it('only lists the current business day and is closed to people who cannot take orders', function () {
+it('keeps old shifts out of the list and is closed to people who cannot take orders', function () {
+    $cashier = userWithRole('cashier');
+    $first = openShiftFor($cashier, 0);
+    $old = placeOrder($cashier, type: 'takeaway');
+    pay($old, $cashier);
+    app(CloseShiftAction::class)->handle($first, $cashier, 44000, 0, null, null, 'k');
+    openShiftFor($cashier, 0);
+    $new = placeOrder($cashier, type: 'takeaway');
+    pay($new, $cashier);
+
+    $this->actingAs($cashier)->getJson('/pos/history')->assertOk()->assertJsonCount(1, 'orders')->assertJsonPath('orders.0.id', $new->id);
+    $this->actingAs(userWithRole('kitchen'))->getJson('/pos/history')->assertForbidden();
+    expect(Order::query()->count())->toBe(2);
+});
+
+it('lists the shift transactions on the shift page for every staff role that may open it', function () {
     $cashier = userWithRole('cashier');
     openShiftFor($cashier, 0);
-    $old = placeOrder($cashier, type: 'takeaway');
-    Order::query()->whereKey($old->id)->update(['business_date' => now()->subDays(2)->toDateString()]);
+    $order = placeOrder($cashier, type: 'takeaway');
+    pay($order, userWithRole('manager'));
 
-    $this->actingAs($cashier)->getJson('/pos/history')->assertOk()->assertJsonCount(0, 'orders');
-    $this->actingAs(userWithRole('kitchen'))->getJson('/pos/history')->assertForbidden();
+    foreach (['waiter', 'cashier', 'manager'] as $role) {
+        $this->actingAs(userWithRole($role))->get('/shift')->assertInertia(
+            fn ($p) => $p->has('transactions', 1)->where('transactions.0.number', $order->number)->where('transactions.0.paid_by', userWithRole('manager')->name),
+        );
+    }
 });

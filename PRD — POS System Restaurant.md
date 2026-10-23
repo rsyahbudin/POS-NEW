@@ -244,7 +244,7 @@ Modul 4.1–4.15 adalah inti POS; 4.16–4.27 ditambahkan setelah MVP. Setiap kr
 ### 4.13a Akun, Keluar & Riwayat Transaksi
 
 - Layar Kasir, Dapur, dan Shift tidak punya sidebar, jadi memakai **menu akun** (tombol bulat berisi inisial) di pojok kanan atas: nama dan email, **Riwayat transaksi** (hanya di Kasir), dan **Keluar**. Keluar tidak menutup shift.
-- **Riwayat transaksi hari ini:** ringkasan penjualan lunas dan jumlah transaksi, pesanan yang belum selesai, dan yang dibatalkan; daftar bill dengan filter status; tombol Buka pesanan (yang masih terbuka) dan Cetak ulang struk (berlabel COPY). Manager/owner (izin laporan penjualan) melihat seluruh outlet; peran lain hanya bill yang mereka buka atau terima pembayarannya. Hanya hari bisnis berjalan; hari lain lewat laporan.
+- **Transaksi shift ini:** ringkasan penjualan lunas dan jumlah transaksi, pesanan yang belum selesai, dan yang dibatalkan; daftar bill dengan filter status, siapa yang membuka dan siapa yang menerima pembayaran; tombol Buka pesanan (yang masih terbuka) dan Cetak ulang struk (berlabel COPY). Shift adalah satu kesatuan toko, jadi **semua peran staf melihat semua transaksi shift** (tanpa shift terbuka: transaksi hari ini). Hari-hari sebelumnya lewat laporan. Halaman Shift juga memuat daftar transaksi shift berjalan beserta penerimanya.
 
 ### 4.14 Pengaturan, User & Peran
 

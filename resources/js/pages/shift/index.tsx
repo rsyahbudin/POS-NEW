@@ -5,6 +5,7 @@ import {
     Field,
     MoneyInput,
     PageHeader,
+    ResponsiveTable,
     Select,
     Stat,
 } from '@/components/pos/ui';
@@ -55,6 +56,15 @@ type Props = {
     suggestedOpening: number;
     accounts: { expense: Acc[]; other: Acc[]; bank: Acc[] };
     recent: ShiftData[];
+    transactions: {
+        id: number;
+        number: string;
+        where: string;
+        at: string | null;
+        status: string;
+        total: number;
+        paid_by: string;
+    }[];
     can: { operate: boolean };
 };
 
@@ -63,6 +73,7 @@ export default function ShiftPage({
     suggestedOpening,
     accounts,
     recent,
+    transactions,
     can,
 }: Props) {
     const errors = usePage().props.errors as Record<string, string> | undefined;
@@ -113,6 +124,35 @@ export default function ShiftPage({
                             'Satu shift dipakai bersama oleh semua staf toko. Tiap pembayaran dan kas tercatat atas nama orang yang melakukannya.',
                         )}
                     </p>
+                )}
+
+                {shift && (
+                    <section
+                        aria-label={t('Transaksi shift ini')}
+                        className="grid gap-2"
+                    >
+                        <h2 className="font-semibold">
+                            {t('Transaksi shift ini')}
+                        </h2>
+                        <ResponsiveTable
+                            headers={[
+                                t('Order'),
+                                t('Waktu'),
+                                t('Status'),
+                                t('Diterima oleh'),
+                                t('Total'),
+                            ]}
+                            numeric={[4]}
+                            empty={t('Belum ada transaksi di shift ini.')}
+                            rows={transactions.map((o) => [
+                                `${o.where} · ${o.number}`,
+                                o.at ? timeId(o.at) : '-',
+                                o.status,
+                                o.paid_by || '-',
+                                rupiah(o.total),
+                            ])}
+                        />
+                    </section>
                 )}
 
                 {recent.length > 0 && (

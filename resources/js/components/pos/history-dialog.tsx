@@ -16,6 +16,7 @@ type Row = {
     total: number;
     refunded: number;
     by: string | null;
+    paid_by: string[];
     bills: {
         id: number;
         label: string | null;
@@ -24,7 +25,7 @@ type Row = {
     }[];
 };
 type History = {
-    scope: 'all' | 'mine';
+    shift: { opened_by: string | null; opened_at: string } | null;
     summary: { paid: number; total: number; open: number; cancelled: number };
     orders: Row[];
 };
@@ -78,13 +79,13 @@ export function HistoryDialog({
         <Modal
             open
             onClose={onClose}
-            title={t('Riwayat transaksi hari ini')}
+            title={t('Transaksi shift ini')}
             description={
                 data
-                    ? data.scope === 'all'
-                        ? t('Semua transaksi outlet pada hari bisnis ini.')
+                    ? data.shift
+                        ? `${t('Shift dibuka oleh')} ${data.shift.opened_by ?? '-'} · ${t('semua staf bisa melihat.')}`
                         : t(
-                              'Transaksi yang Anda buka atau terima pembayarannya hari ini.',
+                              'Belum ada shift terbuka; menampilkan transaksi hari ini.',
                           )
                     : undefined
             }
@@ -167,7 +168,12 @@ export function HistoryDialog({
                                             </p>
                                             <p className="text-xs text-muted-foreground">
                                                 {o.at ? timeId(o.at) : '-'}
-                                                {o.by ? ` · ${o.by}` : ''}
+                                                {o.by
+                                                    ? ` · ${t('dibuka')} ${o.by}`
+                                                    : ''}
+                                                {o.paid_by.length > 0
+                                                    ? ` · ${t('dibayar')} ${o.paid_by.join(', ')}`
+                                                    : ''}
                                             </p>
                                         </div>
                                         <div className="text-right">

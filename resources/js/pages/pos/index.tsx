@@ -988,6 +988,15 @@ export default function PosPage(props: Props) {
                                 menu={menu}
                                 soldOut={soldOut}
                                 markMode={markMode}
+                                inCart={cart.reduce<Record<number, number>>(
+                                    (m, l) => {
+                                        m[l.product.id] =
+                                            (m[l.product.id] ?? 0) + l.qty;
+
+                                        return m;
+                                    },
+                                    {},
+                                )}
                                 onPick={pick}
                             />
                         )}

@@ -1,4 +1,5 @@
 import { Minus, Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { t } from '@/lang';
 import { rupiah, timeId } from '@/lib/format';
@@ -296,79 +297,11 @@ export function OrderPanel({
                         </p>
                         <ul className="grid gap-1">
                             {cart.map((l) => (
-                                <li
+                                <CartRow
                                     key={l.key}
-                                    className="rounded-lg border border-dashed p-2 text-sm"
-                                >
-                                    <div className="flex justify-between gap-2">
-                                        <p className="min-w-0 font-medium">
-                                            {l.label}
-                                        </p>
-                                        <p className="tabular-nums">
-                                            {rupiah(l.unitPrice * l.qty)}
-                                        </p>
-                                    </div>
-                                    <input
-                                        type="text"
-                                        value={l.note}
-                                        maxLength={200}
-                                        placeholder={t(
-                                            'Catatan (mis. less ice, tanpa gula)',
-                                        )}
-                                        aria-label={`${t('Catatan')} ${l.label}`}
-                                        onChange={(e) =>
-                                            actions.setNote(
-                                                l.key,
-                                                e.target.value,
-                                            )
-                                        }
-                                        className="mt-1 h-10 w-full rounded-md border border-input bg-background px-2 text-xs"
-                                    />
-                                    <div className="mt-1 flex items-center gap-1">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="icon"
-                                            className="size-11"
-                                            aria-label={t('Kurangi')}
-                                            onClick={() =>
-                                                actions.setQty(l.key, -1)
-                                            }
-                                        >
-                                            <Minus />
-                                        </Button>
-                                        <span
-                                            className="w-8 text-center tabular-nums"
-                                            aria-live="polite"
-                                        >
-                                            {l.qty}
-                                        </span>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="icon"
-                                            className="size-11"
-                                            aria-label={t('Tambah')}
-                                            onClick={() =>
-                                                actions.setQty(l.key, 1)
-                                            }
-                                        >
-                                            <Plus />
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="ml-auto size-11"
-                                            aria-label={t('Hapus')}
-                                            onClick={() =>
-                                                actions.remove(l.key)
-                                            }
-                                        >
-                                            <Trash2 />
-                                        </Button>
-                                    </div>
-                                </li>
+                                    line={l}
+                                    actions={actions}
+                                />
                             ))}
                         </ul>
                     </div>
@@ -713,6 +646,86 @@ export function OrderPanel({
                 )}
             </footer>
         </section>
+    );
+}
+
+function CartRow({
+    line: l,
+    actions,
+}: {
+    line: CartLine;
+    actions: PanelActions;
+}) {
+    const [note, setNote] = useState(l.note !== '');
+
+    return (
+        <li className="px-3 py-2.5 text-sm">
+            <div className="flex justify-between gap-3">
+                <p className="min-w-0 font-medium">{l.label}</p>
+                <p className="shrink-0 font-semibold tabular-nums">
+                    {rupiah(l.unitPrice * l.qty)}
+                </p>
+            </div>
+            {note && (
+                <input
+                    type="text"
+                    value={l.note}
+                    maxLength={200}
+                    autoFocus={l.note === ''}
+                    placeholder={t('Catatan (mis. less ice, tanpa gula)')}
+                    aria-label={`${t('Catatan')} ${l.label}`}
+                    onChange={(e) => actions.setNote(l.key, e.target.value)}
+                    className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-2.5 text-base sm:text-sm"
+                />
+            )}
+            <div className="mt-1.5 flex items-center gap-1">
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-10"
+                    aria-label={t('Kurangi')}
+                    onClick={() => actions.setQty(l.key, -1)}
+                >
+                    <Minus />
+                </Button>
+                <span
+                    className="w-8 text-center font-semibold tabular-nums"
+                    aria-live="polite"
+                >
+                    {l.qty}
+                </span>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-10"
+                    aria-label={t('Tambah')}
+                    onClick={() => actions.setQty(l.key, 1)}
+                >
+                    <Plus />
+                </Button>
+                {!note && (
+                    <button
+                        type="button"
+                        className="ml-2 h-10 px-1 text-sm text-primary underline-offset-2 hover:underline"
+                        onClick={() => setNote(true)}
+                    >
+                        {t('Catatan')}
+                    </button>
+                )}
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="ml-auto size-10 text-muted-foreground"
+                    aria-label={t('Hapus')}
+                    onClick={() => actions.remove(l.key)}
+                >
+                    <Trash2 />
+                </Button>
+            </div>
+        </li>
     );
 }
 

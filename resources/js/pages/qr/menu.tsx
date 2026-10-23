@@ -1,5 +1,6 @@
 import { Head } from '@inertiajs/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ProductArt } from '@/components/pos/product-art';
 import type { Category, Modifier, Product } from '@/types/pos';
 
 /*
@@ -103,20 +104,49 @@ export default function QrMenu({
         () => menu.reduce((n, c) => n + c.products.length, 0),
         [menu],
     );
-    const products = useMemo(() => {
+    const tintOf = useMemo(
+        () => new Map(menu.map((c, i) => [c.id, i] as const)),
+        [menu],
+    );
+    const sections = useMemo(() => {
         const words = q.toLowerCase().split(/\s+/).filter(Boolean);
 
         return menu
-            .filter((c) => cat === 'all' || c.id === cat)
-            .flatMap((c) => c.products)
-            .filter((p) =>
-                words.every((w) =>
-                    `${p.name} ${p.description ?? ''}`
-                        .toLowerCase()
-                        .includes(w),
+            .map((c) => ({
+                ...c,
+                products: c.products.filter((p) =>
+                    words.every((w) =>
+                        `${p.name} ${p.description ?? ''}`
+                            .toLowerCase()
+                            .includes(w),
+                    ),
                 ),
-            );
-    }, [menu, cat, q]);
+            }))
+            .filter((c) => c.products.length > 0);
+    }, [menu, q]);
+
+    // highlight the chip of the category being read
+    useEffect(() => {
+        const els = document.querySelectorAll<HTMLElement>('[data-cat]');
+        const io = new IntersectionObserver(
+            (entries) => {
+                const top = entries
+                    .filter((e) => e.isIntersecting)
+                    .sort(
+                        (a, b) =>
+                            a.boundingClientRect.top - b.boundingClientRect.top,
+                    )[0];
+
+                if (top) {
+                    setCat(Number((top.target as HTMLElement).dataset.cat));
+                }
+            },
+            { rootMargin: '-160px 0px -60% 0px' },
+        );
+        els.forEach((el) => io.observe(el));
+
+        return () => io.disconnect();
+    }, [sections]);
     const total = cart.reduce((s, l) => s + l.unit * l.qty, 0);
     const count = cart.reduce((s, l) => s + l.qty, 0);
 
@@ -291,114 +321,142 @@ export default function QrMenu({
                         className="flex [scrollbar-width:none] gap-2 overflow-x-auto px-4 pb-3"
                         aria-label="Kategori"
                     >
-                        {[{ id: 'all' as const, name: 'Semua' }, ...menu].map(
-                            (c) => (
-                                <button
-                                    key={c.id}
-                                    onClick={() => setCat(c.id)}
-                                    aria-pressed={cat === c.id}
-                                    className={`h-10 shrink-0 rounded-full border px-4 text-sm font-medium ${cat === c.id ? 'border-primary bg-primary text-primary-foreground' : 'bg-card'}`}
-                                >
-                                    {c.name}
-                                </button>
-                            ),
-                        )}
+                        {sections.map((c) => (
+                            <button
+                                key={c.id}
+                                onClick={() => {
+                                    setCat(c.id);
+                                    document
+                                        .getElementById(`cat-${c.id}`)
+                                        ?.scrollIntoView({
+                                            behavior: 'smooth',
+                                            block: 'start',
+                                        });
+                                }}
+                                aria-pressed={cat === c.id}
+                                className={`h-10 shrink-0 rounded-full border px-4 text-sm font-medium transition-colors ${cat === c.id ? 'border-primary bg-primary text-primary-foreground' : 'bg-card'}`}
+                            >
+                                {c.name}
+                            </button>
+                        ))}
                     </nav>
                 </div>
 
-                <div className="h-3" />
-                <main className="mx-4 divide-y overflow-hidden rounded-xl border bg-card">
-                    {products.map((p) => {
-                        const hasOptions =
-                            p.variants.length > 0 ||
-                            p.modifier_groups.length > 0;
-                        const inCart = cart
-                            .filter((l) => l.product.id === p.id)
-                            .reduce((a, l) => a + l.qty, 0);
+                <main className="grid gap-1 pb-4">
+                    {sections.map((c) => (
+                        <section
+                            key={c.id}
+                            id={`cat-${c.id}`}
+                            data-cat={c.id}
+                            className="scroll-mt-44"
+                        >
+                            <h2 className="px-4 pt-5 pb-2 text-lg font-semibold tracking-tight">
+                                {c.name}
+                            </h2>
+                            <div className="mx-4 divide-y overflow-hidden rounded-2xl border bg-card">
+                                {c.products.map((p) => {
+                                    const hasOptions =
+                                        p.variants.length > 0 ||
+                                        p.modifier_groups.length > 0;
+                                    const inCart = cart
+                                        .filter((l) => l.product.id === p.id)
+                                        .reduce((a, l) => a + l.qty, 0);
 
-                        return (
-                            <div
-                                key={p.id}
-                                className="flex min-h-[72px] items-center gap-3 p-3"
-                            >
-                                {p.image && (
-                                    <img
-                                        src={p.image}
-                                        alt=""
-                                        width={64}
-                                        height={64}
-                                        loading="lazy"
-                                        className="size-16 shrink-0 rounded-xl object-cover"
-                                    />
-                                )}
-                                <div className="min-w-0 flex-1">
-                                    <span className="block font-medium">
-                                        {p.name}
-                                    </span>
-                                    {p.description && (
-                                        <span className="line-clamp-2 block text-xs text-muted-foreground">
-                                            {p.description}
-                                        </span>
-                                    )}
-                                    <span className="mt-0.5 block text-sm font-semibold tabular-nums">
-                                        {p.variants.length > 1
-                                            ? `dari ${rp(Math.min(...p.variants.map((v) => v.price)))}`
-                                            : rp(p.price)}
-                                    </span>
-                                </div>
-                                {hasOptions ? (
-                                    <div className="flex flex-col items-center gap-1">
-                                        <button
-                                            onClick={() => setPicking(p)}
-                                            aria-label={`Pilih ${p.name}`}
-                                            className="h-10 rounded-lg border border-primary px-4 text-sm font-semibold text-primary active:scale-95"
+                                    return (
+                                        <div
+                                            key={p.id}
+                                            className="flex items-start gap-3 p-3.5"
                                         >
-                                            {inCart > 0 ? 'Tambah' : 'Pilih'}
-                                        </button>
-                                        {inCart > 0 && (
-                                            <span className="text-xs font-medium text-primary">
-                                                {inCart} di keranjang
-                                            </span>
-                                        )}
-                                    </div>
-                                ) : inCart === 0 ? (
-                                    <button
-                                        onClick={() => bump(p, 1)}
-                                        aria-label={`Tambah ${p.name}`}
-                                        className="size-10 rounded-lg bg-primary text-2xl leading-none text-primary-foreground active:scale-95"
-                                    >
-                                        +
-                                    </button>
-                                ) : (
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={() => bump(p, -1)}
-                                            aria-label={`Kurangi ${p.name}`}
-                                            className="size-10 rounded-lg border text-xl leading-none active:scale-95"
-                                        >
-                                            −
-                                        </button>
-                                        <span
-                                            className="w-7 text-center font-semibold tabular-nums"
-                                            aria-live="polite"
-                                        >
-                                            {inCart}
-                                        </span>
-                                        <button
-                                            onClick={() => bump(p, 1)}
-                                            aria-label={`Tambah ${p.name}`}
-                                            className="size-10 rounded-lg bg-primary text-xl leading-none text-primary-foreground active:scale-95"
-                                        >
-                                            +
-                                        </button>
-                                    </div>
-                                )}
+                                            <div className="min-w-0 flex-1 py-0.5">
+                                                <span className="block text-base leading-snug font-semibold">
+                                                    {p.name}
+                                                </span>
+                                                {p.description && (
+                                                    <span className="mt-0.5 line-clamp-2 block text-[13px] leading-snug text-muted-foreground">
+                                                        {p.description}
+                                                    </span>
+                                                )}
+                                                <span className="mt-2 block text-[15px] font-semibold tabular-nums">
+                                                    {p.variants.length > 1
+                                                        ? `dari ${rp(Math.min(...p.variants.map((v) => v.price)))}`
+                                                        : rp(p.price)}
+                                                </span>
+                                            </div>
+                                            <div className="relative mb-4 size-24 shrink-0">
+                                                <div className="size-full overflow-hidden rounded-xl">
+                                                    <ProductArt
+                                                        name={p.name}
+                                                        image={p.image}
+                                                        tint={
+                                                            tintOf.get(c.id) ??
+                                                            0
+                                                        }
+                                                    />
+                                                </div>
+                                                <div className="absolute inset-x-0 -bottom-4 flex justify-center">
+                                                    {hasOptions ? (
+                                                        <button
+                                                            onClick={() =>
+                                                                setPicking(p)
+                                                            }
+                                                            aria-label={`Pilih ${p.name}`}
+                                                            className="h-9 rounded-full border border-primary bg-card px-4 text-sm font-semibold text-primary shadow-sm active:scale-95"
+                                                        >
+                                                            {inCart > 0
+                                                                ? `${inCart} · Tambah`
+                                                                : 'Pilih'}
+                                                        </button>
+                                                    ) : inCart === 0 ? (
+                                                        <button
+                                                            onClick={() =>
+                                                                bump(p, 1)
+                                                            }
+                                                            aria-label={`Tambah ${p.name}`}
+                                                            className="h-9 rounded-full border border-primary bg-card px-4 text-sm font-semibold text-primary shadow-sm active:scale-95"
+                                                        >
+                                                            Tambah
+                                                        </button>
+                                                    ) : (
+                                                        <div className="flex h-9 items-center rounded-full bg-primary text-primary-foreground shadow-sm">
+                                                            <button
+                                                                onClick={() =>
+                                                                    bump(p, -1)
+                                                                }
+                                                                aria-label={`Kurangi ${p.name}`}
+                                                                className="size-9 text-xl leading-none active:scale-90"
+                                                            >
+                                                                −
+                                                            </button>
+                                                            <span
+                                                                className="w-6 text-center text-sm font-semibold tabular-nums"
+                                                                aria-live="polite"
+                                                            >
+                                                                {inCart}
+                                                            </span>
+                                                            <button
+                                                                onClick={() =>
+                                                                    bump(p, 1)
+                                                                }
+                                                                aria-label={`Tambah ${p.name}`}
+                                                                className="size-9 text-xl leading-none active:scale-90"
+                                                            >
+                                                                +
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
-                        );
-                    })}
-                    {products.length === 0 && (
+                        </section>
+                    ))}
+                    {sections.length === 0 && (
                         <p className="py-10 text-center text-sm text-muted-foreground">
-                            Menu belum tersedia.
+                            {q
+                                ? 'Menu tidak ditemukan.'
+                                : 'Menu belum tersedia.'}
                         </p>
                     )}
                 </main>

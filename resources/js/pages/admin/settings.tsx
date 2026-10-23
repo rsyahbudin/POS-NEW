@@ -40,6 +40,8 @@ type Promo = {
     starts_at: string;
     ends_at: string;
     days: number[] | null;
+    starts_on: string | null;
+    ends_on: string | null;
     is_active: boolean;
 };
 type Field_ = {
@@ -766,7 +768,7 @@ function DiscountPresets({ presets }: { presets: DPreset[] }) {
             )}
             <div className="grid gap-2 rounded-xl border bg-card p-3">
                 <h3 className="font-medium">Diskon baru</h3>
-                <div className="grid gap-2 sm:grid-cols-[1fr_7rem_9rem]">
+                <div className="grid gap-2 sm:grid-cols-[1fr_9rem_8rem]">
                     <Input
                         className="h-11"
                         placeholder="Nama, mis. Staff 10%"
@@ -850,33 +852,102 @@ function DiscountPresets({ presets }: { presets: DPreset[] }) {
     );
 }
 
+const DAYS = [
+    [1, 'Sen'],
+    [2, 'Sel'],
+    [3, 'Rab'],
+    [4, 'Kam'],
+    [5, 'Jum'],
+    [6, 'Sab'],
+    [7, 'Min'],
+] as const;
+
+const dateShort = (d: string) =>
+    new Date(`${d}T00:00:00`).toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'short',
+    });
+
+function promoWhen(p: Promo): string {
+    const hours = `${p.starts_at.slice(0, 5)}–${p.ends_at.slice(0, 5)}`;
+    const days =
+        p.days && p.days.length > 0 && p.days.length < 7
+            ? DAYS.filter(([d]) => p.days?.includes(d))
+                  .map(([, l]) => l)
+                  .join(', ')
+            : 'Setiap hari';
+    const dates =
+        p.starts_on || p.ends_on
+            ? ` · ${p.starts_on ? dateShort(p.starts_on) : '…'} – ${p.ends_on ? dateShort(p.ends_on) : '…'}`
+            : '';
+
+    return `${hours} · ${days}${dates}`;
+}
+
 function Promos({ promos }: { promos: Promo[] }) {
-    const [n, setN] = useState({
-        name: 'Happy Hour',
-        type: 'percent',
-        value: 1000,
+    const errors = usePage().props.errors as Record<string, string>;
+    const blank = {
+        name: '',
+        type: 'percent' as 'percent' | 'fixed',
+        value: '' as number | '',
         starts_at: '15:00',
         ends_at: '17:00',
         days: [] as number[],
+        starts_on: '',
+        ends_on: '',
+    };
+    const [n, setN] = useState(blank);
+    const amount = (p: Promo) =>
+        p.type === 'percent'
+            ? `${(p.value / 100).toLocaleString('id-ID')}%`
+            : `Rp${p.value.toLocaleString('id-ID')}`;
+    const toggleDay = (d: number) =>
+        setN({
+            ...n,
+            days: n.days.includes(d)
+                ? n.days.filter((x) => x !== d)
+                : [...n.days, d],
+        });
+    const payload = () => ({
+        name: n.name,
+        type: n.type,
+        value: n.type === 'percent' ? Number(n.value) * 100 : Number(n.value),
+        starts_at: n.starts_at,
+        ends_at: n.ends_at,
+        days: n.days,
+        starts_on: n.starts_on || null,
+        ends_on: n.ends_on || null,
         is_active: true,
     });
+    const first = Object.values(errors ?? {})[0];
 
     return (
         <div className="grid max-w-2xl gap-3">
+            <div>
+                <h2 className="text-lg font-semibold">Promo terjadwal</h2>
+                <p className="text-sm text-muted-foreground">
+                    Diskon otomatis pada jam, hari, dan tanggal yang Anda
+                    tentukan, misalnya Happy Hour Senin–Jumat 15.00–17.00.
+                    Diterapkan sekali pada order saat pesanan dikirim di dalam
+                    jadwal; jam boleh melewati tengah malam (22.00–02.00). Bila
+                    beberapa promo cocok, hanya yang pertama dipakai.
+                </p>
+            </div>
             {promos.map((p) => (
                 <div
                     key={p.id}
-                    className="flex items-center justify-between rounded-xl border bg-card p-3 text-sm"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card p-3 text-sm"
                 >
-                    <span>
-                        <strong>{p.name}</strong> ·{' '}
-                        {p.type === 'percent'
-                            ? `${p.value / 100}%`
-                            : `Rp${p.value.toLocaleString('id-ID')}`}{' '}
-                        · {p.starts_at.slice(0, 5)}–{p.ends_at.slice(0, 5)}{' '}
-                        {p.is_active ? '' : '(nonaktif)'}
+                    <span
+                        className={p.is_active ? '' : 'text-muted-foreground'}
+                    >
+                        <strong>{p.name}</strong> · {amount(p)}
+                        {!p.is_active && ' (nonaktif)'}
+                        <span className="block text-xs text-muted-foreground">
+                            {promoWhen(p)}
+                        </span>
                     </span>
-                    {p.is_active && (
+                    {p.is_active ? (
                         <Button
                             variant="ghost"
                             className="h-10"
@@ -888,60 +959,162 @@ function Promos({ promos }: { promos: Promo[] }) {
                         >
                             Nonaktifkan
                         </Button>
+                    ) : (
+                        <Button
+                            variant="ghost"
+                            className="h-10"
+                            onClick={() =>
+                                router.put(
+                                    `/admin/promotions/${p.id}`,
+                                    {
+                                        name: p.name,
+                                        type: p.type,
+                                        value: p.value,
+                                        starts_at: p.starts_at.slice(0, 5),
+                                        ends_at: p.ends_at.slice(0, 5),
+                                        days: p.days ?? [],
+                                        starts_on: p.starts_on,
+                                        ends_on: p.ends_on,
+                                        is_active: true,
+                                    },
+                                    { preserveScroll: true },
+                                )
+                            }
+                        >
+                            Aktifkan
+                        </Button>
                     )}
                 </div>
             ))}
-            <section className="grid gap-2 rounded-xl border bg-card p-3">
-                <h3 className="font-medium">Promo terjadwal baru</h3>
+            {promos.length === 0 && (
+                <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
+                    Belum ada promo.
+                </p>
+            )}
+            <section className="grid gap-3 rounded-xl border bg-card p-3">
+                <h3 className="font-medium">Promo baru</h3>
                 <Input
                     className="h-11"
                     value={n.name}
+                    placeholder="Nama, mis. Happy Hour"
                     onChange={(e) => setN({ ...n, name: e.target.value })}
-                    aria-label="Nama"
+                    aria-label="Nama promo"
+                    maxLength={60}
                 />
                 <div className="grid grid-cols-2 gap-2">
                     <Select
+                        aria-label="Jenis diskon"
                         value={n.type}
-                        onChange={(e) => setN({ ...n, type: e.target.value })}
+                        onChange={(e) =>
+                            setN({
+                                ...n,
+                                type: e.target.value as 'percent' | 'fixed',
+                            })
+                        }
                     >
-                        <option value="percent">Persen</option>
-                        <option value="fixed">Nominal</option>
+                        <option value="percent">Persen (%)</option>
+                        <option value="fixed">Rupiah (Rp)</option>
                     </Select>
-                    <MoneyInput
+                    <Input
+                        className="h-11 text-right"
+                        type="number"
+                        min={1}
+                        max={n.type === 'percent' ? 100 : undefined}
                         value={n.value}
-                        onChange={(v) =>
-                            setN({ ...n, value: v === '' ? 0 : v })
-                        }
-                        aria-label="Nilai (persen dalam basis poin: 1000 = 10%)"
-                    />
-                    <Input
-                        className="h-11"
-                        type="time"
-                        value={n.starts_at}
+                        placeholder={n.type === 'percent' ? '10' : '5000'}
+                        aria-label="Nilai diskon"
                         onChange={(e) =>
-                            setN({ ...n, starts_at: e.target.value })
+                            setN({
+                                ...n,
+                                value:
+                                    e.target.value === ''
+                                        ? ''
+                                        : Number(e.target.value),
+                            })
                         }
-                        aria-label="Mulai"
-                    />
-                    <Input
-                        className="h-11"
-                        type="time"
-                        value={n.ends_at}
-                        onChange={(e) =>
-                            setN({ ...n, ends_at: e.target.value })
-                        }
-                        aria-label="Selesai"
                     />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                    Persen dalam basis poin (1000 = 10%). Diterapkan otomatis
-                    pada order yang dikonfirmasi dalam jam promo.
-                </p>
+                <div className="grid grid-cols-2 gap-2">
+                    <Field label="Jam mulai">
+                        <Input
+                            className="h-11"
+                            type="time"
+                            value={n.starts_at}
+                            onChange={(e) =>
+                                setN({ ...n, starts_at: e.target.value })
+                            }
+                        />
+                    </Field>
+                    <Field label="Jam selesai">
+                        <Input
+                            className="h-11"
+                            type="time"
+                            value={n.ends_at}
+                            onChange={(e) =>
+                                setN({ ...n, ends_at: e.target.value })
+                            }
+                        />
+                    </Field>
+                </div>
+                <div>
+                    <p className="mb-1.5 text-sm font-medium">
+                        Hari{' '}
+                        <span className="font-normal text-muted-foreground">
+                            · kosongkan untuk setiap hari
+                        </span>
+                    </p>
+                    <div
+                        className="flex flex-wrap gap-1.5"
+                        role="group"
+                        aria-label="Hari berlaku"
+                    >
+                        {DAYS.map(([d, label]) => (
+                            <button
+                                key={d}
+                                type="button"
+                                aria-pressed={n.days.includes(d)}
+                                onClick={() => toggleDay(d)}
+                                className={`h-10 min-w-12 rounded-lg border px-3 text-sm font-medium transition-colors ${n.days.includes(d) ? 'border-primary bg-primary text-primary-foreground' : 'bg-card hover:bg-muted'}`}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                    <Field label="Mulai tanggal (opsional)">
+                        <Input
+                            className="h-11"
+                            type="date"
+                            value={n.starts_on}
+                            onChange={(e) =>
+                                setN({ ...n, starts_on: e.target.value })
+                            }
+                        />
+                    </Field>
+                    <Field label="Sampai tanggal (opsional)">
+                        <Input
+                            className="h-11"
+                            type="date"
+                            value={n.ends_on}
+                            onChange={(e) =>
+                                setN({ ...n, ends_on: e.target.value })
+                            }
+                        />
+                    </Field>
+                </div>
+                {first && (
+                    <p role="alert" className="text-sm text-destructive">
+                        {first}
+                    </p>
+                )}
                 <Button
                     className="h-11"
+                    disabled={n.name.trim() === '' || !n.value}
                     onClick={() =>
-                        router.post('/admin/promotions', n, {
+                        router.post('/admin/promotions', payload(), {
                             preserveScroll: true,
+                            onSuccess: () => setN(blank),
                         })
                     }
                 >

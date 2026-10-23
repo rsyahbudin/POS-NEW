@@ -147,7 +147,7 @@ class SettingsController extends Controller
     {
         $data = $request->validate([
             'name' => 'required|string|max:60', 'type' => 'required|in:percent,fixed', 'value' => 'required|integer|min:1',
-            'starts_at' => 'required|date_format:H:i', 'ends_at' => 'required|date_format:H:i', 'days' => 'nullable|array', 'days.*' => 'integer|min:1|max:7', 'is_active' => 'boolean',
+            'starts_at' => 'required|date_format:H:i', 'ends_at' => 'required|date_format:H:i', 'days' => 'nullable|array', 'days.*' => 'integer|min:1|max:7', 'starts_on' => 'nullable|date', 'ends_on' => 'nullable|date|after_or_equal:starts_on', 'is_active' => 'boolean',
         ]);
         $promotion ? $promotion->update($data) : Promotion::create($data + ['outlet_id' => $this->outlet->id()]);
         Audit::log('settings.promotion', $promotion, $data);

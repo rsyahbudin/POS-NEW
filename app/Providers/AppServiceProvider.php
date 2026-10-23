@@ -53,8 +53,12 @@ class AppServiceProvider extends ServiceProvider
     {
         Date::use(CarbonImmutable::class);
 
+        // Wiping commands are refused on any database not named *_testing (a dev database is lost for good),
+        // unless ALLOW_DESTRUCTIVE_DB=1 is given on purpose.
+        $database = (string) config('database.connections.'.config('database.default').'.database');
         DB::prohibitDestructiveCommands(
-            app()->isProduction(),
+            app()->isProduction()
+            || (! str_ends_with($database, '_testing') && ! (bool) config('pos.allow_destructive_db')),
         );
 
         Password::defaults(fn (): ?Password => app()->isProduction()

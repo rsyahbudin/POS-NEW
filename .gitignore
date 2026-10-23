@@ -46,3 +46,4 @@ yarn-error.log
 /test-results
 /playwright-report
 /public/hot.e2e-backup
+.env.testing

@@ -1,6 +1,10 @@
 <?php
 
 return [
+    // Destructive artisan commands (migrate:fresh, db:wipe ...) only run on a database whose name ends in
+    // "_testing", or when this is switched on for one command: ALLOW_DESTRUCTIVE_DB=1 php artisan migrate:fresh
+    'allow_destructive_db' => (bool) env('ALLOW_DESTRUCTIVE_DB', false),
+
     // Browser-side WebSocket target. Empty = derive from the page's own host (recommended behind Nginx).
     'realtime' => [
         'host' => env('REVERB_PUBLIC_HOST'),

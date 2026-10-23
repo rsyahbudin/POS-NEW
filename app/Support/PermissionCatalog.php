@@ -26,7 +26,7 @@ final class PermissionCatalog
             ]],
             'shift' => ['label' => 'Shift & kas', 'items' => [
                 'open-close-shift' => ['label' => 'Buka / tutup shift sendiri', 'hint' => 'Wajib punya shift terbuka untuk menerima pembayaran.'],
-                'manage-shifts-any' => ['label' => 'Kelola shift orang lain & tutup hari', 'hint' => 'Tutup shift siapa pun, tutup hari (Z-report), pindah/gabung meja.'],
+                'manage-shifts-any' => ['label' => 'Kelola shift orang lain & tutup hari', 'hint' => 'Tutup shift siapa pun, buka kembali shift, pindah/gabung meja.'],
                 'view-own-shift-recap' => ['label' => 'Lihat rekap shift sendiri', 'hint' => 'Rekap shift kasir.'],
                 'input-expense' => ['label' => 'Input pengeluaran', 'hint' => 'Catat pengeluaran operasional.'],
             ]],

@@ -3,9 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Notification\ReportDelivery;
+use App\Domain\Ordering\Models\Order;
 use App\Domain\Settings\OutletContext;
-use App\Domain\Shift\Actions\CloseBusinessDayAction;
-use App\Domain\Shift\Models\BusinessDay;
 use App\Domain\Shift\Models\Shift;
 use App\Domain\Shift\ZReport;
 use App\Domain\Shift\ZReportSummary;
@@ -38,8 +37,7 @@ class DayCloseController extends Controller
                 'closed_by' => $s->closed_by ? ($users[$s->closed_by] ?? null) : null, 'difference' => $s->difference,
             ])->all(),
             'openShifts' => Shift::query()->where('outlet_id', $id)->whereNull('closed_at')->with('user:id,name')->get()->map(fn ($s) => ['id' => $s->id, 'user' => $s->user?->name, 'opened_at' => $s->opened_at->toIso8601String()]),
-            'closed' => BusinessDay::query()->where('outlet_id', $id)->where('date', $date)->whereNotNull('closed_at')->exists(),
-            'history' => BusinessDay::query()->where('outlet_id', $id)->whereNotNull('closed_at')->orderByDesc('date')->limit(14)->get(['date', 'summary']),
+            'history' => $this->history($id, $report, 14),
             'channels' => collect($delivery->configured())->map(fn (string $c) => ReportDelivery::CHANNELS[$c])->values()->all(),
         ]);
     }
@@ -57,25 +55,29 @@ class DayCloseController extends Controller
             : 'Laporan dikirim ke '.implode(', ', array_map(fn ($c) => ReportDelivery::CHANNELS[$c], $channels)).'.');
     }
 
-    public function export(Request $request, OutletContext $outlet): \Symfony\Component\HttpFoundation\Response
+    /**
+     * Recent business dates that had sales, newest first, each with its report built from the live data.
+     *
+     * @return array<int, array{date: string, summary: array<string, mixed>}>
+     */
+    private function history(int $outletId, ZReport $report, int $limit): array
     {
-        $days = BusinessDay::query()->where('outlet_id', $outlet->id())->whereNotNull('closed_at')->orderByDesc('date')->limit(90)->get();
-        $rows = [];
-        foreach ($days as $d) {
-            $z = ZReportSummary::fromArray($d->summary);
-            $rows[] = [$d->date->translatedFormat('d M Y'), $z->orders, $z->gross, $z->discounts, $z->refunds, $z->net, $z->voidItems, $z->compItems, $z->cashDifference];
-        }
-
-        return ReportFile::download((string) $request->input('format', 'xlsx'), 'Rekap tutup hari', [
-            new ReportSheet('Rekap tutup hari', 'Z-report 90 hari terakhir', ['Tanggal', 'Order', 'Omzet kotor (Rp)', 'Diskon (Rp)', 'Refund (Rp)', 'Omzet bersih (Rp)', 'Void (item)', 'Komplimen (item)', 'Selisih kas (Rp)'], $rows,
-                ['Total', array_sum(array_column($rows, 1)), array_sum(array_column($rows, 2)), array_sum(array_column($rows, 3)), array_sum(array_column($rows, 4)), array_sum(array_column($rows, 5)), array_sum(array_column($rows, 6)), array_sum(array_column($rows, 7)), array_sum(array_column($rows, 8))]),
-        ]);
+        return Order::query()->where('outlet_id', $outletId)->whereIn('status', ['paid', 'refunded'])->distinct()->orderByDesc('business_date')->limit($limit)->pluck('business_date')
+            ->map(fn ($d) => substr((string) $d, 0, 10))
+            ->map(fn (string $d) => ['date' => $d, 'summary' => $report->build($d)])->values()->all();
     }
 
-    public function close(Request $request, CloseBusinessDayAction $action): RedirectResponse
+    public function export(Request $request, OutletContext $outlet, ZReport $report): \Symfony\Component\HttpFoundation\Response
     {
-        $action->handle($this->actor($request), BusinessDate::for());
+        $rows = [];
+        foreach ($this->history($outlet->id(), $report, 90) as $h) {
+            $z = ZReportSummary::fromArray($h['summary']);
+            $rows[] = [CarbonImmutable::parse($h['date'])->translatedFormat('D, d M Y'), $z->orders, $z->gross, $z->discounts, $z->refunds, $z->net, $z->voidItems, $z->compItems, $z->cashDifference];
+        }
 
-        return back()->with('success', 'Hari bisnis ditutup. Z-report dikirim ke Telegram jika dikonfigurasi.');
+        return ReportFile::download((string) $request->input('format', 'xlsx'), 'Rekap harian', [
+            new ReportSheet('Rekap harian', '90 hari terakhir yang ada penjualan', ['Tanggal', 'Order', 'Omzet kotor (Rp)', 'Diskon (Rp)', 'Refund (Rp)', 'Omzet bersih (Rp)', 'Void (item)', 'Komplimen (item)', 'Selisih kas (Rp)'], $rows,
+                ['Total', array_sum(array_column($rows, 1)), array_sum(array_column($rows, 2)), array_sum(array_column($rows, 3)), array_sum(array_column($rows, 4)), array_sum(array_column($rows, 5)), array_sum(array_column($rows, 6)), array_sum(array_column($rows, 7)), array_sum(array_column($rows, 8))]),
+        ]);
     }
 }

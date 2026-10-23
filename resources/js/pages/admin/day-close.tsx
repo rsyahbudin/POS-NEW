@@ -30,7 +30,6 @@ type Props = {
         difference: number | null;
     }[];
     openShifts: { id: number; user: string; opened_at: string }[];
-    closed: boolean;
     history: { date: string; summary: Summary }[];
     channels: string[];
 };
@@ -41,7 +40,6 @@ export default function DailyReport({
     preview,
     shifts,
     openShifts,
-    closed,
     history,
     channels,
 }: Props) {
@@ -51,7 +49,7 @@ export default function DailyReport({
             <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
                 <PageHeader
                     title="Laporan harian"
-                    subtitle={`Hari bisnis ${dateId(date)}${date === today ? ' (berjalan)' : ''}${closed ? ' · sudah dikirim otomatis' : ''}`}
+                    subtitle={`${dateId(date)}${date === today ? ' (hari ini)' : ''}`}
                     actions={
                         <>
                             <Button asChild variant="outline" className="h-11">
@@ -111,9 +109,8 @@ export default function DailyReport({
                 <p className="text-sm text-muted-foreground">
                     {channels.length > 0 ? (
                         <>
-                            Dikirim ke: {channels.join(', ')}. Laporan hari yang
-                            sudah lewat dikirim otomatis setelah semua shiftnya
-                            ditutup.
+                            Dikirim ke: {channels.join(', ')}. Laporan dikirim
+                            otomatis begitu shift terakhir ditutup.
                         </>
                     ) : (
                         <>

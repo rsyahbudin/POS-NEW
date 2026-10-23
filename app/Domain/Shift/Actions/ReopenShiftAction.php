@@ -6,7 +6,6 @@ use App\Domain\Accounting\Actions\ReverseJournalAction;
 use App\Domain\Accounting\Models\JournalEntry;
 use App\Domain\Notification\Notifier;
 use App\Domain\Ordering\Exceptions\OrderException;
-use App\Domain\Shift\Models\BusinessDay;
 use App\Domain\Shift\Models\Shift;
 use App\Models\User;
 use App\Support\Audit;
@@ -36,9 +35,6 @@ class ReopenShiftAction
             }
             if (Shift::query()->where('outlet_id', $shift->outlet_id)->where('id', '>', $shift->id)->exists()) {
                 throw new OrderException('Sudah ada shift lain setelah shift ini, jadi tidak bisa dibuka kembali.');
-            }
-            if (BusinessDay::query()->where('outlet_id', $shift->outlet_id)->where('date', $shift->business_date->toDateString())->whereNotNull('closed_at')->exists()) {
-                throw new OrderException('Hari bisnis shift ini sudah ditutup.');
             }
 
             $closing = [

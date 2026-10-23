@@ -8,7 +8,6 @@ use App\Domain\Reporting\SalesReports;
 use App\Domain\Settings\Models\Outlet;
 use App\Domain\Settings\OutletContext;
 use App\Domain\Settings\SettingsRepository;
-use App\Domain\Shift\Models\BusinessDay;
 use App\Domain\Shift\Models\Shift;
 use App\Domain\Shift\ShiftCash;
 use App\Domain\Shift\ZReportSummary;
@@ -139,11 +138,6 @@ class ReportDelivery
         }
 
         return $out;
-    }
-
-    public function dailyText(BusinessDay $day): string
-    {
-        return $this->dailyTextFor($day->date->format('d M Y'), ZReportSummary::fromArray($day->summary), $day->date->toDateString());
     }
 
     public function dailyTextFor(string $label, ZReportSummary $s, ?string $date = null): string

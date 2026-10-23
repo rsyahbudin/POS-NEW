@@ -1,7 +1,6 @@
 <?php
 
 use App\Domain\Accounting\Models\JournalEntry;
-use App\Domain\Shift\Actions\CloseBusinessDayAction;
 use App\Domain\Shift\Actions\CloseShiftAction;
 use App\Domain\Shift\Models\Shift;
 use App\Support\BusinessDate;
@@ -48,16 +47,13 @@ it('lets a cashier undo only their own recent close, and a manager any last clos
     $this->actingAs(userWithRole('waiter'))->post("/shift/{$shift->id}/reopen")->assertForbidden();
 });
 
-it('refuses to reopen once another shift exists or the day is closed', function () {
+it('refuses to reopen once another shift exists', function () {
     $manager = userWithRole('manager');
     $first = openShiftFor($manager, 0);
     app(CloseShiftAction::class)->handle($first, $manager, 0, 0, null, null, 'rk4');
     $second = openShiftFor($manager, 0);
     $this->actingAs($manager)->post("/shift/{$first->id}/reopen")->assertSessionHas('error');
-
-    app(CloseShiftAction::class)->handle($second, $manager, 0, 0, null, null, 'rk5');
-    app(CloseBusinessDayAction::class)->handle($manager, BusinessDate::for());
-    $this->actingAs($manager)->post("/shift/{$second->id}/reopen")->assertSessionHas('error');
+    expect($second->fresh()->isOpen())->toBeTrue();
 });
 
 it('offers the undo on the shift page only to people who may use it', function () {

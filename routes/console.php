@@ -14,8 +14,8 @@ Schedule::command('backup:monitor')->dailyAt('03:45')->onOneServer();
 // Queue metrics for Horizon's dashboard.
 Schedule::command('horizon:snapshot')->everyFiveMinutes();
 
-// Daily report (Z-report) without anyone pressing a button; checks every 30 minutes after the day changes.
-Schedule::command('days:auto-close')->everyThirtyMinutes()->withoutOverlapping();
+// A shift left open for more than half a day is probably forgotten: tell the managers.
+Schedule::command('shifts:remind-open')->everyThirtyMinutes()->withoutOverlapping();
 
 // QRIS online: expire old codes, catch missed webhooks, book payments that waited for an open shift.
 Schedule::command('qris:sweep')->everyMinute()->withoutOverlapping();

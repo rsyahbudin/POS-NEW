@@ -6,7 +6,6 @@ use App\Domain\Accounting\Actions\PostJournalAction;
 use App\Domain\Accounting\SystemAccount;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Settings\OutletContext;
-use App\Domain\Shift\Models\BusinessDay;
 use App\Domain\Shift\Models\Shift;
 use App\Models\User;
 use App\Support\Audit;
@@ -33,10 +32,6 @@ class OpenShiftAction
         return DB::transaction(function () use ($user, $openingCash, $deviceLabel) {
             $outletId = $this->outlet->id();
             $date = BusinessDate::for();
-
-            if (BusinessDay::query()->where('outlet_id', $outletId)->where('date', $date)->whereNotNull('closed_at')->exists()) {
-                throw new OrderException('Hari bisnis ini sudah ditutup.');
-            }
 
             $open = Shift::query()->where('outlet_id', $outletId)->whereNull('closed_at')->lockForUpdate()->with('user:id,name')->first();
             if ($open !== null) {

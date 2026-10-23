@@ -10,12 +10,9 @@ use App\Domain\Ordering\Actions\RequestBillAction;
 use App\Domain\Ordering\Actions\UpdateItemStatusAction;
 use App\Domain\Payment\Models\Bill;
 use App\Domain\Settings\Models\Outlet;
-use App\Domain\Shift\Jobs\SendZReportJob;
-use App\Domain\Shift\Models\BusinessDay;
 use App\Domain\Shift\Models\Shift;
 use App\Models\User;
 use App\Support\BusinessDate;
-use Illuminate\Support\Facades\Queue;
 use Spatie\Activitylog\Models\Activity;
 
 // ---------------------------------------------------------------- notifications stay light
@@ -131,55 +128,23 @@ it('shows the activity log to those who may see it, filterable by person and gro
     expect(User::query()->count())->toBeGreaterThan(1);
 });
 
-// ---------------------------------------------------------------- the day closes itself
+// ---------------------------------------------------------------- forgotten shifts
 
-it('closes finished past days by itself, leaves today alone, and builds a Z-report', function () {
-    Queue::fake();
+it('reminds the managers about a shift left open for over half a day, and clears it once closed', function () {
     $cashier = userWithRole('cashier');
-    openShiftFor($cashier, 0);
-    $order = placeOrder($cashier);
-    pay($order, $cashier);
-    $this->actingAs($cashier)->post('/shift/close', ['counted_cash' => 44000, 'cash_left' => 0, 'close_key' => 'k1'])->assertSessionHasNoErrors();
-
-    $this->artisan('days:auto-close')->assertSuccessful();
-    expect(BusinessDay::query()->count())->toBe(0); // today is still running
-
-    $this->travelTo(now()->addDay()->setTime(12, 0));
-    $this->artisan('days:auto-close')->assertSuccessful();
-    $day = BusinessDay::query()->first();
-    expect($day->closed_at)->not->toBeNull()->and($day->closed_by)->toBeNull()->and($day->summary['orders'])->toBe(1);
-    Queue::assertPushed(SendZReportJob::class);
-
-    $this->artisan('days:auto-close')->assertSuccessful(); // not twice
-    expect(BusinessDay::query()->count())->toBe(1);
-});
-
-it('waits for a forgotten shift and tells the managers instead', function () {
-    $cashier = userWithRole('cashier');
-    openShiftFor($cashier, 0);
+    $shift = openShiftFor($cashier, 0);
     pay(placeOrder($cashier), $cashier);
+    $title = 'Shift '.$cashier->name.' belum ditutup';
+    $titles = fn () => collect($this->actingAs(userWithRole('manager'))->getJson('/notifications')->json('items'))->pluck('title')->all();
 
-    $this->travelTo(now()->addDay()->setTime(12, 0));
-    $this->artisan('days:auto-close')->assertSuccessful();
-    expect(BusinessDay::query()->count())->toBe(0);
-    expect(collect($this->actingAs(userWithRole('manager'))->getJson('/notifications')->json('items'))->pluck('title')->all())->toContain('Shift '.$cashier->name.' belum ditutup');
+    $this->travelTo(now()->addHours(3));
+    $this->artisan('shifts:remind-open')->assertSuccessful();
+    expect($titles())->not->toContain($title);          // a late night is not forgetting
 
-    // an owner closes it for them, the alert clears and the next run closes the day
-    $shift = Shift::query()->first();
+    $this->travelTo(now()->addHours(10));
+    $this->artisan('shifts:remind-open')->assertSuccessful();
+    expect($titles())->toContain($title);
+
     $this->actingAs(userWithRole('owner'))->post('/shift/close', ['shift_id' => $shift->id, 'counted_cash' => 44000, 'cash_left' => 0, 'close_key' => 'k2'])->assertSessionHasNoErrors();
-    expect(collect($this->actingAs(userWithRole('manager'))->getJson('/notifications')->json('items'))->pluck('title')->all())->not->toContain('Shift '.$cashier->name.' belum ditutup');
-    $this->artisan('days:auto-close')->assertSuccessful();
-    expect(BusinessDay::query()->whereNotNull('closed_at')->count())->toBe(1);
-});
-
-it('does nothing when automatic closing is switched off', function () {
-    $cashier = userWithRole('cashier');
-    openShiftFor($cashier, 0);
-    pay(placeOrder($cashier), $cashier);
-    $this->actingAs($cashier)->post('/shift/close', ['counted_cash' => 44000, 'cash_left' => 0, 'close_key' => 'k3']);
-    setting('operations.auto_close_day', false);
-
-    $this->travelTo(now()->addDay()->setTime(12, 0));
-    $this->artisan('days:auto-close')->assertSuccessful();
-    expect(BusinessDay::query()->count())->toBe(0);
+    expect($titles())->not->toContain($title);
 });

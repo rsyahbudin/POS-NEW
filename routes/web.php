@@ -343,7 +343,6 @@ Route::middleware(['auth', 'staff'])->group(function () {
 
         Route::middleware('permission:manage-shifts-any')->group(function () {
             Route::get('day-close', [DayCloseController::class, 'index'])->name('day-close');
-            Route::post('day-close', [DayCloseController::class, 'close'])->name('day-close.store');
             Route::post('day-close/send', [DayCloseController::class, 'send'])->name('day-close.send');
             Route::get('day-close/export', [DayCloseController::class, 'export'])->name('day-close.export');
         });

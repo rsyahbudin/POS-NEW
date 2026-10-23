@@ -98,8 +98,6 @@ it('sends the daily report to all channels unless it is switched off', function 
     pay(placeOrder($cashier), $cashier);
     $this->actingAs($cashier)->post('/shift/close', ['counted_cash' => 44000, 'cash_left' => 0, 'close_key' => 'z1']);
 
-    $this->travelTo(now()->addDay()->setTime(12, 0));
-    $this->artisan('days:auto-close')->assertSuccessful();
     Http::assertSent(fn ($r) => str_contains($r->url(), 'sendMessage') && str_contains($r['text'], 'Laporan harian') && str_contains($r['text'], 'Rp44.000'));
     Http::assertSent(fn ($r) => str_contains($r->url(), 'fonnte.com'));
 });
@@ -113,8 +111,6 @@ it('does not send the daily report when it is switched off', function () {
     pay(placeOrder($cashier), $cashier);
     $this->actingAs($cashier)->post('/shift/close', ['counted_cash' => 44000, 'cash_left' => 0, 'close_key' => 'z2']);
 
-    $this->travelTo(now()->addDay()->setTime(12, 0));
-    $this->artisan('days:auto-close')->assertSuccessful();
     Http::assertNothingSent();
 });
 
@@ -192,23 +188,24 @@ it('sends the daily report as soon as the last shift closes, once, and again onl
     Http::assertSent(fn ($r) => str_contains($r->url(), 'sendMessage') && str_contains($r['text'], 'Laporan harian') && str_contains($r['text'], 'Rp44.000'));
     Http::assertSentCount(1);
 
-    // the day closing by itself later adds nothing: same numbers
-    $this->travelTo(now()->addDay()->setTime(12, 0));
-    $this->artisan('days:auto-close')->assertSuccessful();
+    // sending the same day again adds nothing: same numbers
+    app(DailyReportSender::class)->send(BusinessDate::for());
     Http::assertSentCount(1);
 });
 
-it('waits for the shift that is still open, and can be switched off', function () {
+it('sends an updated report when the shift is reopened and sells more', function () {
     setUpChannels(true, false, false);
     Http::fake(['*' => Http::response(['ok' => true])]);
-    $sender = app(DailyReportSender::class);
-    setting('report.on_last_shift', false);
     $cashier = userWithRole('cashier');
     $shift = openShiftFor($cashier, 0);
     pay(placeOrder($cashier), $cashier);
     app(CloseShiftAction::class)->handle($shift, $cashier, 44000, 0, null, null, 'l2');
-    Http::assertNothingSent();
-
-    expect($sender->send(BusinessDate::for()))->toBe(['telegram'])->and($sender->send(BusinessDate::for()))->toBe([]);
     Http::assertSentCount(1);
+
+    $this->actingAs($cashier)->post("/shift/{$shift->id}/reopen")->assertSessionHas('success');
+    pay(placeOrder($cashier), $cashier);
+    app(CloseShiftAction::class)->handle($shift->fresh(), $cashier, 88000, 0, null, null, 'l3');
+
+    Http::assertSentCount(2);
+    Http::assertSent(fn ($r) => str_contains($r->url(), 'sendMessage') && str_contains($r['text'], '(diperbarui)') && str_contains($r['text'], 'Rp88.000'));
 });

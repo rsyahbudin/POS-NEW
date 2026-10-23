@@ -3,21 +3,15 @@
 use App\Domain\Accounting\Models\Account;
 use App\Domain\Accounting\SystemAccount;
 use App\Domain\Floor\Models\Table;
-use App\Domain\Notification\DailyReportSender;
 use App\Domain\Ordering\Enums\OrderStatus;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Payment\Actions\RefundPaymentAction;
-use App\Domain\Settings\OutletContext;
 use App\Domain\Shift\Actions\AddCashMovementAction;
-use App\Domain\Shift\Actions\CloseBusinessDayAction;
 use App\Domain\Shift\Actions\CloseShiftAction;
 use App\Domain\Shift\Actions\OpenShiftAction;
-use App\Domain\Shift\Jobs\SendZReportJob;
-use App\Domain\Shift\Models\BusinessDay;
 use App\Domain\Shift\ShiftCash;
 use App\Support\BusinessDate;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Queue;
 
 it('lets only manager or owner refund, with a reversing journal and the original order untouched', function () {
     $cashier = userWithRole('cashier');
@@ -114,30 +108,23 @@ it('holds the Kas Laci invariant per shift: opening + cash sales + in - out - ca
     expect($s['expected'])->toBe($s['opening'] + 44000 + 44000 - 10000 - 3000)->toBe(75000 + 88000 - 10000 - 3000); // the manager's cash refund leaves the same drawer
 });
 
-it('blocks opening a shift on a closed business day, and closing the day needs all shifts closed', function () {
-    Queue::fake();
+it('lets a new shift open after the previous one closed, even on the same day', function () {
     $manager = userWithRole('manager');
     $shift = openShiftFor($manager, 0);
-
-    expect(fn () => app(CloseBusinessDayAction::class)->handle($manager, BusinessDate::for()))->toThrow(OrderException::class, 'shift');
+    expect(fn () => openShiftFor(userWithRole('cashier')))->toThrow(OrderException::class, 'sudah dibuka');
 
     app(CloseShiftAction::class)->handle($shift, $manager, 0, 0);
-    $day = app(CloseBusinessDayAction::class)->handle($manager, BusinessDate::for());
-    expect($day->closed_at)->not->toBeNull()->and($day->summary)->toHaveKeys(['orders', 'gross', 'by_method', 'voids', 'comps', 'cash_difference']);
-    Queue::assertPushed(SendZReportJob::class);
-
-    expect(fn () => openShiftFor(userWithRole('cashier')))->toThrow(OrderException::class, 'ditutup');
+    expect(openShiftFor(userWithRole('cashier'))->business_date->toDateString())->toBe(BusinessDate::for());
 });
 
-it('sends the Z-report to Telegram when configured', function () {
+it('sends the daily report to Telegram when the last shift closes', function () {
     Http::fake();
     setting('telegram.bot_token', 'T0KEN');
     setting('telegram.chat_id', '123');
-    $day = BusinessDay::create(['outlet_id' => app(OutletContext::class)->id(), 'date' => '2026-10-20', 'closed_at' => now(), 'summary' => [
-        'orders' => 3, 'gross' => 100000, 'discounts' => 0, 'refunds' => 0, 'net' => 100000, 'by_method' => ['Tunai' => 100000],
-        'voids' => ['items' => 0, 'value' => 0], 'comps' => ['items' => 0, 'value' => 0], 'cash_difference' => 0,
-    ]]);
-    (new SendZReportJob($day->id))->handle(app(DailyReportSender::class));
+    $cashier = userWithRole('cashier');
+    $shift = openShiftFor($cashier, 0);
+    pay(placeOrder($cashier), $cashier);
+    app(CloseShiftAction::class)->handle($shift, $cashier, 44000, 0);
 
-    Http::assertSent(fn ($r) => str_contains($r->url(), 'botT0KEN/sendMessage') && str_contains($r['text'], 'Rp100.000'));
+    Http::assertSent(fn ($r) => str_contains($r->url(), 'botT0KEN/sendMessage') && str_contains($r['text'], 'Rp44.000'));
 });

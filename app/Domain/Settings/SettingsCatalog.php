@@ -18,10 +18,9 @@ final class SettingsCatalog
     {
         return [
             ['key' => 'ops', 'label' => 'Operasional', 'groups' => [[
-                'title' => 'Harga & penutupan hari',
+                'title' => 'Harga & tampilan',
                 'fields' => [
                     ['key' => 'pricing.rounding', 'type' => 'select', 'label' => 'Pembulatan grand total', 'hint' => 'Selisih pembulatan dicatat di akun tersendiri.', 'default' => 0, 'options' => [['0', 'Tanpa pembulatan'], ['100', 'Ke Rp100 terdekat'], ['500', 'Ke Rp500 terdekat']]],
-                    ['key' => 'operations.auto_close_day', 'type' => 'bool', 'label' => 'Tutup hari otomatis', 'hint' => 'Aktif: setelah hari bisnis berganti dan semua shift hari itu sudah ditutup, aplikasi membuat laporan harian (Z-report) sendiri dan mengirimnya ke Telegram. Manager tidak perlu menekan Tutup Hari. Kalau masih ada shift yang lupa ditutup, manager mendapat notifikasi.', 'default' => true],
                     ['key' => 'ui.accent', 'type' => 'select', 'label' => 'Warna aksen aplikasi', 'hint' => 'Warna tombol, menu aktif, dan grafik di semua perangkat. Warna status (meja kosong/terisi, pesanan siap, peringatan) tidak ikut berubah supaya tetap jelas dibaca.', 'default' => 'blue', 'options' => Accent::options()],
                     ['key' => 'discount.cashier_limit_percent', 'type' => 'int', 'label' => 'Batas diskon kasir tanpa PIN (%)', 'hint' => 'Diskon di atas batas ini butuh PIN dari pemegang izin "Diskon di atas batas".', 'default' => 10, 'min' => 0, 'max' => 100],
                 ],
@@ -118,8 +117,7 @@ final class SettingsCatalog
             ['key' => 'notif', 'label' => 'Notifikasi', 'groups' => [[
                 'title' => 'Apa yang dikirim ke HP / email',
                 'fields' => [
-                    ['key' => 'report.send_daily', 'type' => 'bool', 'label' => 'Laporan harian', 'hint' => 'Ringkasan omzet, metode bayar, diskon, void, dan selisih kas, dikirim otomatis setelah hari bisnis selesai.', 'default' => true],
-                    ['key' => 'report.on_last_shift', 'type' => 'bool', 'label' => 'Kirim laporan harian saat shift terakhir ditutup', 'hint' => 'Aktif: begitu shift terakhir hari itu ditutup, laporan harian langsung dikirim tanpa menunggu tanggal bisnis berganti. Kalau setelah itu masih ada penjualan, laporan diperbarui dikirim lagi. Mati: laporan dikirim setelah hari bisnis ditutup.', 'default' => true],
+                    ['key' => 'report.send_daily', 'type' => 'bool', 'label' => 'Laporan harian', 'hint' => 'Ringkasan omzet per jam, metode bayar, diskon, void, dan selisih kas, dikirim otomatis begitu shift terakhir ditutup. Kalau toko buka lagi dan angkanya berubah, laporan diperbarui dikirim lagi.', 'default' => true],
                     ['key' => 'report.send_shift', 'type' => 'bool', 'label' => 'Laporan tiap shift ditutup', 'hint' => 'Rincian penjualan dan selisih kas dikirim begitu kasir menutup shift.', 'default' => false],
                     ['key' => 'notify.forward_alerts', 'type' => 'bool', 'label' => 'Teruskan peringatan penting', 'hint' => 'Stok menipis, selisih kas, shift yang lupa ditutup, dan aset rusak ikut dikirim ke saluran di bawah (selain muncul di lonceng).', 'default' => false],
                 ],

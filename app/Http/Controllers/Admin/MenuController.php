@@ -38,7 +38,7 @@ class MenuController extends Controller
             'stations' => Station::query()->where('outlet_id', $id)->orderBy('sort')->get(['id', 'name', 'is_active']),
             'products' => Product::query()->where('outlet_id', $id)->with(['variants', 'modifierGroups:id', 'printers:id'])->orderBy('category_id')->orderBy('sort')->get()->map(fn ($p) => [
                 'id' => $p->id, 'name' => $p->name, 'sku' => $p->sku, 'description' => $p->description, 'category_id' => $p->category_id, 'station_id' => $p->station_id,
-                'base_price' => $p->base_price, 'is_available' => $p->is_available, 'stock_qty' => $p->stock_qty, 'sort' => $p->sort,
+                'base_price' => $p->base_price, 'is_available' => $p->is_available, 'is_active' => $p->is_active, 'stock_qty' => $p->stock_qty, 'sort' => $p->sort,
                 'image' => MediaUrl::public($p->image_path),
                 'variants' => $p->variants->map(fn ($v) => ['id' => $v->id, 'name' => $v->name, 'price' => $v->price])->all(),
                 'modifier_group_ids' => $p->modifierGroups->pluck('id')->all(),
@@ -128,6 +128,18 @@ class MenuController extends Controller
         });
 
         return back()->with('success', 'Produk disimpan.');
+    }
+
+    /** Hide a product from the POS and the QR menu without deleting it; switching it back on restores it as it was. */
+    public function setActive(Request $request, Product $product): RedirectResponse
+    {
+        abort_unless($product->outlet_id === $this->outlet->id(), 404);
+        $active = (bool) $request->validate(['is_active' => 'required|boolean'])['is_active'];
+        $product->update(['is_active' => $active]);
+        Realtime::dispatch(new ProductAvailabilityChanged($product->outlet_id, $product->id, $active && $product->is_available));
+        Audit::log($active ? 'product.activated' : 'product.deactivated', $product, ['name' => $product->name]);
+
+        return back()->with('success', $active ? "{$product->name} diaktifkan." : "{$product->name} dinonaktifkan.");
     }
 
     public function deleteProduct(Product $product): RedirectResponse

@@ -17,7 +17,7 @@ class MenuPresenter
     public static function categories(int $outletId): array
     {
         return Category::query()->where('outlet_id', $outletId)->orderBy('sort')
-            ->with(['products' => fn ($q) => $q->orderBy('sort')->with(['variants', 'modifierGroups.modifiers'])])
+            ->with(['products' => fn ($q) => $q->where('is_active', true)->orderBy('sort')->with(['variants', 'modifierGroups.modifiers'])])
             ->get()
             ->map(fn (Category $c) => [
                 'id' => $c->id,

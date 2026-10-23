@@ -29,6 +29,7 @@ type Product = {
     printer_ids: number[];
     base_price: number;
     is_available: boolean;
+    is_active: boolean;
     stock_qty: number | null;
     sort: number;
     image: string | null;
@@ -97,6 +98,14 @@ export default function MenuPage({
     const [group, setGroup] = useState<Group | null>(null);
     const errors = usePage().props.errors as Record<string, string>;
     const [local, setLocal] = useState<Record<number, boolean>>({});
+    const [show, setShow] = useState<'all' | 'active' | 'inactive'>('all');
+    const [q, setQ] = useState('');
+    const shown = products.filter(
+        (p) =>
+            (show === 'all' || (show === 'active') === p.is_active) &&
+            (!q.trim() ||
+                p.name.toLowerCase().includes(q.trim().toLowerCase())),
+    );
 
     const save = () => {
         if (!draft) return;
@@ -204,6 +213,30 @@ export default function MenuPage({
                 )}
 
                 {tab === 'products' && (
+                    <div className="flex flex-wrap items-center gap-2">
+                        <input
+                            type="search"
+                            value={q}
+                            onChange={(e) => setQ(e.target.value)}
+                            placeholder="Cari menu"
+                            aria-label="Cari menu"
+                            className="h-11 min-w-48 flex-1 rounded-lg border bg-background px-3 text-sm"
+                        />
+                        <select
+                            value={show}
+                            onChange={(e) =>
+                                setShow(e.target.value as typeof show)
+                            }
+                            aria-label="Tampilkan"
+                            className="h-11 rounded-lg border bg-background px-3 text-sm"
+                        >
+                            <option value="all">Semua</option>
+                            <option value="active">Aktif</option>
+                            <option value="inactive">Nonaktif</option>
+                        </select>
+                    </div>
+                )}
+                {tab === 'products' && (
                     <ResponsiveTable
                         headers={[
                             'Menu',
@@ -216,7 +249,7 @@ export default function MenuPage({
                         ]}
                         numeric={[3, 4]}
                         empty="Belum ada menu."
-                        rows={products.map((p) => {
+                        rows={shown.map((p) => {
                             const on = local[p.id] ?? p.is_available;
 
                             return [
@@ -247,7 +280,14 @@ export default function MenuPage({
                                 p.sku ?? '-',
                                 rupiah(p.base_price),
                                 p.stock_qty ?? '∞',
-                                on ? (
+                                !p.is_active ? (
+                                    <span
+                                        key="n"
+                                        className="font-semibold text-muted-foreground"
+                                    >
+                                        NONAKTIF
+                                    </span>
+                                ) : on ? (
                                     <span key="s" className="text-emerald-700">
                                         Tersedia
                                     </span>
@@ -268,9 +308,26 @@ export default function MenuPage({
                                         variant={on ? 'outline' : 'destructive'}
                                         className="h-9"
                                         aria-pressed={!on}
+                                        disabled={!p.is_active}
                                         onClick={() => toggle(p)}
                                     >
-                                        {on ? 'Tandai habis' : 'Aktifkan'}
+                                        {on ? 'Tandai habis' : 'Tersedia lagi'}
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-9"
+                                        onClick={() =>
+                                            router.post(
+                                                `/admin/products/${p.id}/active`,
+                                                { is_active: !p.is_active },
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        {p.is_active
+                                            ? 'Nonaktifkan'
+                                            : 'Aktifkan menu'}
                                     </Button>
                                     <Button
                                         size="sm"

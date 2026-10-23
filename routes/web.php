@@ -206,6 +206,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::put('stations/{station}', [MenuController::class, 'saveStation'])->name('stations.update');
             Route::post('products', [MenuController::class, 'saveProduct'])->name('products.store');
             Route::post('products/{product}', [MenuController::class, 'saveProduct'])->name('products.update'); // multipart needs POST
+            Route::post('products/{product}/active', [MenuController::class, 'setActive'])->name('products.active');
             Route::delete('products/{product}', [MenuController::class, 'deleteProduct'])->name('products.destroy');
             Route::post('modifier-groups', [MenuController::class, 'saveModifierGroup'])->name('modifier-groups.store');
             Route::put('modifier-groups/{group}', [MenuController::class, 'saveModifierGroup'])->name('modifier-groups.update');

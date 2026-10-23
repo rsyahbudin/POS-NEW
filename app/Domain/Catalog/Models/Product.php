@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property int $base_price
  * @property string|null $image_path
  * @property bool $is_available
+ * @property bool $is_active
  * @property int|null $stock_qty
  * @property int $sort
  * @property Carbon|null $deleted_at
@@ -36,7 +37,7 @@ class Product extends Model
 
     protected function casts(): array
     {
-        return ['is_available' => 'boolean', 'base_price' => 'integer', 'stock_qty' => 'integer'];
+        return ['is_available' => 'boolean', 'is_active' => 'boolean', 'base_price' => 'integer', 'stock_qty' => 'integer'];
     }
 
     /** @return BelongsTo<Category, $this> */

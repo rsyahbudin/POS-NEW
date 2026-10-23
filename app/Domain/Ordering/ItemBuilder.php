@@ -34,6 +34,9 @@ class ItemBuilder
             if (! $product) {
                 throw new OrderException('Produk tidak ditemukan.');
             }
+            if (! $product->is_active) {
+                throw new OrderException("{$product->name} tidak dijual.");
+            }
             if (! $product->is_available) {
                 throw new OrderException("{$product->name} sedang habis.");
             }

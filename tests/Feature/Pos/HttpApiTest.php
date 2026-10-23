@@ -231,3 +231,18 @@ it('keeps a sold-out product on the QR menu, flagged, and sets or corrects stock
     $none = product('Caffe Latte');
     $this->actingAs($owner)->postJson("/pos/products/{$none->id}/stock", ['stock_qty' => 2])->assertStatus(422);
 });
+
+it('deactivates a menu item: gone from POS and QR, not orderable, and back when reactivated', function () {
+    $p = product('Americano');
+    $this->actingAs(userWithRole('cashier'))->post("/admin/products/{$p->id}/active", ['is_active' => false])->assertForbidden();
+    $this->actingAs(userWithRole('manager'))->post("/admin/products/{$p->id}/active", ['is_active' => false])->assertRedirect();
+
+    $names = fn () => collect(MenuPresenter::categories($p->outlet_id))->flatMap(fn ($c) => $c['products'])->pluck('name');
+    expect($names()->contains('Americano'))->toBeFalse();
+    $cashier = userWithRole('cashier');
+    openShiftFor($cashier, 0);
+    expect(fn () => placeOrder($cashier, [['product_id' => $p->id, 'qty' => 1]], 'takeaway'))->toThrow(OrderException::class, 'tidak dijual');
+
+    $this->actingAs(userWithRole('manager'))->post("/admin/products/{$p->id}/active", ['is_active' => true])->assertRedirect();
+    expect($names()->contains('Americano'))->toBeTrue()->and($p->fresh()->is_active)->toBeTrue();
+});

@@ -8,6 +8,7 @@ import {
     Select,
     Stat,
 } from '@/components/pos/ui';
+import { AccountMenu } from '@/components/pos/account-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { t } from '@/lang';
@@ -78,9 +79,12 @@ export default function ShiftPage({
                             : t('Belum ada shift terbuka')
                     }
                     actions={
-                        <Button asChild variant="outline" className="h-11">
-                            <Link href="/pos">← {t('Kasir')}</Link>
-                        </Button>
+                        <>
+                            <Button asChild variant="outline" className="h-11">
+                                <Link href="/pos">← {t('Kasir')}</Link>
+                            </Button>
+                            <AccountMenu />
+                        </>
                     }
                 />
                 {errors && Object.values(errors).length > 0 && (

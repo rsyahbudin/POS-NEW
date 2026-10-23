@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Pos;
 
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Ordering\Enums\OrderStatus;
 use App\Domain\Ordering\Models\Order;
 use App\Domain\Ordering\Models\OrderItem;
 use App\Domain\Ordering\Models\OrderRound;
@@ -15,6 +16,7 @@ use App\Domain\Shift\ShiftResolver;
 use App\Http\Controllers\Controller;
 use App\Http\Presenters\MenuPresenter;
 use App\Http\Presenters\OrderPresenter;
+use App\Support\BusinessDate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -98,5 +100,38 @@ class PosController extends Controller
     public function stateJson(): JsonResponse
     {
         return response()->json($this->state());
+    }
+
+    /**
+     * Today's bills (business day), newest first. Managers and owners (sales report permission) see the whole outlet;
+     * everybody else sees what they opened or took payment for.
+     */
+    public function history(Request $request): JsonResponse
+    {
+        $user = $this->actor($request);
+        $all = $user->can('view-sales-reports');
+        $orders = Order::query()
+            ->where('outlet_id', $this->outlet->id())->where('business_date', BusinessDate::for())
+            ->when(! $all, fn ($q) => $q->where(fn ($w) => $w->where('opened_by', $user->id)->orWhereHas('payments', fn ($p) => $p->where('received_by', $user->id))))
+            ->with(['table:id,name', 'opener:id,name', 'bills:id,order_id,label,status,grand_total,is_unallocated'])
+            ->latest('id')->limit(200)->get();
+
+        $paid = $orders->whereIn('status', [OrderStatus::Paid, OrderStatus::Refunded]);
+
+        return response()->json([
+            'scope' => $all ? 'all' : 'mine',
+            'summary' => [
+                'paid' => $paid->count(),
+                'total' => (int) $paid->sum(fn (Order $o) => $o->grand_total - $o->refunded_total),
+                'open' => $orders->whereIn('status', [OrderStatus::Open, OrderStatus::PartiallyPaid])->count(),
+                'cancelled' => $orders->where('status', OrderStatus::Cancelled)->count(),
+            ],
+            'orders' => $orders->map(fn (Order $o) => [
+                'id' => $o->id, 'number' => $o->number, 'where' => $o->table->name ?? $o->call_number ?? $o->platform ?? ucfirst((string) $o->type->value),
+                'at' => $o->created_at?->toIso8601String(), 'status' => $o->status->value, 'status_label' => $o->status->label(),
+                'total' => $o->grand_total, 'refunded' => $o->refunded_total, 'by' => $o->opener?->name,
+                'bills' => $o->bills->where('is_unallocated', false)->map(fn ($b) => ['id' => $b->id, 'label' => $b->label, 'status' => $b->status->value, 'total' => $b->grand_total])->values()->all(),
+            ])->values()->all(),
+        ]);
     }
 }

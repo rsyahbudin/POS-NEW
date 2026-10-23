@@ -237,7 +237,13 @@ Modul 4.1–4.15 adalah inti POS; 4.16–4.27 ditambahkan setelah MVP. Setiap kr
 
 - Struk berisi outlet, nomor order, tanggal-jam, kasir, meja, item+modifier, rincian pajak/biaya, metode bayar, kembalian, catatan kaki.
 - Printer thermal 58/80 mm lewat QZ Tray, Bluetooth, atau RawBT; fallback cetak browser. Routing tiket/struk per stasiun cetak, kategori, dan menu; **Stasiun Cetak** adalah layar antrean cetak untuk perangkat tanpa printer langsung.
+- Setelah pembayaran, struk dicetak otomatis dengan urutan: antrean printer di server bila struk dirutekan ke sebuah printer; cetak langsung dari perangkat bila printer perangkat sudah diatur dan "Cetak langsung" aktif; selain itu jendela cetak browser. Tiap perangkat punya opsi "Cetak struk otomatis setelah bayar" yang bisa dimatikan untuk perangkat tanpa printer; struk tetap tampil di layar dengan tombol Cetak.
 - Cetak ulang tercatat berlabel "COPY". Struk digital: tautan publik bertoken, dibagikan via WhatsApp.
+
+### 4.13a Akun, Keluar & Riwayat Transaksi
+
+- Layar Kasir, Dapur, dan Shift tidak punya sidebar, jadi memakai **menu akun** (tombol bulat berisi inisial) di pojok kanan atas: nama dan email, **Riwayat transaksi** (hanya di Kasir), dan **Keluar**. Keluar tidak menutup shift.
+- **Riwayat transaksi hari ini:** ringkasan penjualan lunas dan jumlah transaksi, pesanan yang belum selesai, dan yang dibatalkan; daftar bill dengan filter status; tombol Buka pesanan (yang masih terbuka) dan Cetak ulang struk (berlabel COPY). Manager/owner (izin laporan penjualan) melihat seluruh outlet; peran lain hanya bill yang mereka buka atau terima pembayarannya. Hanya hari bisnis berjalan; hari lain lewat laporan.
 
 ### 4.14 Pengaturan, User & Peran
 

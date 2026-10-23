@@ -79,6 +79,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
     Route::prefix('pos')->name('pos.')->group(function () {
         Route::get('/', [PosController::class, 'index'])->middleware('permission:create-order|receive-payment')->name('index');
         Route::get('state', [PosController::class, 'stateJson'])->middleware('permission:create-order|receive-payment')->name('state');
+        Route::get('history', [PosController::class, 'history'])->middleware('permission:create-order|receive-payment')->name('history');
 
         Route::post('orders', [OrderController::class, 'store'])->name('orders.store');
         Route::get('orders/{order}', [OrderController::class, 'show'])->name('orders.show');

@@ -12,6 +12,8 @@ export type PrinterPrefs = {
     paper: PaperWidth;
     enabled: boolean;
     method: PrintMethod;
+    /** Print the receipt by itself right after a payment (otherwise only the Cetak button prints). */
+    auto: boolean;
 };
 
 const KEY = 'pos.printer';
@@ -24,10 +26,17 @@ export function getPrinterPrefs(): PrinterPrefs {
             paper: 80,
             enabled: false,
             method: 'qz',
+            auto: true,
             ...JSON.parse(localStorage.getItem(KEY) ?? '{}'),
         };
     } catch {
-        return { printer: '', paper: 80, enabled: false, method: 'qz' };
+        return {
+            printer: '',
+            paper: 80,
+            enabled: false,
+            method: 'qz',
+            auto: true,
+        };
     }
 }
 

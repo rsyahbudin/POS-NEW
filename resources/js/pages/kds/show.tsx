@@ -2,6 +2,7 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import { Printer, Volume2, VolumeX, WifiOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { AccountMenu } from '@/components/pos/account-menu';
 import { Button } from '@/components/ui/button';
 import { useRealtime } from '@/hooks/use-realtime';
 import { useSound } from '@/hooks/use-sound';
@@ -232,6 +233,9 @@ export default function KdsPage({
                         >
                             {sound.prefs.muted ? <VolumeX /> : <Volume2 />}
                         </Button>
+                    </div>
+                    <div className="ml-auto">
+                        <AccountMenu />
                     </div>
                 </header>
 

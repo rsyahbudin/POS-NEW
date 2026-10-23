@@ -13,7 +13,9 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { AccountMenu } from '@/components/pos/account-menu';
 import { DiscountDialog } from '@/components/pos/discount-dialog';
+import { HistoryDialog } from '@/components/pos/history-dialog';
 import { ModifierSheet } from '@/components/pos/modifier-sheet';
 import { OpenShiftDialog } from '@/components/pos/open-shift-dialog';
 import { Modal } from '@/components/pos/modal';
@@ -120,6 +122,7 @@ type Dialog =
     | { kind: 'receipt'; receipt: Receipt; note?: string; billId?: number }
     | { kind: 'online' }
     | { kind: 'printer' }
+    | { kind: 'history' }
     | { kind: 'shift' }
     | null;
 
@@ -519,7 +522,9 @@ export default function PosPage(props: Props) {
         if (r) {
             const how = routing.receipt
                 ? 'queue'
-                : await printReceipt(r.receipt);
+                : copy || getPrinterPrefs().auto
+                  ? await printReceipt(r.receipt)
+                  : undefined;
             setDialog({
                 kind: 'receipt',
                 receipt: r.receipt,
@@ -888,6 +893,9 @@ export default function PosPage(props: Props) {
                                 <span className="hidden sm:inline">Shift</span>
                             </Link>
                         </Button>
+                        <AccountMenu
+                            onHistory={() => setDialog({ kind: 'history' })}
+                        />
                     </div>
                 </header>
 
@@ -1391,6 +1399,13 @@ export default function PosPage(props: Props) {
                     </div>
                 </Modal>
             )}
+            {dialog?.kind === 'history' && (
+                <HistoryDialog
+                    onClose={() => setDialog(null)}
+                    onReceipt={(id) => void showReceipt({ id } as Bill, true)}
+                    onOpen={(id) => void openExisting(id)}
+                />
+            )}
             {dialog?.kind === 'printer' && (
                 <PrinterDialog onClose={() => setDialog(null)} />
             )}
@@ -1774,6 +1789,24 @@ function PrinterDialog({ onClose }: { onClose: () => void }) {
                     }
                 />
                 {t('Cetak langsung tanpa dialog browser')}
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+                <input
+                    type="checkbox"
+                    className="mt-0.5 size-5"
+                    checked={prefs.auto}
+                    onChange={(e) =>
+                        setPrefs({ ...prefs, auto: e.target.checked })
+                    }
+                />
+                <span>
+                    {t('Cetak struk otomatis setelah bayar')}
+                    <span className="block text-xs text-muted-foreground">
+                        {t(
+                            'Matikan kalau perangkat ini tidak punya printer: struk tetap tampil di layar dengan tombol Cetak, dan tidak ada jendela cetak yang terbuka sendiri.',
+                        )}
+                    </span>
+                </span>
             </label>
             <Button
                 type="button"

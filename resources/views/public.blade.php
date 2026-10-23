@@ -38,6 +38,7 @@
 
         @viteReactRefresh
         @vite(['resources/css/app.css', 'resources/js/public.tsx', "resources/js/pages/{$page['component']}.tsx"])
+        <style>{!! \App\Support\Accent::css() !!}</style>
         <x-inertia::head>
             <title>{{ config('app.name') }}</title>
         </x-inertia::head>

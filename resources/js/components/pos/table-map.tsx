@@ -40,7 +40,7 @@ export function TableMap({
                     <h2 className="mb-2 text-sm font-medium text-muted-foreground">
                         {area.name}
                     </h2>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2">
                         {area.tables.map((tb) => (
                             <button
                                 key={tb.id}

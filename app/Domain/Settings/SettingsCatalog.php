@@ -2,6 +2,8 @@
 
 namespace App\Domain\Settings;
 
+use App\Support\Accent;
+
 /**
  * Every adjustable setting, with its label, help text, type and default.
  * The settings page renders from this list and validation is derived from it,
@@ -22,6 +24,7 @@ final class SettingsCatalog
                     ['key' => 'pricing.rounding', 'type' => 'select', 'label' => 'Pembulatan grand total', 'hint' => 'Selisih pembulatan dicatat di akun tersendiri.', 'default' => 0, 'options' => [['0', 'Tanpa pembulatan'], ['100', 'Ke Rp100 terdekat'], ['500', 'Ke Rp500 terdekat']]],
                     ['key' => 'operations.auto_close_day', 'type' => 'bool', 'label' => 'Tutup hari otomatis', 'hint' => 'Aktif: setelah hari bisnis berganti dan semua shift hari itu sudah ditutup, aplikasi membuat laporan harian (Z-report) sendiri dan mengirimnya ke Telegram. Manager tidak perlu menekan Tutup Hari. Kalau masih ada shift yang lupa ditutup, manager mendapat notifikasi.', 'default' => true],
                     ['key' => 'shift.shared_for_managers', 'type' => 'bool', 'label' => 'Manager/owner boleh menerima pembayaran lewat shift kasir yang sedang terbuka', 'hint' => 'Aktif: owner/manager yang tidak punya shift sendiri memakai shift kasir yang terbuka (uang masuk tercatat di shift itu, penerima tetap nama yang login). Nonaktif: setiap orang wajib membuka shift sendiri.', 'default' => true],
+                    ['key' => 'ui.accent', 'type' => 'select', 'label' => 'Warna aksen aplikasi', 'hint' => 'Warna tombol, menu aktif, dan grafik di semua perangkat. Warna status (meja kosong/terisi, pesanan siap, peringatan) tidak ikut berubah supaya tetap jelas dibaca.', 'default' => 'blue', 'options' => Accent::options()],
                     ['key' => 'discount.cashier_limit_percent', 'type' => 'int', 'label' => 'Batas diskon kasir tanpa PIN (%)', 'hint' => 'Diskon di atas batas ini butuh PIN dari pemegang izin "Diskon di atas batas".', 'default' => 10, 'min' => 0, 'max' => 100],
                 ],
             ]]],

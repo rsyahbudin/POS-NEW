@@ -75,7 +75,7 @@ export function ProductGrid({
                 )}
             </div>
 
-            <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-2 gap-2 overflow-y-auto pb-24 sm:grid-cols-3 md:pb-2 lg:grid-cols-4">
+            <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2 overflow-y-auto pb-24 md:pb-2">
                 {products.map((p) => {
                     const out = !p.is_available || soldOut.includes(p.id);
 

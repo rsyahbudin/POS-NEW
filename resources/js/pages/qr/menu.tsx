@@ -98,13 +98,25 @@ export default function QrMenu({
         return () => window.clearInterval(id);
     }, [refresh]);
 
-    const products = useMemo(
-        () =>
-            menu
-                .filter((c) => cat === 'all' || c.id === cat)
-                .flatMap((c) => c.products),
-        [menu, cat],
+    const [q, setQ] = useState('');
+    const allCount = useMemo(
+        () => menu.reduce((n, c) => n + c.products.length, 0),
+        [menu],
     );
+    const products = useMemo(() => {
+        const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+
+        return menu
+            .filter((c) => cat === 'all' || c.id === cat)
+            .flatMap((c) => c.products)
+            .filter((p) =>
+                words.every((w) =>
+                    `${p.name} ${p.description ?? ''}`
+                        .toLowerCase()
+                        .includes(w),
+                ),
+            );
+    }, [menu, cat, q]);
     const total = cart.reduce((s, l) => s + l.unit * l.qty, 0);
     const count = cart.reduce((s, l) => s + l.qty, 0);
 
@@ -249,38 +261,52 @@ export default function QrMenu({
         <>
             <Head title={`Menu · ${table.name}`} />
             <div className="min-h-dvh bg-background pb-28 text-foreground">
-                <header className="sticky top-0 z-10 border-b bg-card/95 px-4 py-3 backdrop-blur-sm">
-                    <p className="text-xs font-medium text-muted-foreground">
-                        {outlet}
-                    </p>
-                    <h1 className="text-xl font-semibold tracking-tight">
-                        Meja {table.name}
-                    </h1>
-                    {!qris && (
-                        <p className="text-xs text-muted-foreground">
-                            Pembayaran di kasir.
+                <div className="sticky top-0 z-10 border-b bg-card/95 backdrop-blur-sm">
+                    <header className="px-4 pt-3 pb-2">
+                        <p className="text-xs font-medium text-muted-foreground">
+                            {outlet}
                         </p>
+                        <h1 className="text-xl font-semibold tracking-tight">
+                            Meja {table.name}
+                        </h1>
+                        {!qris && (
+                            <p className="text-xs text-muted-foreground">
+                                Pembayaran di kasir.
+                            </p>
+                        )}
+                    </header>
+                    {allCount > 8 && (
+                        <div className="px-4 pb-2">
+                            <input
+                                type="search"
+                                value={q}
+                                onChange={(e) => setQ(e.target.value)}
+                                placeholder="Cari menu…"
+                                aria-label="Cari menu"
+                                className="h-11 w-full rounded-lg border bg-background px-3 text-base outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                            />
+                        </div>
                     )}
-                </header>
+                    <nav
+                        className="flex [scrollbar-width:none] gap-2 overflow-x-auto px-4 pb-3"
+                        aria-label="Kategori"
+                    >
+                        {[{ id: 'all' as const, name: 'Semua' }, ...menu].map(
+                            (c) => (
+                                <button
+                                    key={c.id}
+                                    onClick={() => setCat(c.id)}
+                                    aria-pressed={cat === c.id}
+                                    className={`h-10 shrink-0 rounded-full border px-4 text-sm font-medium ${cat === c.id ? 'border-primary bg-primary text-primary-foreground' : 'bg-card'}`}
+                                >
+                                    {c.name}
+                                </button>
+                            ),
+                        )}
+                    </nav>
+                </div>
 
-                <nav
-                    className="flex gap-2 overflow-x-auto px-4 py-3"
-                    aria-label="Kategori"
-                >
-                    {[{ id: 'all' as const, name: 'Semua' }, ...menu].map(
-                        (c) => (
-                            <button
-                                key={c.id}
-                                onClick={() => setCat(c.id)}
-                                aria-pressed={cat === c.id}
-                                className={`h-10 shrink-0 rounded-lg border px-4 text-sm font-medium ${cat === c.id ? 'border-primary bg-primary text-primary-foreground' : 'bg-card'}`}
-                            >
-                                {c.name}
-                            </button>
-                        ),
-                    )}
-                </nav>
-
+                <div className="h-3" />
                 <main className="mx-4 divide-y overflow-hidden rounded-xl border bg-card">
                     {products.map((p) => {
                         const hasOptions =

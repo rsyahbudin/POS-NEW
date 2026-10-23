@@ -4,6 +4,7 @@ import {
     ChevronUp,
     Clock,
     Settings2,
+    Bike,
     ShoppingBag,
     UtensilsCrossed,
     Volume2,
@@ -731,13 +732,13 @@ export default function PosPage(props: Props) {
         <>
             <Head title="Kasir" />
             <div className="flex h-dvh flex-col bg-background">
-                <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b bg-card px-3 py-2">
-                    <Link href="/" className="text-base font-semibold">
+                <header className="flex items-center gap-2 border-b bg-card px-3 py-2">
+                    <Link href="/" className="shrink-0 text-base font-semibold">
                         POS
                     </Link>
                     <span
                         className={cn(
-                            'rounded px-2 py-0.5 text-xs',
+                            'min-w-0 truncate rounded-md px-2 py-0.5 text-xs',
                             props.shift
                                 ? 'bg-emerald-100 text-emerald-900'
                                 : 'bg-amber-100 text-amber-900',
@@ -761,7 +762,7 @@ export default function PosPage(props: Props) {
                             </span>
                         </span>
                     )}
-                    <div className="ml-auto flex items-center gap-1">
+                    <div className="ml-auto flex shrink-0 items-center gap-1">
                         {can.confirm_qr && (
                             <Button
                                 type="button"
@@ -771,7 +772,8 @@ export default function PosPage(props: Props) {
                                 onClick={() => setInbox(true)}
                                 aria-label={`${t('Pesanan QR')}: ${pendingCount}`}
                             >
-                                <Bell /> QR
+                                <Bell />{' '}
+                                <span className="hidden sm:inline">QR</span>
                                 {pendingCount > 0 && (
                                     <span className="absolute -top-1 -right-1 grid size-5 place-items-center rounded-full bg-red-600 text-[11px] text-white">
                                         {pendingCount}
@@ -889,65 +891,66 @@ export default function PosPage(props: Props) {
                     </div>
                 )}
 
-                <main className="grid min-h-0 flex-1 gap-3 p-3 md:grid-cols-[minmax(0,1fr)_380px]">
+                <main className="grid min-h-0 flex-1 gap-3 p-3 md:grid-cols-[minmax(0,1fr)_340px] lg:grid-cols-[minmax(0,1fr)_380px]">
                     <div className="flex min-h-0 flex-col gap-3">
-                        <div role="tablist" className="grid grid-cols-2 gap-2">
-                            <Button
-                                role="tab"
-                                aria-selected={view === 'tables'}
-                                type="button"
-                                variant={
-                                    view === 'tables' ? 'default' : 'outline'
-                                }
-                                className="h-12"
-                                onClick={() => setView('tables')}
-                            >
-                                {t('Meja & order')}
-                            </Button>
-                            <Button
-                                role="tab"
-                                aria-selected={view === 'menu'}
-                                type="button"
-                                variant={
-                                    view === 'menu' ? 'default' : 'outline'
-                                }
-                                className="h-12"
-                                onClick={() => setView('menu')}
-                            >
-                                {t('Menu')}
-                            </Button>
+                        <div
+                            role="tablist"
+                            className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1"
+                        >
+                            {(
+                                [
+                                    ['tables', t('Meja & order')],
+                                    ['menu', t('Menu')],
+                                ] as const
+                            ).map(([id, label]) => (
+                                <button
+                                    key={id}
+                                    role="tab"
+                                    aria-selected={view === id}
+                                    type="button"
+                                    onClick={() => setView(id)}
+                                    className={`h-11 rounded-lg text-sm font-medium transition-colors ${view === id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground active:bg-card/60'}`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
                         </div>
 
                         {view === 'tables' ? (
                             <div className="min-h-0 flex-1 overflow-y-auto">
-                                <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        className="h-14"
-                                        onClick={() => openTakeaway('takeaway')}
-                                    >
-                                        <ShoppingBag /> Takeaway
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        className="h-14"
-                                        onClick={() => openTakeaway('dine_in')}
-                                    >
-                                        <UtensilsCrossed />{' '}
-                                        {t('Dine-in bayar dulu')}
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        className="h-14"
-                                        onClick={() =>
-                                            setDialog({ kind: 'online' })
-                                        }
-                                    >
-                                        Online / Ojol
-                                    </Button>
+                                <div className="mb-4 grid grid-cols-3 gap-2">
+                                    {(
+                                        [
+                                            [
+                                                'Takeaway',
+                                                ShoppingBag,
+                                                () => openTakeaway('takeaway'),
+                                            ],
+                                            [
+                                                t('Dine-in bayar dulu'),
+                                                UtensilsCrossed,
+                                                () => openTakeaway('dine_in'),
+                                            ],
+                                            [
+                                                'Online / Ojol',
+                                                Bike,
+                                                () =>
+                                                    setDialog({
+                                                        kind: 'online',
+                                                    }),
+                                            ],
+                                        ] as const
+                                    ).map(([label, Icon, run]) => (
+                                        <Button
+                                            key={label}
+                                            type="button"
+                                            variant="outline"
+                                            className="h-auto min-h-14 flex-col gap-1 px-1 py-2 text-center text-xs whitespace-normal sm:flex-row sm:text-sm"
+                                            onClick={run}
+                                        >
+                                            <Icon /> {label}
+                                        </Button>
+                                    ))}
                                 </div>
                                 {state.takeaway_orders.length > 0 && (
                                     <div className="mb-4">

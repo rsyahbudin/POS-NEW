@@ -5,6 +5,7 @@ namespace App\Domain\Shift\Jobs;
 use App\Domain\Notification\ReportDelivery;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Shift\Models\BusinessDay;
+use App\Domain\Shift\ZReportSummary;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -24,6 +25,6 @@ class SendZReportJob implements ShouldQueue
         }
 
         $day = BusinessDay::findOrFail($this->businessDayId);
-        $delivery->deliver('Laporan harian '.$day->date->format('d M Y'), $delivery->dailyText($day));
+        $delivery->deliver('Laporan harian '.$day->date->format('d M Y'), $delivery->dailyText($day), null, $delivery->dailyHtml($day->date->toDateString(), ZReportSummary::fromArray($day->summary)));
     }
 }

@@ -77,7 +77,7 @@ class ReportController extends Controller
 
         return ReportFile::download((string) $request->input('format', 'xlsx'), "Kinerja dapur {$labels[$dimension]} {$from} {$to}", [
             new ReportSheet("Kinerja dapur {$labels[$dimension]}", $sub, [$labels[$dimension], 'Item', 'Rata-rata (menit)', 'Terlama 10% (menit)', 'Terlama (menit)'],
-                $rows->map(fn ($r) => [$r->label, $r->items, $r->avg_minutes, $r->p90_minutes, $r->max_minutes])->all()),
+                $rows->map(fn ($r) => [$this->pretty($dimension, $r->label), $r->items, $r->avg_minutes, $r->p90_minutes, $r->max_minutes])->all()),
             new ReportSheet('Ringkasan', $sub, ['Keterangan', 'Nilai'], [
                 ['Item selesai', $s['items']], ['Rata-rata selesai (menit)', $s['avg_minutes']], ['90% selesai dalam (menit)', $s['p90_minutes']],
                 ['Rata-rata menunggu dimulai (menit)', $s['avg_wait']], ['Rata-rata pembuatan (menit)', $s['avg_make']], ['Item lewat batas merah', $s['slow']],
@@ -114,7 +114,7 @@ class ReportController extends Controller
 
         return ReportFile::download((string) $request->input('format', 'xlsx'), "Margin {$labels[$dimension]} {$from} {$to}", [
             new ReportSheet("Margin per {$labels[$dimension]}", $sub, [$labels[$dimension], 'Terjual', 'Penjualan', 'HPP', 'Laba kotor', 'Margin %'],
-                $by->map(fn ($r) => [$r->label, $r->qty, $r->revenue, $r->cogs, $r->profit, $r->margin_pct])->all(),
+                $by->map(fn ($r) => [$this->pretty($dimension, $r->label), $r->qty, $r->revenue, $r->cogs, $r->profit, $r->margin_pct])->all(),
                 ['Total', (int) $by->sum('qty'), (int) $by->sum('revenue'), (int) $by->sum('cogs'), (int) $by->sum('profit'),
                     (int) $by->sum('revenue') > 0 ? round((int) $by->sum('profit') / (int) $by->sum('revenue') * 100, 1) : 0.0]),
             new ReportSheet('Ringkasan', $sub, ['Keterangan', 'Nilai'], [
@@ -152,7 +152,7 @@ class ReportController extends Controller
         $wasteBy = $waste->by($dimension, $from, $to);
 
         return ReportFile::download((string) $request->input('format', 'xlsx'), "Waste {$labels[$dimension]} {$from} {$to}", [
-            new ReportSheet("Waste per {$labels[$dimension]}", $sub, [$labels[$dimension], 'Kejadian', 'Nilai (Rp)', '% dari total'], array_map(fn ($r) => [$r->label, $r->entries, $r->cost, $r->share_pct], $wasteBy),
+            new ReportSheet("Waste per {$labels[$dimension]}", $sub, [$labels[$dimension], 'Kejadian', 'Nilai (Rp)', '% dari total'], array_map(fn ($r) => [$this->pretty($dimension, $r->label), $r->entries, $r->cost, $r->share_pct], $wasteBy),
                 ['Total', (int) array_sum(array_map(fn ($r) => $r->entries, $wasteBy)), (int) array_sum(array_map(fn ($r) => $r->cost, $wasteBy)), '']),
             new ReportSheet('Rincian', $sub, ['Waktu', 'Item', 'Jumlah', 'Satuan', 'Alasan', 'Catatan', 'Nilai (Rp)', 'Pencatat'],
                 array_map(fn ($e) => [$e['at'], $e['label'], $e['qty'], $e['unit'], $e['reason'], $e['note'] ?? '', $e['cost'], $e['user'] ?? '-'], $waste->entries($from, $to, 5000))),
@@ -226,6 +226,12 @@ class ReportController extends Controller
         ];
 
         return ReportFile::download($format, "Laporan penjualan {$label} {$from} {$to}", $sheets, "Laporan penjualan per {$label}");
+    }
+
+    /** Group names for the file: a date reads as "Jum, 23 Okt 2026". */
+    private function pretty(string $dimension, string $label): string
+    {
+        return $dimension === 'day' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $label) === 1 ? CarbonImmutable::parse($label)->translatedFormat('D, d M Y') : $label;
     }
 
     private function when(\stdClass $r): string

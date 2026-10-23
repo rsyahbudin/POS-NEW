@@ -9,7 +9,7 @@ import {
 } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { rupiah } from '@/lib/format';
+import { dateId, rupiah } from '@/lib/format';
 
 const LABELS: Record<string, string> = {
     product: 'Per produk',
@@ -66,6 +66,8 @@ export default function MarginReport({
     const qs = (format: string) =>
         new URLSearchParams({ ...filters, format }).toString();
     const data = rows.map((r) => ({ label: r.label, value: r.profit }));
+    const sum = (k: 'qty' | 'revenue' | 'cogs' | 'profit') =>
+        rows.reduce((a, r) => a + r[k], 0);
 
     return (
         <>
@@ -205,8 +207,18 @@ export default function MarginReport({
                         'Margin',
                     ]}
                     numeric={[1, 2, 3, 4, 5]}
+                    footer={[
+                        'Total',
+                        sum('qty'),
+                        rupiah(sum('revenue')),
+                        rupiah(sum('cogs')),
+                        rupiah(sum('profit')),
+                        `${(sum('revenue') > 0 ? Math.round((sum('profit') / sum('revenue')) * 1000) / 10 : 0).toLocaleString('id-ID')}%`,
+                    ]}
                     rows={rows.map((r) => [
-                        r.uncosted_qty > 0 ? `${r.label} *` : r.label,
+                        (filters.dimension === 'day'
+                            ? dateId(r.label)
+                            : r.label) + (r.uncosted_qty > 0 ? ' *' : ''),
                         r.qty,
                         rupiah(r.revenue),
                         rupiah(r.cogs),
@@ -231,6 +243,13 @@ export default function MarginReport({
                         'Batas minimum',
                     ]}
                     numeric={[1, 2, 3, 4]}
+                    footer={[
+                        'Total nilai stok',
+                        '',
+                        '',
+                        rupiah(stock.reduce((a, s) => a + s.value, 0)),
+                        '',
+                    ]}
                     rows={stock.map((s) => [
                         s.low ? `${s.name} (menipis)` : s.name,
                         `${s.stock.toLocaleString('id-ID')} ${s.unit}`,

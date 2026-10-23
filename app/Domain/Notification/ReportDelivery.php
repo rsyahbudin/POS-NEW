@@ -4,6 +4,9 @@ namespace App\Domain\Notification;
 
 use App\Domain\Notification\Jobs\DeliverMessageJob;
 use App\Domain\Payment\Models\Payment;
+use App\Domain\Reporting\SalesReports;
+use App\Domain\Settings\Models\Outlet;
+use App\Domain\Settings\OutletContext;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Shift\Models\BusinessDay;
 use App\Domain\Shift\Models\Shift;
@@ -11,6 +14,7 @@ use App\Domain\Shift\ShiftCash;
 use App\Domain\Shift\ZReportSummary;
 use App\Models\User;
 use App\Support\Money;
+use Carbon\CarbonImmutable;
 
 /**
  * Sends reports and important alerts to the owner's phone or inbox: Telegram, email and WhatsApp (through a
@@ -63,16 +67,34 @@ class ReportDelivery
      * Queues the message on every configured channel (or only the given ones).
      *
      * @param  list<string>|null  $only
+     * @param  string|null  $html  a designed version of the message, used by email (the plain text is its fallback)
      * @return list<string> channels used
      */
-    public function deliver(string $subject, string $text, ?array $only = null): array
+    public function deliver(string $subject, string $text, ?array $only = null, ?string $html = null): array
     {
         $channels = array_values(array_filter($this->configured(), fn ($c) => $only === null || in_array($c, $only, true)));
         foreach ($channels as $channel) {
-            DeliverMessageJob::dispatch($channel, $subject, $text);
+            DeliverMessageJob::dispatch($channel, $subject, $text, $channel === 'email' ? $html : null);
         }
 
         return $channels;
+    }
+
+    /** The daily report as a designed email: headline, comparison, payment methods, best sellers, things to check. */
+    public function dailyHtml(string $date, ZReportSummary $s): string
+    {
+        $sales = app(SalesReports::class);
+        $day = CarbonImmutable::parse($date);
+
+        return view('emails.daily-report', [
+            'outlet' => (string) Outlet::query()->find(app(OutletContext::class)->id())?->name,
+            'dateLabel' => $day->translatedFormat('l, d F Y'),
+            's' => $s,
+            'average' => $s->orders > 0 ? intdiv($s->net, $s->orders) : 0,
+            'compare' => $sales->dashboard($date),
+            'top' => $sales->by('product', $date, $date)->take(5)->map(fn ($r) => ['name' => $r->label, 'qty' => $r->orders, 'total' => $r->total])->values()->all(),
+            'url' => url("/admin/reports/sales?from={$date}&to={$date}"),
+        ])->render();
     }
 
     public function dailyText(BusinessDay $day): string

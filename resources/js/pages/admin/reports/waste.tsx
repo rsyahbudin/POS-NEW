@@ -9,7 +9,7 @@ import {
 } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { rupiah } from '@/lib/format';
+import { dateId, rupiah } from '@/lib/format';
 
 const LABELS: Record<string, string> = {
     item: 'Per item',
@@ -180,8 +180,14 @@ export default function WasteReport({
                     ]}
                     numeric={[1, 2, 3]}
                     empty="Tidak ada waste pada periode ini."
+                    footer={[
+                        'Total',
+                        rows.reduce((a, r) => a + r.entries, 0),
+                        rupiah(rows.reduce((a, r) => a + r.cost, 0)),
+                        '',
+                    ]}
                     rows={rows.map((r) => [
-                        r.label,
+                        filters.dimension === 'day' ? dateId(r.label) : r.label,
                         r.entries,
                         rupiah(r.cost),
                         `${r.share_pct.toLocaleString('id-ID')}%`,

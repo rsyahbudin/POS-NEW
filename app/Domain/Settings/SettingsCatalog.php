@@ -132,7 +132,7 @@ final class SettingsCatalog
             ], [
                 'title' => 'Email',
                 'fields' => [
-                    ['key' => 'notify.email_to', 'type' => 'text', 'label' => 'Alamat email penerima', 'hint' => 'Pisahkan dengan koma untuk lebih dari satu. Pengiriman memakai pengaturan SMTP (MAIL_*) di file .env server; tanpa itu email hanya tercatat di log.', 'default' => null, 'max' => 300],
+                    ['key' => 'notify.email_to', 'type' => 'text', 'label' => 'Alamat email penerima', 'hint' => 'Pisahkan dengan koma untuk lebih dari satu. Laporan harian dikirim sebagai email bergambar rapi. Pengiriman lewat Resend (isi MAIL_MAILER=resend, RESEND_API_KEY, dan MAIL_FROM_ADDRESS dengan domain yang sudah diverifikasi di file .env server) atau SMTP biasa; tanpa itu email hanya tercatat di log.', 'default' => null, 'max' => 300],
                 ],
             ], [
                 'title' => 'WhatsApp (lewat gateway)',

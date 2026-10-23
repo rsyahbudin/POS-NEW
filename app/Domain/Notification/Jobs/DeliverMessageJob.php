@@ -17,7 +17,7 @@ class DeliverMessageJob implements ShouldQueue
 
     public int $tries = 3;
 
-    public function __construct(public string $channel, public string $subject, public string $text) {}
+    public function __construct(public string $channel, public string $subject, public string $text, public ?string $html = null) {}
 
     /** @return array<int, int> */
     public function backoff(): array
@@ -51,7 +51,13 @@ class DeliverMessageJob implements ShouldQueue
         if ($to === []) {
             return;
         }
-        Mail::raw($this->text, fn ($m) => $m->to($to)->subject($this->subject));
+        if ($this->html === null) {
+            Mail::raw($this->text, fn ($m) => $m->to($to)->subject($this->subject));
+
+            return;
+        }
+        $html = $this->html;
+        Mail::send([], [], fn ($m) => $m->to($to)->subject($this->subject)->html($html)->text($this->text));
     }
 
     /** Fonnte (api.fonnte.com) style gateway: token in the Authorization header, numbers with country code 62. */

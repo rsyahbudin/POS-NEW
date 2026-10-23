@@ -49,7 +49,8 @@ class DayCloseController extends Controller
     {
         $data = $request->validate(['date' => 'required|date']);
         $date = CarbonImmutable::parse($data['date']);
-        $channels = $delivery->deliver('Laporan harian '.$date->format('d M Y'), $delivery->dailyTextFor($date->format('d M Y'), ZReportSummary::fromArray($report->build($date->toDateString()))));
+        $summary = ZReportSummary::fromArray($report->build($date->toDateString()));
+        $channels = $delivery->deliver('Laporan harian '.$date->format('d M Y'), $delivery->dailyTextFor($date->format('d M Y'), $summary), null, $delivery->dailyHtml($date->toDateString(), $summary));
 
         return back()->with($channels === [] ? 'error' : 'success', $channels === []
             ? 'Belum ada saluran pengiriman. Isi Telegram, email, atau WhatsApp di Pengaturan > Notifikasi.'

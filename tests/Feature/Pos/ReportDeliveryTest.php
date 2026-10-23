@@ -5,6 +5,8 @@ use App\Domain\Notification\Notifier;
 use App\Domain\Notification\ReportDelivery;
 use App\Domain\Settings\Models\Outlet;
 use App\Domain\Settings\SettingsRepository;
+use App\Domain\Shift\ZReport;
+use App\Domain\Shift\ZReportSummary;
 use App\Support\BusinessDate;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -159,4 +161,20 @@ it('shows the report of any day, lists its shifts, and sends it on request', fun
     $this->actingAs($manager)->post('/admin/day-close/send', ['date' => $d])->assertSessionHas('success');
     Http::assertSent(fn ($r) => str_contains($r['text'], 'Omzet bersih: Rp44.000'));
     $this->actingAs($cashier)->post('/admin/day-close/send', ['date' => $d])->assertForbidden();
+});
+
+it('emails the daily report as a designed message with a plain-text fallback', function () {
+    setUpChannels(false, true, false);
+    config(['mail.default' => 'array']);
+    openShiftFor(userWithRole('cashier'), 0);
+    pay(placeOrder());
+    $date = BusinessDate::for();
+    $summary = ZReportSummary::fromArray(app(ZReport::class)->build($date));
+    $delivery = app(ReportDelivery::class);
+
+    $delivery->deliver('Laporan harian', $delivery->dailyTextFor($date, $summary), null, $delivery->dailyHtml($date, $summary));
+    $message = app('mailer')->getSymfonyTransport()->messages()[0]->getOriginalMessage();
+
+    expect($message->getHtmlBody())->toContain('Penjualan bersih')->toContain('Rp44.000')->toContain('Menu terlaris')->toContain('/admin/reports/sales?from='.$date)
+        ->and($message->getTextBody())->toContain('Omzet bersih');
 });

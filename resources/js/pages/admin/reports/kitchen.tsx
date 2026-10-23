@@ -14,6 +14,7 @@ import {
 } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { dateId } from '@/lib/format';
 
 const LABELS: Record<string, string> = {
     day: 'Per hari',
@@ -214,7 +215,7 @@ export default function KitchenReport({
                     ]}
                     numeric={[1, 2, 3, 4]}
                     rows={rows.map((r) => [
-                        r.label,
+                        filters.dimension === 'day' ? dateId(r.label) : r.label,
                         r.items,
                         min(r.avg_minutes),
                         min(r.p90_minutes),

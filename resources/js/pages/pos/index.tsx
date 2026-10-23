@@ -842,7 +842,7 @@ export default function PosPage(props: Props) {
                 {!sound.unlocked && !sound.prefs.muted && (
                     <div
                         role="status"
-                        className="fixed inset-x-3 bottom-3 z-50 flex items-center justify-between gap-2 rounded-xl bg-sky-100 px-3 py-2 text-sm text-sky-950 shadow-lg"
+                        className="fixed inset-x-3 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-40 flex items-center justify-between gap-2 rounded-xl bg-sky-100 px-3 py-2 text-sm text-sky-950 shadow-lg md:bottom-3"
                     >
                         <span>
                             {t(

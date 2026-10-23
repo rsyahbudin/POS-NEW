@@ -462,12 +462,12 @@ export default function QrMenu({
                 </main>
 
                 <div
-                    className={`fixed inset-x-0 bottom-0 z-20 grid gap-2 border-t bg-card p-3 ${status.rounds.length === 0 && count === 0 ? 'hidden' : ''}`}
+                    className={`fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-20 grid gap-2 ${status.rounds.length === 0 && count === 0 ? 'hidden' : ''}`}
                 >
                     {status.rounds.length > 0 && (
                         <button
                             onClick={() => setOpen('status')}
-                            className="h-11 rounded-lg border text-sm font-medium"
+                            className="h-11 rounded-full border bg-card text-sm font-medium shadow-md"
                         >
                             Lihat status pesanan · total sementara{' '}
                             {rp(status.total)}
@@ -476,12 +476,15 @@ export default function QrMenu({
                     {count > 0 && (
                         <button
                             onClick={() => setOpen('cart')}
-                            className="flex h-14 items-center justify-between rounded-xl bg-primary px-4 text-base font-bold text-primary-foreground"
+                            className="flex h-14 items-center justify-between rounded-2xl bg-primary pr-5 pl-3 text-base font-semibold text-primary-foreground shadow-lg active:scale-[0.99]"
                         >
-                            <span>{count} item</span>
-                            <span className="tabular-nums">
-                                {rp(total)} · Lihat pesanan
+                            <span className="flex items-center gap-3">
+                                <span className="grid size-8 place-items-center rounded-full bg-white/20 text-sm tabular-nums">
+                                    {count}
+                                </span>
+                                Lihat pesanan
                             </span>
+                            <span className="tabular-nums">{rp(total)}</span>
                         </button>
                     )}
                 </div>
@@ -850,15 +853,21 @@ function Sheet({
             onClick={onClose}
         >
             <div
-                className="max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl bg-card p-4"
+                className="max-h-[90dvh] w-full overflow-y-auto rounded-t-3xl bg-card p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
                 onClick={(e) => e.stopPropagation()}
             >
+                <div
+                    aria-hidden
+                    className="mx-auto mb-3 h-1 w-10 rounded-full bg-border"
+                />
                 <div className="mb-3 flex items-center justify-between">
-                    <h2 className="text-lg font-bold">{title}</h2>
+                    <h2 className="text-xl font-semibold tracking-tight">
+                        {title}
+                    </h2>
                     <button
                         onClick={onClose}
                         aria-label="Tutup"
-                        className="size-11 text-xl"
+                        className="grid size-10 place-items-center rounded-full bg-muted text-base"
                     >
                         ✕
                     </button>

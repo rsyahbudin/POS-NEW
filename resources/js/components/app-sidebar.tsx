@@ -60,12 +60,6 @@ const top: Item[] = [
         permission: ['create-order', 'receive-payment'],
     },
     {
-        title: 'Shift',
-        href: '/shift',
-        icon: Coins,
-        permission: 'open-close-shift',
-    },
-    {
         title: 'Dapur (KDS)',
         href: '/kds',
         icon: ChefHat,
@@ -206,6 +200,12 @@ const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
         title: 'Keuangan',
         icon: BookOpenCheck,
         items: [
+            {
+                title: 'Shift & Kas',
+                href: '/shift',
+                icon: Coins,
+                permission: 'manage-shifts-any',
+            },
             {
                 title: 'Pengeluaran',
                 href: '/admin/expenses',

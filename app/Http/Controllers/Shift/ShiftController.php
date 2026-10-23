@@ -52,7 +52,7 @@ class ShiftController extends Controller
         $data = $request->validate(['opening_cash' => 'required|integer|min:0', 'device_label' => 'nullable|string|max:60']);
         $action->handle($this->actor($request), (int) $data['opening_cash'], $data['device_label'] ?? null);
 
-        return redirect()->route('shift.index')->with('success', 'Shift dibuka.');
+        return back()->with('success', 'Shift dibuka.');
     }
 
     public function movement(Request $request, AddCashMovementAction $action): RedirectResponse

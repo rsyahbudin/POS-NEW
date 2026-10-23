@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { DiscountDialog } from '@/components/pos/discount-dialog';
 import { ModifierSheet } from '@/components/pos/modifier-sheet';
+import { OpenShiftDialog } from '@/components/pos/open-shift-dialog';
 import { Modal } from '@/components/pos/modal';
 import { MoveDialog } from '@/components/pos/move-dialog';
 import { OrderPanel } from '@/components/pos/order-panel';
@@ -87,6 +88,7 @@ type Props = {
         refund: boolean;
         discount: boolean;
         discount_custom: boolean;
+        open_shift: boolean;
         confirm_qr: boolean;
     };
     settings: {
@@ -132,6 +134,27 @@ export default function PosPage(props: Props) {
     const [dialog, setDialog] = useState<Dialog>(null);
     const [inbox, setInbox] = useState(false);
     const [sheet, setSheet] = useState(false);
+    // A cashier who arrives without an open shift is asked once per session to open one, right here.
+    const [openingShift, setOpeningShift] = useState(() => {
+        try {
+            return (
+                !props.shift &&
+                props.can.open_shift &&
+                sessionStorage.getItem('pos-shift-prompt') === null
+            );
+        } catch {
+            return false;
+        }
+    });
+    const closeShiftPrompt = () => {
+        setOpeningShift(false);
+
+        try {
+            sessionStorage.setItem('pos-shift-prompt', '1');
+        } catch {
+            // private mode: the prompt may show again after a reload, which is harmless
+        }
+    };
     const [sending, setSending] = useState(false);
     const [markMode, setMarkMode] = useState(false);
     const pin = usePinGate();
@@ -847,7 +870,13 @@ export default function PosPage(props: Props) {
                             size="sm"
                             className="h-11"
                         >
-                            <Link href="/shift">
+                            <Link
+                                href="/shift"
+                                aria-label={t(
+                                    'Kas masuk/keluar dan tutup shift',
+                                )}
+                                title={t('Kas masuk/keluar dan tutup shift')}
+                            >
                                 <Clock />{' '}
                                 <span className="hidden sm:inline">Shift</span>
                             </Link>
@@ -887,9 +916,20 @@ export default function PosPage(props: Props) {
                         <span>
                             {t('Buka shift untuk menerima pembayaran.')}
                         </span>
-                        <Button asChild size="sm" className="h-10">
-                            <Link href="/shift">{t('Buka shift')}</Link>
-                        </Button>
+                        {can.open_shift ? (
+                            <Button
+                                type="button"
+                                size="sm"
+                                className="h-10"
+                                onClick={() => setOpeningShift(true)}
+                            >
+                                {t('Buka shift')}
+                            </Button>
+                        ) : (
+                            <span className="text-xs">
+                                {t('Minta kasir atau manager membuka shift.')}
+                            </span>
+                        )}
                     </div>
                 )}
 
@@ -1337,6 +1377,12 @@ export default function PosPage(props: Props) {
             )}
             {dialog?.kind === 'printer' && (
                 <PrinterDialog onClose={() => setDialog(null)} />
+            )}
+            {openingShift && !props.shift && (
+                <OpenShiftDialog
+                    suggested={props.suggestedOpening}
+                    onClose={closeShiftPrompt}
+                />
             )}
             {pin.dialog}
         </>

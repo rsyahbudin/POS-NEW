@@ -144,6 +144,7 @@ export type FloorTable = {
         number: string;
         grand_total: number;
         bill_requested: boolean;
+        opened_at: string | null;
     } | null;
 };
 

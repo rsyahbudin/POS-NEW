@@ -46,7 +46,7 @@ class MenuPresenter
             'tables' => $a->tables->map(fn ($t) => [
                 'id' => $t->id, 'public_id' => $t->public_id, 'name' => $t->name, 'capacity' => $t->capacity,
                 'status' => $t->status->value, 'qr_enabled' => $t->qr_enabled,
-                'order' => ($o = $open->get($t->id)) ? ['id' => $o->id, 'number' => $o->number, 'grand_total' => $o->grand_total, 'bill_requested' => $o->bill_requested_at !== null] : null,
+                'order' => ($o = $open->get($t->id)) ? ['id' => $o->id, 'number' => $o->number, 'grand_total' => $o->grand_total, 'bill_requested' => $o->bill_requested_at !== null, 'opened_at' => $o->created_at?->toIso8601String()] : null,
             ])->all(),
         ])->all();
     }

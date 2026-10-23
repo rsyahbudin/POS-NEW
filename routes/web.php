@@ -28,6 +28,7 @@ use App\Http\Controllers\Pos\OrderController;
 use App\Http\Controllers\Pos\PosController;
 use App\Http\Controllers\Pos\QzTrayController;
 use App\Http\Controllers\Pos\SoldOutController;
+use App\Http\Controllers\Pos\TodayController;
 use App\Http\Controllers\Print\PrintStationController;
 use App\Http\Controllers\Qr\QrMenuController;
 use App\Http\Controllers\Qr\QrPaymentController;
@@ -75,6 +76,7 @@ Route::get('/', function () {
 })->name('home');
 
 Route::middleware(['auth', 'staff'])->group(function () {
+    Route::get('today', TodayController::class)->middleware('permission:view-today-summary')->name('today');
     Route::get('dashboard', [ReportController::class, 'dashboard'])->middleware('permission:view-sales-reports')->name('dashboard');
 
     // Cashier / waiter

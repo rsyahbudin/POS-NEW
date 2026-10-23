@@ -2,6 +2,7 @@
 
 use App\Domain\Ordering\Models\Order;
 use App\Domain\Shift\Actions\CloseShiftAction;
+use Spatie\Permission\PermissionRegistrar;
 
 it('shows every staff role all the transactions of the shift, whoever made them', function () {
     $cashier = userWithRole('cashier');
@@ -50,4 +51,21 @@ it('lists the shift transactions on the shift page for every staff role that may
             fn ($p) => $p->has('transactions', 1)->where('transactions.0.number', $order->number)->where('transactions.0.paid_by', userWithRole('manager')->name),
         );
     }
+});
+
+it('gives cashier, waiter and kitchen a Today page with the day sales, and respects the permission', function () {
+    $cashier = userWithRole('cashier');
+    openShiftFor($cashier, 0);
+    pay(placeOrder($cashier, type: 'takeaway'), $cashier);
+
+    foreach (['cashier' => '/pos', 'waiter' => '/pos', 'kitchen' => '/kds'] as $role => $back) {
+        $this->actingAs(userWithRole($role))->get('/today')->assertOk()->assertInertia(
+            fn ($p) => $p->component('pos/today')->where('metrics.orders', 1)->where('metrics.revenue', 44000)->where('back', $back),
+        );
+    }
+
+    $waiter = userWithRole('waiter');
+    $waiter->roles->firstOrFail()->revokePermissionTo('view-today-summary');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+    $this->actingAs($waiter->fresh())->get('/today')->assertForbidden();
 });

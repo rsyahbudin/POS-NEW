@@ -49,6 +49,7 @@ final class PermissionCatalog
                 'manage-assets' => ['label' => 'Kelola aset & alat', 'hint' => 'Tambah/ubah/hapus aset, catat servis dan perbaikan.'],
                 'import-data' => ['label' => 'Impor dari Excel', 'hint' => 'Mengunggah template Excel untuk bahan, pembelian, resep, menu, dan aset. Tetap butuh izin kelola layar yang bersangkutan.'],
                 'manage-suppliers' => ['label' => 'Kelola data pemasok', 'hint' => 'Tambah/ubah pemasok, lihat riwayat belanja dan perbandingan harga.'],
+                'view-today-summary' => ['label' => 'Lihat ringkasan penjualan hari ini', 'hint' => 'Halaman Hari Ini dari menu akun: omzet, jumlah transaksi, penjualan per jam, menu terlaris. Untuk staf tanpa akses dashboard.'],
                 'mark-sold-out' => ['label' => 'Tandai menu habis', 'hint' => 'Menandai menu habis / tersedia lagi dari layar kasir. Menu habis ikut hilang dari QR pelanggan.'],
                 'record-waste' => ['label' => 'Catat bahan / menu terbuang', 'hint' => 'Mencatat waste dengan alasan. Stok berkurang dan nilainya masuk laporan waste.'],
                 'export-receipts' => ['label' => 'Unduh struk satu bulan (PDF)', 'hint' => 'Membuat satu PDF berisi semua struk di bulan dan tahun yang dipilih, termasuk bulan yang sudah lewat.'],

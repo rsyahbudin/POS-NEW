@@ -1,5 +1,5 @@
 import { Link, router, usePage } from '@inertiajs/react';
-import { Ban, History, LogOut, Printer } from 'lucide-react';
+import { Ban, BarChart3, History, LogOut, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -24,6 +24,9 @@ export function AccountMenu({
     onSoldOut?: () => void;
 }) {
     const user = usePage().props.auth.user;
+    const canToday = (
+        (usePage().props.auth.user?.permissions as string[] | undefined) ?? []
+    ).includes('view-today-summary');
     const initials = useInitials();
 
     if (!user) {
@@ -60,6 +63,14 @@ export function AccountMenu({
                     >
                         <History className="mr-2" />
                         {t('Riwayat transaksi')}
+                    </DropdownMenuItem>
+                )}
+                {canToday && (
+                    <DropdownMenuItem asChild className="h-11 text-base">
+                        <Link className="w-full cursor-pointer" href="/today">
+                            <BarChart3 className="mr-2" />
+                            {t('Ringkasan hari ini')}
+                        </Link>
                     </DropdownMenuItem>
                 )}
                 {onSoldOut && (

@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\MenuController;
 use App\Http\Controllers\Admin\OnlinePaymentController;
 use App\Http\Controllers\Admin\PaymentSettingsController;
 use App\Http\Controllers\Admin\PrinterController;
+use App\Http\Controllers\Admin\ReceiptExportController;
 use App\Http\Controllers\Admin\RecipeController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\RoleController;
@@ -207,6 +208,13 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::delete('modifier-groups/{group}', [MenuController::class, 'deleteModifierGroup'])->name('modifier-groups.destroy');
         });
 
+        Route::middleware('permission:export-receipts')->group(function () {
+            Route::get('receipt-exports', [ReceiptExportController::class, 'index'])->name('receipt-exports');
+            Route::get('receipt-exports/preview', [ReceiptExportController::class, 'preview'])->name('receipt-exports.preview');
+            Route::post('receipt-exports', [ReceiptExportController::class, 'store'])->name('receipt-exports.store');
+            Route::get('receipt-exports/{export}/download', [ReceiptExportController::class, 'download'])->name('receipt-exports.download');
+            Route::delete('receipt-exports/{export}', [ReceiptExportController::class, 'destroy'])->name('receipt-exports.destroy');
+        });
         Route::middleware('permission:manage-online-payments')->group(function () {
             Route::get('online-payments', [OnlinePaymentController::class, 'index'])->name('online-payments');
             Route::post('online-payments/{onlinePayment}/retry', [OnlinePaymentController::class, 'retry'])->name('online-payments.retry');

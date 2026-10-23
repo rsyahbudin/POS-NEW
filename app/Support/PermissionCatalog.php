@@ -50,6 +50,7 @@ final class PermissionCatalog
                 'import-data' => ['label' => 'Impor dari Excel', 'hint' => 'Mengunggah template Excel untuk bahan, pembelian, resep, menu, dan aset. Tetap butuh izin kelola layar yang bersangkutan.'],
                 'manage-suppliers' => ['label' => 'Kelola data pemasok', 'hint' => 'Tambah/ubah pemasok, lihat riwayat belanja dan perbandingan harga.'],
                 'record-waste' => ['label' => 'Catat bahan / menu terbuang', 'hint' => 'Mencatat waste dengan alasan. Stok berkurang dan nilainya masuk laporan waste.'],
+                'export-receipts' => ['label' => 'Unduh struk satu bulan (PDF)', 'hint' => 'Membuat satu PDF berisi semua struk di bulan dan tahun yang dipilih, termasuk bulan yang sudah lewat.'],
                 'view-waste-report' => ['label' => 'Laporan waste', 'hint' => 'Nilai rupiah dan penyebab bahan terbuang.'],
                 'manage-online-payments' => ['label' => 'Pembayaran QRIS online', 'hint' => 'Melihat daftar pembayaran QRIS dari HP pelanggan, mencatat ulang yang tertahan, dan menerima peringatannya.'],
                 'manage-discount-presets' => ['label' => 'Kelola diskon & promo', 'hint' => 'Halaman Diskon & Promo: diskon bernama yang dipilih kasir (mis. Staff 10%) dan promo terjadwal (Happy Hour).'],

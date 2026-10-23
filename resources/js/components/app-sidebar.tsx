@@ -7,6 +7,7 @@ import {
     Coins,
     History,
     FileBarChart,
+    FileDown,
     LayoutGrid,
     Monitor,
     CreditCard,
@@ -169,6 +170,12 @@ const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 icon: Timer,
                 permission: 'view-kitchen-report',
                 feature: 'kds',
+            },
+            {
+                title: 'Struk Bulanan',
+                href: '/admin/receipt-exports',
+                icon: FileDown,
+                permission: 'export-receipts',
             },
             {
                 title: 'Laporan Waste',

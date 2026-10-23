@@ -20,6 +20,9 @@ Schedule::command('days:auto-close')->everyThirtyMinutes()->withoutOverlapping()
 // QRIS online: expire old codes, catch missed webhooks, book payments that waited for an open shift.
 Schedule::command('qris:sweep')->everyMinute()->withoutOverlapping();
 
+// Monthly receipt PDFs are only kept for a month.
+Schedule::command('receipt-exports:prune')->dailyAt('03:20');
+
 // Notifications: keep the bell light.
 Schedule::command('notifications:prune')->dailyAt('03:15');
 

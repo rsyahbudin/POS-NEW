@@ -300,6 +300,7 @@ Modul 4.1–4.15 adalah inti POS; 4.16–4.27 ditambahkan setelah MVP. Setiap kr
 - Alasan dari daftar yang dikelola manager (Basi/busuk, Kadaluarsa, Tumpah, Rusak/pecah, Salah buat, Lainnya).
 - Nilai rupiah dibekukan pada biaya rata-rata saat itu; pelaku tercatat; manager dinotifikasi bila pencatat bukan pengelola stok.
 - **Laporan Waste:** nilai total, item dan alasan terbanyak, pengelompokan per item/alasan/pencatat/hari, rincian kejadian, ekspor Excel/PDF.
+- **Struk Bulanan (PDF):** izin `export-receipts` (owner, manager). Pilih bulan dan tahun (termasuk bulan yang sudah lewat dan beda tahun), sistem membuat SATU PDF berisi struk semua transaksi lunas pada hari usaha di bulan itu. Dibuat di latar belakang per 250 struk lalu digabung, status Antre/Sedang dibuat/Siap/Gagal, diunduh sebagai `struk-YYYY-MM.pdf`, disimpan 30 hari lalu dihapus otomatis, permintaan ganda untuk periode yang sama ditolak, dicatat di jejak aktivitas.
 
 ### 4.20 Aset & Alat
 
@@ -650,7 +651,7 @@ Navigasi staf (sidebar), dengan izin yang menampilkannya:
 | Kelola | **Pemasok** | Manager | Tabel pemasok, riwayat, perbandingan harga, impor. |
 | Kelola | **Aset & Alat** | Manager | Daftar alat, kondisi, riwayat servis. |
 | Kelola | **Meja & QR** | Owner, manager | Area, meja, QR, cetak PDF QR, aktif/nonaktif. |
-| Laporan | **Laporan Penjualan**, **Margin & HPP**, **Kinerja Dapur**, **Laporan Waste**, **Diskon/Void/Refund** | Owner, manager | Filter tanggal, pengelompokan, grafik, tabel, ekspor Excel/PDF. |
+| Laporan | **Laporan Penjualan**, **Margin & HPP**, **Kinerja Dapur**, **Laporan Waste**, **Diskon/Void/Refund**, **Struk Bulanan (PDF)** | Owner, manager | Filter tanggal, pengelompokan, grafik, tabel, ekspor Excel/PDF. |
 | Laporan | **Pembayaran Online** | Manager | Daftar transaksi QRIS online, status, catat ulang, simulasi; petunjuk aktivasi. |
 | Laporan | **Jejak Aktivitas** | Owner, manager | Daftar aksi dengan pencarian dan filter. |
 | Keuangan | **Pengeluaran** | Manager | Input pengeluaran, kategori, ekspor. |

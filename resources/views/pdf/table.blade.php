@@ -15,33 +15,38 @@
     tr:nth-child(even) td { background: #f3f4f6; }
     .num { text-align: right; white-space: nowrap; }
     tr.total td { background: #e5e7eb; font-weight: bold; border-top: 1px solid #9ca3af; }
+    h2 .sub { font-weight: normal; color: #6b7280; font-size: 10px; margin-left: 6px; }
+    .pageno { position: fixed; bottom: -14px; right: 0; color: #9ca3af; font-size: 9px; }
+    .pageno:after { content: "Halaman " counter(page); }
     .foot { margin-top: 12px; color: #9ca3af; font-size: 9px; }
 </style>
 </head>
 <body>
+<div class="pageno"></div>
 <div class="head">
     <h1>{{ $title }}</h1>
-    <div class="meta">{{ $outlet }} · dicetak {{ $printedAt }}</div>
+    <div class="meta">{{ $outlet }}@if ($subtitle) · {{ $subtitle }}@endif</div>
+    <div class="meta">Dicetak {{ $printedAt }}@if ($printedBy) oleh {{ $printedBy }}@endif</div>
 </div>
 @foreach ($sections as $i => $section)
-    @if ($i > 0 || count($sections) > 1)<h2>{{ $section['title'] }}</h2>@endif
+    @if ($i > 0 || count($sections) > 1)<h2>{{ $section['title'] }}@if ($section['subtitle'] && $section['subtitle'] !== $subtitle) <span class="sub">{{ $section['subtitle'] }}</span>@endif</h2>@endif
     @php
         $numeric = [];
         foreach ($section['headings'] as $c => $_) {
             $vals = array_filter(array_column($section['rows'], $c), fn ($v) => $v !== null && $v !== '');
-            $numeric[$c] = $vals !== [] && count(array_filter($vals, 'is_int')) === count($vals);
+            $numeric[$c] = $vals !== [] && count(array_filter($vals, fn ($v) => is_int($v) || is_float($v))) === count($vals);
         }
     @endphp
     <table>
         <thead><tr>@foreach ($section['headings'] as $c => $h)<th class="{{ $numeric[$c] ? 'num' : '' }}">{{ $h }}</th>@endforeach</tr></thead>
         <tbody>
         @forelse ($section['rows'] as $row)
-            <tr>@foreach ($row as $c => $cell)<td class="{{ ($numeric[$c] ?? false) ? 'num' : '' }}">{{ is_int($cell) ? number_format($cell, 0, ',', '.') : $cell }}</td>@endforeach</tr>
+            <tr>@foreach ($row as $c => $cell)<td class="{{ ($numeric[$c] ?? false) ? 'num' : '' }}">{{ is_int($cell) ? number_format($cell, 0, ',', '.') : (is_float($cell) ? number_format($cell, floor($cell) === $cell ? 0 : 1, ',', '.') : $cell) }}</td>@endforeach</tr>
         @empty
             <tr><td colspan="{{ count($section['headings']) }}">Tidak ada data.</td></tr>
         @endforelse
         @if ($section['totals'])
-            <tr class="total">@foreach ($section['totals'] as $c => $cell)<td class="{{ ($numeric[$c] ?? false) ? 'num' : '' }}">{{ is_int($cell) ? number_format($cell, 0, ',', '.') : $cell }}</td>@endforeach</tr>
+            <tr class="total">@foreach ($section['totals'] as $c => $cell)<td class="{{ ($numeric[$c] ?? false) ? 'num' : '' }}">{{ is_int($cell) ? number_format($cell, 0, ',', '.') : (is_float($cell) ? number_format($cell, floor($cell) === $cell ? 0 : 1, ',', '.') : $cell) }}</td>@endforeach</tr>
         @endif
         </tbody>
     </table>

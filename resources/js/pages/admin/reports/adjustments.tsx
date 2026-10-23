@@ -3,7 +3,7 @@ import { BarList, ChartCard } from '@/components/pos/charts';
 import { Field, PageHeader, ResponsiveTable } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { rupiah } from '@/lib/format';
+import { dateId, rupiah, timeId } from '@/lib/format';
 
 type R = Record<string, string | number | null>;
 type Props = {
@@ -27,6 +27,12 @@ export default function Adjustments({
     }).toString();
     const sum = (rows: R[]) =>
         rows.reduce((a, r) => a + Number(r.amount ?? 0), 0);
+    const when = (r: R) =>
+        r.at
+            ? `${dateId(String(r.at))} ${timeId(String(r.at))}`
+            : r.date
+              ? dateId(String(r.date))
+              : '-';
     const who = (r: R) =>
         !r.approver || r.approver === r.actor
             ? String(r.actor ?? '-')
@@ -108,30 +114,40 @@ export default function Adjustments({
                 <Section
                     title="Diskon"
                     headers={[
+                        'Waktu',
                         'Order',
                         'Jenis',
-                        'Nominal',
+                        'Nilai diskon',
+                        'Potongan',
                         'Alasan',
                         'Pelaku → Penyetuju',
                     ]}
+                    numeric={[4]}
                     rows={discounts.map((r) => [
+                        when(r),
                         r.number,
-                        `${r.type} ${r.value}`,
+                        r.kind,
+                        r.value_label,
                         rupiah(Number(r.amount)),
                         r.reason,
                         who(r),
                     ])}
+                    total={sum(discounts)}
                 />
                 <Section
                     title="Void item"
                     headers={[
+                        'Waktu',
                         'Order',
                         'Item',
                         'Nilai',
                         'Alasan',
                         'Pelaku → Penyetuju',
                     ]}
+                    numeric={[3]}
+                    total={sum(voids)}
                     rows={voids.map((r) => [
+                        when(r),
                         r.number,
                         `${r.item} ×${r.qty}`,
                         rupiah(Number(r.amount)),
@@ -141,8 +157,17 @@ export default function Adjustments({
                 />
                 <Section
                     title="Refund"
-                    headers={['Order', 'Nominal', 'Alasan', 'Penyetuju']}
+                    headers={[
+                        'Waktu',
+                        'Order',
+                        'Nominal',
+                        'Alasan',
+                        'Penyetuju',
+                    ]}
+                    numeric={[2]}
+                    total={sum(refunds)}
                     rows={refunds.map((r) => [
+                        when(r),
                         r.number,
                         rupiah(Number(r.amount)),
                         r.reason,
@@ -152,17 +177,21 @@ export default function Adjustments({
                 <Section
                     title="Komplimen & staff meal (harga jual)"
                     headers={[
+                        'Waktu',
                         'Order',
                         'Item',
                         'Nilai',
                         'Jenis',
                         'Alasan / penyetuju',
                     ]}
+                    numeric={[3]}
+                    total={sum(comps)}
                     rows={comps.map((r) => [
+                        when(r),
                         r.number,
                         `${r.item} ×${r.qty}`,
                         rupiah(Number(r.amount)),
-                        r.type,
+                        r.type === 'staff_meal' ? 'Staff meal' : 'Komplimen',
                         `${r.reason} · ${r.approver ?? '-'}`,
                     ])}
                 />
@@ -175,15 +204,42 @@ function Section({
     title,
     headers,
     rows,
+    numeric,
+    total,
 }: {
     title: string;
     headers: string[];
     rows: (string | number | null)[][];
+    numeric?: number[];
+    total: number;
 }) {
+    const amountCol = numeric?.[0] ?? 0;
+
     return (
         <section>
-            <h2 className="mb-2 font-semibold">{title}</h2>
-            <ResponsiveTable headers={headers} rows={rows} />
+            <h2 className="mb-2 font-semibold">
+                {title}{' '}
+                <span className="font-normal text-muted-foreground">
+                    · {rows.length} kejadian
+                </span>
+            </h2>
+            <ResponsiveTable
+                headers={headers}
+                rows={rows}
+                numeric={numeric}
+                empty="Tidak ada pada periode ini."
+                footer={
+                    rows.length > 0
+                        ? headers.map((_, i) =>
+                              i === 0
+                                  ? 'Total'
+                                  : i === amountCol
+                                    ? rupiah(total)
+                                    : '',
+                          )
+                        : undefined
+                }
+            />
         </section>
     );
 }

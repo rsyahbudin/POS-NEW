@@ -70,7 +70,9 @@ it('reports sales per order not per bill and nets out refunds', function () {
     $d = BusinessDate::for();
     $s = app(SalesReports::class);
 
-    expect($s->summary($d, $d))->toBe(['orders' => 1, 'gross' => 44000, 'refunds' => 4000, 'net' => 40000, 'discounts' => 0])
+    expect($s->summary($d, $d))->toBe(['orders' => 1, 'gross' => 44000, 'refunds' => 4000, 'net' => 40000, 'discounts' => 0, 'subtotal' => 44000, 'charges' => 0, 'rounding' => 0, 'average' => 40000])
+        ->and($s->by('day', $d, $d)->first())->toMatchObject(['subtotal' => 44000, 'refunds' => 4000, 'total' => 40000, 'average' => 40000])
+        ->and($s->by('type', $d, $d)->first()->display)->toBeIn(['Dine-in', 'Takeaway', 'Online / Ojol'])
         ->and($s->dashboard($d)['revenue'])->toBe(40000)
         ->and($s->by('product', $d, $d)->first()->total)->toBe(44000)
         ->and($s->by('method', $d, $d)->first()->total)->toBe(40000);

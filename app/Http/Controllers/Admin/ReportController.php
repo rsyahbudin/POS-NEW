@@ -43,6 +43,7 @@ class ReportController extends Controller
             'filters' => ['from' => $from, 'to' => $to, 'dimension' => $dimension],
             'summary' => $this->reports->summary($from, $to),
             'rows' => $this->reports->by($dimension, $from, $to),
+            'detailed' => in_array($dimension, SalesReports::ORDER_DIMENSIONS, true),
             'dimensions' => SalesReports::DIMENSIONS,
         ]);
     }
@@ -108,15 +109,20 @@ class ReportController extends Controller
         $labels = ['product' => 'Produk', 'category' => 'Kategori', 'day' => 'Hari'];
         $sub = 'Periode '.$this->rangeLabel($from, $to);
         $s = $margin->summary($from, $to);
+        $by = $margin->by($dimension, $from, $to);
+        $stock = $margin->stock();
 
         return ReportFile::download((string) $request->input('format', 'xlsx'), "Margin {$labels[$dimension]} {$from} {$to}", [
             new ReportSheet("Margin per {$labels[$dimension]}", $sub, [$labels[$dimension], 'Terjual', 'Penjualan', 'HPP', 'Laba kotor', 'Margin %'],
-                $margin->by($dimension, $from, $to)->map(fn ($r) => [$r->label, $r->qty, $r->revenue, $r->cogs, $r->profit, $r->margin_pct])->all()),
+                $by->map(fn ($r) => [$r->label, $r->qty, $r->revenue, $r->cogs, $r->profit, $r->margin_pct])->all(),
+                ['Total', (int) $by->sum('qty'), (int) $by->sum('revenue'), (int) $by->sum('cogs'), (int) $by->sum('profit'),
+                    (int) $by->sum('revenue') > 0 ? round((int) $by->sum('profit') / (int) $by->sum('revenue') * 100, 1) : 0.0]),
             new ReportSheet('Ringkasan', $sub, ['Keterangan', 'Nilai'], [
                 ['Penjualan', $s['revenue']], ['HPP (biaya bahan)', $s['cogs']], ['Laba kotor', $s['profit']], ['Margin %', $s['margin_pct']], ['Porsi tanpa resep/HPP', $s['uncosted_qty']],
             ]),
             new ReportSheet('Stok bahan', 'Saat ini', ['Bahan', 'Satuan', 'Stok', 'Biaya rata-rata', 'Nilai stok', 'Batas minimum'],
-                $margin->stock()->map(fn ($r) => [$r->name, $r->unit, $r->stock, $r->avg_cost, $r->value, $r->min_stock])->all()),
+                $stock->map(fn ($r) => [$r->name, $r->unit, $r->stock, $r->avg_cost, $r->value, $r->min_stock])->all(),
+                ['Total nilai stok', '', '', '', (int) $stock->sum('value'), '']),
         ]);
     }
 
@@ -143,9 +149,11 @@ class ReportController extends Controller
         $labels = ['item' => 'Item', 'reason' => 'Alasan', 'person' => 'Pencatat', 'day' => 'Hari'];
         $sub = 'Periode '.$this->rangeLabel($from, $to);
         $s = $waste->summary($from, $to);
+        $wasteBy = $waste->by($dimension, $from, $to);
 
         return ReportFile::download((string) $request->input('format', 'xlsx'), "Waste {$labels[$dimension]} {$from} {$to}", [
-            new ReportSheet("Waste per {$labels[$dimension]}", $sub, [$labels[$dimension], 'Kejadian', 'Nilai (Rp)', '% dari total'], array_map(fn ($r) => [$r->label, $r->entries, $r->cost, $r->share_pct], $waste->by($dimension, $from, $to))),
+            new ReportSheet("Waste per {$labels[$dimension]}", $sub, [$labels[$dimension], 'Kejadian', 'Nilai (Rp)', '% dari total'], array_map(fn ($r) => [$r->label, $r->entries, $r->cost, $r->share_pct], $wasteBy),
+                ['Total', (int) array_sum(array_map(fn ($r) => $r->entries, $wasteBy)), (int) array_sum(array_map(fn ($r) => $r->cost, $wasteBy)), '']),
             new ReportSheet('Rincian', $sub, ['Waktu', 'Item', 'Jumlah', 'Satuan', 'Alasan', 'Catatan', 'Nilai (Rp)', 'Pencatat'],
                 array_map(fn ($e) => [$e['at'], $e['label'], $e['qty'], $e['unit'], $e['reason'], $e['note'] ?? '', $e['cost'], $e['user'] ?? '-'], $waste->entries($from, $to, 5000))),
             new ReportSheet('Ringkasan', $sub, ['Keterangan', 'Nilai'], [['Total nilai terbuang', $s['cost']], ['Jumlah kejadian', $s['entries']], ['Item terbanyak', $s['top_item'] ?? '-'], ['Alasan terbanyak', $s['top_reason'] ?? '-']]),
@@ -156,7 +164,15 @@ class ReportController extends Controller
     {
         [$from, $to] = $this->params($request);
 
-        return Inertia::render('admin/reports/adjustments', ['filters' => compact('from', 'to')] + $this->reports->adjustments($from, $to));
+        $a = $this->reports->adjustments($from, $to);
+        $a['discounts'] = $a['discounts']->map(function ($r) {
+            $r->kind = self::discountKind($r->type);
+            $r->value_label = self::discountValue($r->type, (int) $r->value);
+
+            return $r;
+        });
+
+        return Inertia::render('admin/reports/adjustments', ['filters' => compact('from', 'to')] + $a);
     }
 
     public function export(Request $request): \Symfony\Component\HttpFoundation\Response
@@ -171,38 +187,70 @@ class ReportController extends Controller
             $sub = "Periode {$range}";
             $sum = fn ($rows) => (int) $rows->sum(fn ($r) => (int) $r->amount);
             $sheets = [
-                new ReportSheet('Diskon', $sub, ['Order', 'Jenis', 'Nilai', 'Potongan (Rp)', 'Alasan', 'Dilakukan oleh', 'Disetujui oleh'],
-                    $a['discounts']->map(fn ($r) => [$r->number, $r->type === 'percent' ? 'Persen' : ($r->type === 'fixed' ? 'Nominal' : 'Promo'), $r->type === 'percent' ? ((int) $r->value / 100).'%' : (string) $r->value, (int) $r->amount, $r->reason, $r->actor ?? '-', $r->approver ?? '-'])->all(),
-                    ['Total', '', '', $sum($a['discounts']), '', '', '']),
-                new ReportSheet('Void', $sub, ['Order', 'Item', 'Qty', 'Nilai (Rp)', 'Alasan', 'Dilakukan oleh', 'Disetujui oleh'],
-                    $a['voids']->map(fn ($r) => [$r->number, $r->item, (int) $r->qty, (int) $r->amount, $r->reason, $r->actor ?? '-', $r->approver ?? '-'])->all(),
-                    ['Total', '', '', $sum($a['voids']), '', '', '']),
-                new ReportSheet('Refund', $sub, ['Order', 'Nominal (Rp)', 'Alasan', 'Disetujui oleh'],
-                    $a['refunds']->map(fn ($r) => [$r->number, (int) $r->amount, $r->reason, $r->approver ?? '-'])->all(),
-                    ['Total', $sum($a['refunds']), '', '']),
-                new ReportSheet('Komplimen', $sub, ['Order', 'Item', 'Qty', 'Harga jual (Rp)', 'Jenis', 'Alasan', 'Disetujui oleh'],
-                    $a['comps']->map(fn ($r) => [$r->number, $r->item, (int) $r->qty, (int) $r->amount, $r->type === 'staff_meal' ? 'Staff meal' : 'Komplimen', $r->reason, $r->approver ?? '-'])->all(),
-                    ['Total', '', '', $sum($a['comps']), '', '', '']),
+                new ReportSheet('Diskon', $sub, ['Tanggal', 'Order', 'Jenis', 'Nilai', 'Potongan (Rp)', 'Alasan', 'Dilakukan oleh', 'Disetujui oleh'],
+                    $a['discounts']->map(fn ($r) => [$this->when($r), $r->number, self::discountKind($r->type), self::discountValue($r->type, (int) $r->value), (int) $r->amount, $r->reason, $r->actor ?? '-', $r->approver ?? '-'])->all(),
+                    ['Total', '', '', '', $sum($a['discounts']), '', '', '']),
+                new ReportSheet('Void', $sub, ['Tanggal', 'Order', 'Item', 'Qty', 'Nilai (Rp)', 'Alasan', 'Dilakukan oleh', 'Disetujui oleh'],
+                    $a['voids']->map(fn ($r) => [$this->when($r), $r->number, $r->item, (int) $r->qty, (int) $r->amount, $r->reason, $r->actor ?? '-', $r->approver ?? '-'])->all(),
+                    ['Total', '', '', '', $sum($a['voids']), '', '', '']),
+                new ReportSheet('Refund', $sub, ['Tanggal', 'Order', 'Nominal (Rp)', 'Alasan', 'Disetujui oleh'],
+                    $a['refunds']->map(fn ($r) => [$this->when($r), $r->number, (int) $r->amount, $r->reason, $r->approver ?? '-'])->all(),
+                    ['Total', '', $sum($a['refunds']), '', '']),
+                new ReportSheet('Komplimen', $sub, ['Tanggal', 'Order', 'Item', 'Qty', 'Harga jual (Rp)', 'Jenis', 'Alasan', 'Disetujui oleh'],
+                    $a['comps']->map(fn ($r) => [$this->when($r), $r->number, $r->item, (int) $r->qty, (int) $r->amount, $r->type === 'staff_meal' ? 'Staff meal' : 'Komplimen', $r->reason, $r->approver ?? '-'])->all(),
+                    ['Total', '', '', '', $sum($a['comps']), '', '', '']),
             ];
 
-            return ReportFile::download($format, "{$title} {$from} {$to}", $sheets);
+            return ReportFile::download($format, "{$title} {$from} {$to}", $sheets, $title);
         }
 
         $label = self::DIMENSION_LABELS[$dimension];
         $rows = $this->reports->by($dimension, $from, $to);
         $qtyDim = in_array($dimension, ['product', 'category'], true);
         $summary = $this->reports->summary($from, $to);
+        $detailed = in_array($dimension, SalesReports::ORDER_DIMENSIONS, true);
         $sheets = [
-            new ReportSheet("Penjualan {$label}", "Periode {$range}", [$label, $qtyDim ? 'Qty' : 'Jumlah order', 'Total (Rp)'],
-                $rows->map(fn ($r) => [$r->label, $r->orders, $r->total])->all(),
-                ['Total', (int) $rows->sum('orders'), (int) $rows->sum('total')]),
+            $detailed
+                ? new ReportSheet("Penjualan {$label}", "Periode {$range}", [$label, 'Order', 'Subtotal menu', 'Diskon', 'Pajak & biaya', 'Pembulatan', 'Refund', 'Penjualan bersih', 'Rata-rata/order'],
+                    $rows->map(fn ($r) => [$r->display, $r->orders, $r->subtotal, $r->discount, $r->charges, $r->rounding, $r->refunds, $r->total, $r->average])->all(),
+                    ['Total', (int) $rows->sum('orders'), (int) $rows->sum('subtotal'), (int) $rows->sum('discount'), (int) $rows->sum('charges'), (int) $rows->sum('rounding'), (int) $rows->sum('refunds'), (int) $rows->sum('total'),
+                        (int) $rows->sum('orders') > 0 ? intdiv((int) $rows->sum('total'), (int) $rows->sum('orders')) : 0])
+                : new ReportSheet("Penjualan {$label}", "Periode {$range}", [$label, $qtyDim ? 'Qty' : 'Jumlah transaksi', 'Total (Rp)'],
+                    $rows->map(fn ($r) => [$r->display, $r->orders, $r->total])->all(),
+                    ['Total', (int) $rows->sum('orders'), (int) $rows->sum('total')]),
             new ReportSheet('Ringkasan', "Periode {$range}", ['Keterangan', 'Nilai'], [
-                ['Jumlah order', $summary['orders']], ['Penjualan kotor (Rp)', $summary['gross']], ['Diskon (Rp)', $summary['discounts']],
-                ['Refund (Rp)', $summary['refunds']], ['Penjualan bersih (Rp)', $summary['net']],
+                ['Jumlah order', $summary['orders']], ['Subtotal menu (Rp)', $summary['subtotal']], ['Diskon (Rp)', $summary['discounts']],
+                ['Pajak & biaya layanan (Rp)', $summary['charges']], ['Pembulatan (Rp)', $summary['rounding']], ['Total ditagih (Rp)', $summary['gross']],
+                ['Refund (Rp)', $summary['refunds']], ['Penjualan bersih (Rp)', $summary['net']], ['Rata-rata per order (Rp)', $summary['average']],
             ]),
         ];
 
-        return ReportFile::download($format, "Laporan penjualan {$label} {$from} {$to}", $sheets);
+        return ReportFile::download($format, "Laporan penjualan {$label} {$from} {$to}", $sheets, "Laporan penjualan per {$label}");
+    }
+
+    private function when(\stdClass $r): string
+    {
+        if (! empty($r->at)) {
+            return CarbonImmutable::parse($r->at)->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i');
+        }
+
+        return empty($r->date) ? '-' : CarbonImmutable::parse($r->date)->translatedFormat('d M Y');
+    }
+
+    public static function discountKind(string $type): string
+    {
+        return match ($type) {
+            'percent' => 'Persen', 'fixed' => 'Nominal', default => 'Promo',
+        };
+    }
+
+    public static function discountValue(string $type, int $value): string
+    {
+        return match ($type) {
+            'percent' => rtrim(rtrim(number_format($value / 100, 2, ',', '.'), '0'), ',').'%',
+            'fixed' => 'Rp '.number_format($value, 0, ',', '.'),
+            default => '-',
+        };
     }
 
     private function rangeLabel(string $from, string $to): string

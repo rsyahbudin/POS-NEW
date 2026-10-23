@@ -92,12 +92,17 @@ it('builds styled Excel files with real numbers, totals and a frozen header', fu
     $book = IOFactory::load($path);
     $sheet = $book->getSheetByName('Penjualan Produk');
 
-    expect($book->getSheetNames())->toBe(['Penjualan Produk', 'Ringkasan'])
+    expect($book->getSheetNames())->toBe(['Ringkasan', 'Penjualan Produk'])   // the summary opens first
         ->and($sheet->getCell('A1')->getValue())->toBe('Penjualan Produk')
-        ->and($sheet->getCell('A4')->getValue())->toBe('Produk')
-        ->and($sheet->getCell('C5')->getValue())->toBe(44000)                // numeric cell, not text
-        ->and($sheet->getCell('A6')->getValue())->toBe('Total')
-        ->and($sheet->getFreezePane())->toBe('A5');
+        ->and($sheet->getCell('A2')->getValue())->toContain('Periode')
+        ->and($sheet->getCell('A3')->getValue())->toStartWith('Dicetak')
+        ->and($sheet->getCell('A5')->getValue())->toBe('Produk')
+        ->and($sheet->getCell('C6')->getValue())->toBe(44000)                // numeric cell, not text
+        ->and($sheet->getStyle('C6')->getNumberFormat()->getFormatCode())->toBe('#,##0')
+        ->and($sheet->getCell('A7')->getValue())->toBe('Total')
+        ->and($sheet->getFreezePane())->toBe('A6');
+    $summary = $book->getSheetByName('Ringkasan');
+    expect($summary->getStyle('B6')->getNumberFormat()->getFormatCode())->toBe('#,##0');
     @unlink($path);
 
     foreach (['/admin/expenses/export', '/admin/day-close/export', '/admin/accounting/export?report=accounts', '/admin/accounting/export?report=cash_flow'] as $url) {

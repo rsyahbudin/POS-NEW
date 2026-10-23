@@ -101,11 +101,12 @@ class AssetController extends Controller
         $assets = Asset::query()->where('outlet_id', $this->outlet->id())->orderBy('category')->orderBy('name')->get();
         $rows = $assets->map(fn (Asset $a) => [
             $a->code, $a->name, $a->category ?? '', trim(($a->brand ?? '').' '.($a->model ?? '')), $a->serial ?? '', $a->quantity, $a->location ?? '',
-            Asset::CONDITIONS[$a->condition] ?? $a->condition, $a->purchased_on?->toDateString() ?? '', $a->purchase_price, $a->quantity * $a->purchase_price,
+            Asset::CONDITIONS[$a->condition] ?? $a->condition, $a->purchased_on?->translatedFormat('d M Y') ?? '', $a->purchase_price, $a->quantity * $a->purchase_price,
         ])->all();
 
         return ReportFile::download((string) $request->input('format', 'xlsx'), 'Daftar aset '.now()->toDateString(), [
-            new ReportSheet('Daftar aset', 'Per '.now()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y'), ['Kode', 'Nama', 'Kategori', 'Merek / model', 'No. seri', 'Jumlah', 'Lokasi', 'Kondisi', 'Tgl beli', 'Harga satuan', 'Nilai'], $rows),
+            new ReportSheet('Daftar aset', 'Per '.now()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y'), ['Kode', 'Nama', 'Kategori', 'Merek / model', 'No. seri', 'Jumlah', 'Lokasi', 'Kondisi', 'Tgl beli', 'Harga satuan', 'Nilai (Rp)'], $rows,
+                ['Total', '', '', '', '', (int) $assets->sum('quantity'), '', '', '', '', (int) $assets->sum(fn (Asset $a) => $a->quantity * $a->purchase_price)]),
         ]);
     }
 

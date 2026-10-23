@@ -460,6 +460,7 @@ export function ResponsiveTable({
     numeric = [],
     toolbar,
     sortable = true,
+    footer,
 }: {
     headers: string[];
     rows: ReactNode[][];
@@ -467,6 +468,8 @@ export function ResponsiveTable({
     numeric?: number[];
     toolbar?: boolean;
     sortable?: boolean;
+    /** A totals row shown under the table (and as the last card on phones). */
+    footer?: ReactNode[];
 }) {
     const [query, setQuery] = useState('');
     const [filters, setFilters] = useState<Record<number, string>>({});
@@ -797,6 +800,24 @@ export function ResponsiveTable({
                                     </tr>
                                 ))}
                             </tbody>
+                            {footer && (
+                                <tfoot className="border-t-2 bg-muted/40 font-semibold">
+                                    <tr>
+                                        {footer.map((cell, i) => (
+                                            <td
+                                                key={i}
+                                                className={cn(
+                                                    'px-4 py-3',
+                                                    numeric.includes(i) &&
+                                                        'text-right tabular-nums',
+                                                )}
+                                            >
+                                                {cell}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                </tfoot>
+                            )}
                         </table>
                     </div>
                     <div className="grid gap-2 md:hidden">
@@ -823,6 +844,28 @@ export function ResponsiveTable({
                                 </dl>
                             </div>
                         ))}
+                        {footer && (
+                            <div className="rounded-xl border-2 bg-muted/40 p-3.5 font-semibold">
+                                <p>{footer[0]}</p>
+                                <dl className="mt-1 grid gap-0.5 text-sm">
+                                    {footer.slice(1).map((cell, i) =>
+                                        cell === '' || cell === null ? null : (
+                                            <div
+                                                key={i}
+                                                className="flex justify-between gap-3"
+                                            >
+                                                <dt className="font-normal text-muted-foreground">
+                                                    {headers[i + 1]}
+                                                </dt>
+                                                <dd className="text-right tabular-nums">
+                                                    {cell}
+                                                </dd>
+                                            </div>
+                                        ),
+                                    )}
+                                </dl>
+                            </div>
+                        )}
                     </div>
                 </>
             )}

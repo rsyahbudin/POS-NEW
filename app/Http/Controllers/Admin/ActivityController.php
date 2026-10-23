@@ -38,7 +38,7 @@ class ActivityController extends Controller
         $rows = $this->log->rows($from, $to, $user, $group, $q, 5000);
 
         return ReportFile::download((string) $request->input('format', 'xlsx'), "Jejak aktivitas {$from} {$to}", [
-            new ReportSheet('Jejak aktivitas', "Periode {$from} s/d {$to}", ['Waktu', 'Pelaku', 'Aksi', 'Kelompok', 'Detail'],
+            new ReportSheet('Jejak aktivitas', 'Periode '.CarbonImmutable::parse($from)->translatedFormat('d M Y').' s/d '.CarbonImmutable::parse($to)->translatedFormat('d M Y'), ['Waktu', 'Pelaku', 'Aksi', 'Kelompok', 'Detail'],
                 array_map(fn ($r) => [$r['at'], $r['actor'], $r['event'], $r['group'], $r['detail']], $rows)),
         ]);
     }

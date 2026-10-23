@@ -2,6 +2,7 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import {
+    Combobox,
     Field,
     PageHeader,
     ResponsiveTable,
@@ -97,12 +98,17 @@ export default function WastePage({
                 {tab === 'ingredient' ? (
                     <section className="grid max-w-xl gap-3 rounded-xl border bg-card p-4">
                         <Field label="Bahan">
-                            <Select
+                            <Combobox
+                                aria-label="Bahan"
+                                placeholder="Cari bahan…"
+                                options={ingredients.map((i) => ({
+                                    value: i.id,
+                                    label: i.name,
+                                    hint: i.unit,
+                                }))}
                                 value={ing.id}
-                                onChange={(e) => {
-                                    const id = e.target.value
-                                        ? Number(e.target.value)
-                                        : '';
+                                onChange={(v) => {
+                                    const id = v === '' ? '' : Number(v);
                                     setIng({
                                         ...ing,
                                         id,
@@ -111,14 +117,7 @@ export default function WastePage({
                                                 ?.unit ?? '',
                                     });
                                 }}
-                            >
-                                <option value="">Pilih bahan…</option>
-                                {ingredients.map((i) => (
-                                    <option key={i.id} value={i.id}>
-                                        {i.name}
-                                    </option>
-                                ))}
-                            </Select>
+                            />
                         </Field>
                         <div className="grid grid-cols-2 gap-3">
                             <Field label="Jumlah">
@@ -226,25 +225,22 @@ export default function WastePage({
                             dikurangi.
                         </p>
                         <Field label="Menu">
-                            <Select
+                            <Combobox
+                                aria-label="Menu"
+                                placeholder="Cari menu…"
+                                options={products.map((p) => ({
+                                    value: p.id,
+                                    label: p.name,
+                                }))}
                                 value={prod.id}
-                                onChange={(e) =>
+                                onChange={(v) =>
                                     setProd({
                                         ...prod,
-                                        id: e.target.value
-                                            ? Number(e.target.value)
-                                            : '',
+                                        id: v === '' ? '' : Number(v),
                                         variant: '',
                                     })
                                 }
-                            >
-                                <option value="">Pilih menu…</option>
-                                {products.map((p) => (
-                                    <option key={p.id} value={p.id}>
-                                        {p.name}
-                                    </option>
-                                ))}
-                            </Select>
+                            />
                         </Field>
                         <div className="grid grid-cols-2 gap-3">
                             {product && product.variants.length > 0 && (

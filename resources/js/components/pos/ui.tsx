@@ -2,10 +2,20 @@ import {
     ArrowDown,
     ArrowUp,
     ArrowUpDown,
+    Check,
     ChevronDown,
     Search,
 } from 'lucide-react';
-import { isValidElement, useMemo, useState } from 'react';
+import {
+    isValidElement,
+    useEffect,
+    useId,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
+import { createPortal } from 'react-dom';
 import type { ComponentProps, ReactNode } from 'react';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -31,6 +41,242 @@ export function Select({
                 aria-hidden
                 className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground"
             />
+        </div>
+    );
+}
+
+export type ComboOption = {
+    value: number | string;
+    label: string;
+    hint?: string;
+};
+
+/**
+ * Pick one option from a long list by typing (words in any order) or with the arrow keys. The list opens under
+ * the field and is drawn into the surrounding dialog (or the page), so tables and dialogs never clip it.
+ */
+export function Combobox({
+    options,
+    value,
+    onChange,
+    placeholder = 'Cari…',
+    emptyText = 'Tidak ada yang cocok.',
+    disabled,
+    className,
+    'aria-label': ariaLabel,
+}: {
+    options: ComboOption[];
+    value: number | string | '';
+    onChange: (value: number | string | '') => void;
+    placeholder?: string;
+    emptyText?: string;
+    disabled?: boolean;
+    className?: string;
+    'aria-label'?: string;
+}) {
+    const id = useId();
+    const input = useRef<HTMLInputElement>(null);
+    const listRef = useRef<HTMLUListElement>(null);
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState('');
+    const [active, setActive] = useState(0);
+    const [box, setBox] = useState<{
+        top: number;
+        left: number;
+        width: number;
+        fixed: boolean;
+        host: HTMLElement;
+    } | null>(null);
+    const selected = options.find((o) => o.value === value);
+    const LIMIT = 80;
+
+    const shown = useMemo(() => {
+        const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+        const all = words.length
+            ? options.filter((o) => {
+                  const text = `${o.label} ${o.hint ?? ''}`.toLowerCase();
+
+                  return words.every((w) => text.includes(w));
+              })
+            : options;
+
+        return all;
+    }, [options, query]);
+
+    // place the list under the field; inside a dialog it is positioned against the dialog itself
+    useLayoutEffect(() => {
+        if (!open || !input.current) {
+            return;
+        }
+
+        const place = () => {
+            const el = input.current;
+
+            if (!el) {
+                return;
+            }
+
+            const r = el.getBoundingClientRect();
+            const dialog = el.closest<HTMLElement>('[role="dialog"]');
+            const host = dialog ?? document.body;
+
+            if (!dialog) {
+                setBox({
+                    top: r.bottom + 4,
+                    left: r.left,
+                    width: r.width,
+                    fixed: true,
+                    host,
+                });
+
+                return;
+            }
+
+            const d = dialog.getBoundingClientRect();
+            setBox({
+                top: r.bottom - d.top + dialog.scrollTop + 4,
+                left: r.left - d.left + dialog.scrollLeft,
+                width: r.width,
+                fixed: false,
+                host,
+            });
+        };
+        place();
+        window.addEventListener('resize', place);
+        window.addEventListener('scroll', place, true);
+
+        return () => {
+            window.removeEventListener('resize', place);
+            window.removeEventListener('scroll', place, true);
+        };
+    }, [open, query]);
+
+    useEffect(() => {
+        listRef.current
+            ?.querySelector<HTMLElement>('[data-active="true"]')
+            ?.scrollIntoView({ block: 'nearest' });
+    }, [active, open, shown]);
+
+    const close = () => {
+        setOpen(false);
+        setQuery('');
+    };
+    const pick = (o: ComboOption) => {
+        onChange(o.value);
+        close();
+        input.current?.blur();
+    };
+
+    return (
+        <div className={cn('relative w-full', className)}>
+            <input
+                ref={input}
+                role="combobox"
+                aria-label={ariaLabel}
+                aria-expanded={open}
+                aria-controls={`${id}-list`}
+                aria-autocomplete="list"
+                autoComplete="off"
+                disabled={disabled}
+                placeholder={selected ? undefined : placeholder}
+                value={open ? query : (selected?.label ?? '')}
+                onFocus={(e) => {
+                    setOpen(true);
+                    setActive(0);
+                    e.target.select();
+                }}
+                onBlur={close}
+                onChange={(e) => {
+                    setQuery(e.target.value);
+                    setOpen(true);
+                    setActive(0);
+                }}
+                onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        setOpen(true);
+                        setActive((a) =>
+                            Math.min(a + 1, Math.min(shown.length, LIMIT) - 1),
+                        );
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        setActive((a) => Math.max(a - 1, 0));
+                    } else if (e.key === 'Enter' && open) {
+                        e.preventDefault();
+
+                        if (shown[active]) {
+                            pick(shown[active]);
+                        }
+                    } else if (e.key === 'Escape' && open) {
+                        e.stopPropagation();
+                        close();
+                    }
+                }}
+                className="h-11 w-full rounded-lg border border-input bg-card pr-9 pl-3 text-base outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 sm:text-sm"
+            />
+            <ChevronDown
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            {open &&
+                box &&
+                createPortal(
+                    <ul
+                        ref={listRef}
+                        id={`${id}-list`}
+                        role="listbox"
+                        style={{
+                            position: box.fixed ? 'fixed' : 'absolute',
+                            top: box.top,
+                            left: box.left,
+                            width: Math.max(box.width, 220),
+                        }}
+                        className="z-[100] max-h-64 overflow-y-auto rounded-lg border bg-popover p-1 text-sm text-popover-foreground shadow-md"
+                    >
+                        {shown.slice(0, LIMIT).map((o, i) => (
+                            <li
+                                key={o.value}
+                                role="option"
+                                aria-selected={o.value === value}
+                                data-active={i === active}
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    pick(o);
+                                }}
+                                onMouseEnter={() => setActive(i)}
+                                className={cn(
+                                    'flex cursor-pointer items-center justify-between gap-2 rounded-md px-2.5 py-2',
+                                    i === active &&
+                                        'bg-accent text-accent-foreground',
+                                )}
+                            >
+                                <span className="min-w-0 truncate">
+                                    {o.label}
+                                    {o.hint && (
+                                        <span className="ml-1.5 text-xs text-muted-foreground">
+                                            {o.hint}
+                                        </span>
+                                    )}
+                                </span>
+                                {o.value === value && (
+                                    <Check className="size-4 shrink-0 text-primary" />
+                                )}
+                            </li>
+                        ))}
+                        {shown.length === 0 && (
+                            <li className="px-2.5 py-2 text-muted-foreground">
+                                {emptyText}
+                            </li>
+                        )}
+                        {shown.length > LIMIT && (
+                            <li className="px-2.5 py-1.5 text-xs text-muted-foreground">
+                                +{shown.length - LIMIT} lainnya. Ketik untuk
+                                mempersempit.
+                            </li>
+                        )}
+                    </ul>,
+                    box.host,
+                )}
         </div>
     );
 }

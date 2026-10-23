@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from 'lucide-react';
-import { MoneyInput, Select } from '@/components/pos/ui';
+import { Combobox, MoneyInput, Select } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { rupiah } from '@/lib/format';
@@ -82,26 +82,24 @@ export function PurchaseLines({
                         return (
                             <tr key={idx} className="border-t align-top">
                                 <td className="min-w-44 p-2">
-                                    <Select
+                                    <Combobox
                                         aria-label="Bahan"
+                                        placeholder="Cari bahan…"
+                                        options={ingredients.map((i) => ({
+                                            value: i.id,
+                                            label: i.name,
+                                            hint: i.unit,
+                                        }))}
                                         value={l.ingredient_id}
-                                        onChange={(e) => {
-                                            const id = e.target.value
-                                                ? Number(e.target.value)
-                                                : '';
+                                        onChange={(v) => {
+                                            const id =
+                                                v === '' ? '' : Number(v);
                                             patch(idx, {
                                                 ingredient_id: id,
                                                 unit: find(id)?.unit ?? '',
                                             });
                                         }}
-                                    >
-                                        <option value="">Pilih bahan…</option>
-                                        {ingredients.map((i) => (
-                                            <option key={i.id} value={i.id}>
-                                                {i.name}
-                                            </option>
-                                        ))}
-                                    </Select>
+                                    />
                                 </td>
                                 <td className="p-2">
                                     <Input

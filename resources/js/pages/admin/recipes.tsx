@@ -3,7 +3,13 @@ import { FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { ImportDialog } from '@/components/pos/import-dialog';
 import { Modal } from '@/components/pos/modal';
-import { PageHeader, ResponsiveTable, Select, Tabs } from '@/components/pos/ui';
+import {
+    Combobox,
+    PageHeader,
+    ResponsiveTable,
+    Select,
+    Tabs,
+} from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { rupiah } from '@/lib/format';
@@ -322,35 +328,32 @@ export default function RecipesPage({
                                         ))}
                                     </Select>
                                 )}
-                            <Select
+                            <Combobox
                                 aria-label="Bahan"
+                                placeholder="Cari bahan…"
+                                options={ingredients.map((i) => ({
+                                    value: i.id,
+                                    label: i.name,
+                                    hint: i.unit,
+                                }))}
                                 value={l.ingredient_id}
-                                onChange={(e) =>
+                                onChange={(v) =>
                                     setEdit({
                                         ...edit,
                                         lines: edit.lines.map((x, j) =>
                                             j === idx
                                                 ? {
                                                       ...x,
-                                                      ingredient_id: e.target
-                                                          .value
-                                                          ? Number(
-                                                                e.target.value,
-                                                            )
-                                                          : '',
+                                                      ingredient_id:
+                                                          v === ''
+                                                              ? ''
+                                                              : Number(v),
                                                   }
                                                 : x,
                                         ),
                                     })
                                 }
-                            >
-                                <option value="">Pilih bahan…</option>
-                                {ingredients.map((i) => (
-                                    <option key={i.id} value={i.id}>
-                                        {i.name} ({i.unit})
-                                    </option>
-                                ))}
-                            </Select>
+                            />
                             <Input
                                 className="h-11"
                                 aria-label="Jumlah"

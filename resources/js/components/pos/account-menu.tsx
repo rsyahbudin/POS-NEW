@@ -1,5 +1,5 @@
 import { Link, router, usePage } from '@inertiajs/react';
-import { History, LogOut, Printer } from 'lucide-react';
+import { Ban, History, LogOut, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -17,9 +17,13 @@ import { logout } from '@/routes';
 export function AccountMenu({
     onHistory,
     onPrinter,
+    onSoldOut,
+    soldOutOn,
 }: {
     onHistory?: () => void;
     onPrinter?: () => void;
+    onSoldOut?: () => void;
+    soldOutOn?: boolean;
 }) {
     const user = usePage().props.auth.user;
     const initials = useInitials();
@@ -58,6 +62,17 @@ export function AccountMenu({
                     >
                         <History className="mr-2" />
                         {t('Riwayat transaksi')}
+                    </DropdownMenuItem>
+                )}
+                {onSoldOut && (
+                    <DropdownMenuItem
+                        className="h-11 text-base sm:hidden"
+                        onSelect={onSoldOut}
+                    >
+                        <Ban className="mr-2" />
+                        {soldOutOn
+                            ? t('Selesai tandai habis')
+                            : t('Tandai menu habis')}
                     </DropdownMenuItem>
                 )}
                 {onPrinter && (

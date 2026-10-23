@@ -43,6 +43,7 @@ class PosController extends Controller
                 'refund' => $user->can('refund'),
                 'discount' => $user->can('discount-within-limit') || $user->can('discount-custom'),
                 'discount_custom' => $user->can('discount-custom'),
+                'mark_sold_out' => $user->can('mark-sold-out'),
                 'open_shift' => $user->can('open-close-shift'),
                 'confirm_qr' => $user->can('receive-payment'),
             ],

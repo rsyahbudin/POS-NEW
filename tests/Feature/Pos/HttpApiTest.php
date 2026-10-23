@@ -102,10 +102,17 @@ it('hides sold-out products from the QR menu but marks them for the cashier', fu
     $this->actingAs(userWithRole('cashier'))->get('/pos')->assertOk()->assertInertia(fn ($page) => $page->where('state.sold_out', [product('Americano')->id]));
 });
 
-it('toggles availability over HTTP', function () {
+it('lets only people with the sold-out permission mark a menu item, and the QR menu hides it', function () {
     $p = product('Americano');
-    $this->actingAs(userWithRole('cashier'))->postJson("/pos/products/{$p->id}/availability", ['is_available' => false])->assertOk();
+    $cashier = userWithRole('cashier');
+    $this->actingAs($cashier)->postJson("/pos/products/{$p->id}/availability", ['is_available' => false])->assertForbidden();
+    $this->actingAs(userWithRole('manager'))->postJson("/pos/products/{$p->id}/availability", ['is_available' => false])->assertOk();
     expect($p->fresh()->is_available)->toBeFalse();
+
+    $cashier->givePermissionTo('mark-sold-out');
+    $this->actingAs($cashier)->postJson("/pos/products/{$p->id}/availability", ['is_available' => true])->assertOk();
+    expect($p->fresh()->is_available)->toBeTrue();
+    $this->actingAs($cashier)->getJson('/pos')->assertOk();
 });
 
 it('advances kitchen items and lists tickets for the station', function () {

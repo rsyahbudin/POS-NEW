@@ -90,6 +90,7 @@ type Props = {
         discount: boolean;
         discount_custom: boolean;
         open_shift: boolean;
+        mark_sold_out: boolean;
         confirm_qr: boolean;
     };
     settings: {
@@ -858,16 +859,18 @@ export default function PosPage(props: Props) {
                         >
                             {sound.prefs.muted ? <VolumeX /> : <Volume2 />}
                         </Button>
-                        <Button
-                            type="button"
-                            variant={markMode ? 'default' : 'outline'}
-                            size="sm"
-                            className="hidden h-11 sm:inline-flex"
-                            aria-pressed={markMode}
-                            onClick={() => setMarkMode((m) => !m)}
-                        >
-                            {t('Tandai Habis')}
-                        </Button>
+                        {can.mark_sold_out && (
+                            <Button
+                                type="button"
+                                variant={markMode ? 'default' : 'outline'}
+                                size="sm"
+                                className="hidden h-11 sm:inline-flex"
+                                aria-pressed={markMode}
+                                onClick={() => setMarkMode((m) => !m)}
+                            >
+                                {markMode ? t('Selesai') : t('Tandai Habis')}
+                            </Button>
+                        )}
                         <Button
                             asChild
                             variant="outline"
@@ -888,6 +891,12 @@ export default function PosPage(props: Props) {
                         <AccountMenu
                             onHistory={() => setDialog({ kind: 'history' })}
                             onPrinter={() => setDialog({ kind: 'printer' })}
+                            onSoldOut={
+                                can.mark_sold_out
+                                    ? () => setMarkMode((m) => !m)
+                                    : undefined
+                            }
+                            soldOutOn={markMode}
                         />
                     </div>
                 </header>

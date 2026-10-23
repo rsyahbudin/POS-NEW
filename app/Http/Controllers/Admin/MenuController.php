@@ -140,7 +140,7 @@ class MenuController extends Controller
     /** "Habis" toggle: visible on QR menu and cashier screen immediately via broadcast. */
     public function availability(Product $product, Request $request): JsonResponse
     {
-        abort_unless($this->actor($request)->can('manage-menu') || $this->actor($request)->can('create-order'), 403);
+        abort_unless($this->actor($request)->can('manage-menu') || $this->actor($request)->can('mark-sold-out'), 403);
         $data = $request->validate(['is_available' => 'required|boolean']);
         $product->update(['is_available' => $data['is_available']]);
         Realtime::dispatch(new ProductAvailabilityChanged($product->outlet_id, $product->id, $product->is_available));

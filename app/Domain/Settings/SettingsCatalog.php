@@ -74,6 +74,7 @@ final class SettingsCatalog
             ['key' => 'pos', 'label' => 'Kasir & struk', 'groups' => [[
                 'title' => 'Layar kasir',
                 'fields' => [
+                    ['key' => 'pos.receipt_whatsapp', 'type' => 'bool', 'label' => 'Tombol bagikan struk lewat WhatsApp', 'hint' => 'Aktif: setelah bayar, layar struk punya tombol WhatsApp yang membuka WhatsApp di perangkat kasir dengan tautan struk sudah terisi; kasir memilih nomor pelanggan lalu mengirim sendiri. Tidak butuh gateway atau akun apa pun, dan terpisah dari pengiriman laporan ke owner.', 'default' => false],
                     ['key' => 'pos.quick_cash', 'type' => 'list', 'label' => 'Tombol cepat uang tunai', 'hint' => 'Nominal dipisah koma. Tombol "Uang pas" selalu ada. Contoh: 50000,100000,150000,200000', 'default' => '50000,100000,150000,200000'],
                     ['key' => 'pos.ready_alert_minutes', 'type' => 'int', 'label' => 'Item siap antar tampil di kasir (menit)', 'hint' => 'Daftar "siap diantar" di atas layar kasir.', 'default' => 15, 'min' => 1, 'max' => 180],
                 ],

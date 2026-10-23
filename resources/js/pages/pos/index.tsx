@@ -96,6 +96,7 @@ type Props = {
         discount_limit_percent: number;
         qr_alert_seconds: number;
         quick_cash: number[];
+        receipt_whatsapp: boolean;
         kds_enabled: boolean;
         outlet_id: number;
     };
@@ -1353,7 +1354,9 @@ export default function PosPage(props: Props) {
                     <div className="overflow-hidden rounded-lg border">
                         <ReceiptView r={dialog.receipt} />
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div
+                        className={`grid gap-2 ${settings.receipt_whatsapp ? 'grid-cols-2' : 'grid-cols-1'}`}
+                    >
                         <Button
                             type="button"
                             variant="outline"
@@ -1375,19 +1378,21 @@ export default function PosPage(props: Props) {
                         >
                             {t('Cetak')}
                         </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            className="h-12"
-                            onClick={() =>
-                                window.open(
-                                    `https://wa.me/?text=${encodeURIComponent(`${t('Struk')} ${dialog.receipt.order_number}: ${dialog.receipt.public_url}`)}`,
-                                    '_blank',
-                                )
-                            }
-                        >
-                            WhatsApp
-                        </Button>
+                        {settings.receipt_whatsapp && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-12"
+                                onClick={() =>
+                                    window.open(
+                                        `https://wa.me/?text=${encodeURIComponent(`${t('Struk')} ${dialog.receipt.order_number}: ${dialog.receipt.public_url}`)}`,
+                                        '_blank',
+                                    )
+                                }
+                            >
+                                WhatsApp
+                            </Button>
+                        )}
                     </div>
                 </Modal>
             )}

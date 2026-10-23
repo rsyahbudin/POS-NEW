@@ -13,6 +13,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AccountMenu } from '@/components/pos/account-menu';
+import { SoldOutDialog } from '@/components/pos/sold-out-dialog';
 import { DiscountDialog } from '@/components/pos/discount-dialog';
 import { HistoryDialog } from '@/components/pos/history-dialog';
 import { ModifierSheet } from '@/components/pos/modifier-sheet';
@@ -123,6 +124,7 @@ type Dialog =
     | { kind: 'receipt'; receipt: Receipt; note?: string; billId?: number }
     | { kind: 'online' }
     | { kind: 'printer' }
+    | { kind: 'soldout' }
     | { kind: 'history' }
     | { kind: 'shift' }
     | null;
@@ -163,7 +165,6 @@ export default function PosPage(props: Props) {
         }
     };
     const [sending, setSending] = useState(false);
-    const [markMode, setMarkMode] = useState(false);
     const pin = usePinGate();
     const routing = usePage().props.print_routing as {
         receipt: boolean;
@@ -352,24 +353,6 @@ export default function PosPage(props: Props) {
     };
 
     const pick = async (p: Product) => {
-        if (markMode) {
-            try {
-                const out = p.is_available && !soldOut.includes(p.id);
-                await api('POST', `/pos/products/${p.id}/availability`, {
-                    is_available: !out,
-                });
-                toast.success(
-                    `${p.name}: ${out ? t('ditandai habis') : t('tersedia lagi')}`,
-                );
-                void refresh();
-                router.reload({ only: ['menu'] });
-            } catch (e) {
-                toast.error(e instanceof ApiError ? e.message : t('Gagal.'));
-            }
-
-            return;
-        }
-
         if (!ctx) {
             toast.info(t('Pilih meja atau tipe order dulu.'));
             setView('tables');
@@ -862,13 +845,12 @@ export default function PosPage(props: Props) {
                         {can.mark_sold_out && (
                             <Button
                                 type="button"
-                                variant={markMode ? 'default' : 'outline'}
+                                variant="outline"
                                 size="sm"
                                 className="hidden h-11 sm:inline-flex"
-                                aria-pressed={markMode}
-                                onClick={() => setMarkMode((m) => !m)}
+                                onClick={() => setDialog({ kind: 'soldout' })}
                             >
-                                {markMode ? t('Selesai') : t('Tandai Habis')}
+                                {t('Stok & Habis')}
                             </Button>
                         )}
                         <Button
@@ -893,10 +875,9 @@ export default function PosPage(props: Props) {
                             onPrinter={() => setDialog({ kind: 'printer' })}
                             onSoldOut={
                                 can.mark_sold_out
-                                    ? () => setMarkMode((m) => !m)
+                                    ? () => setDialog({ kind: 'soldout' })
                                     : undefined
                             }
-                            soldOutOn={markMode}
                         />
                     </div>
                 </header>
@@ -1072,7 +1053,6 @@ export default function PosPage(props: Props) {
                             <ProductGrid
                                 menu={menu}
                                 soldOut={soldOut}
-                                markMode={markMode}
                                 inCart={cart.reduce<Record<number, number>>(
                                     (m, l) => {
                                         m[l.product.id] =
@@ -1410,6 +1390,16 @@ export default function PosPage(props: Props) {
                     onClose={() => setDialog(null)}
                     onReceipt={(id) => void showReceipt({ id } as Bill, true)}
                     onOpen={(id) => void openExisting(id)}
+                />
+            )}
+            {dialog?.kind === 'soldout' && (
+                <SoldOutDialog
+                    menu={menu}
+                    onClose={() => setDialog(null)}
+                    onChanged={() => {
+                        void refresh();
+                        router.reload({ only: ['menu'] });
+                    }}
                 />
             )}
             {dialog?.kind === 'printer' && (

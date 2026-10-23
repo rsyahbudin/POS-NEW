@@ -106,7 +106,12 @@ export type Order = {
     payments: Payment[];
 };
 
-export type Modifier = { id: number; name: string; price_delta: number };
+export type Modifier = {
+    id: number;
+    name: string;
+    price_delta: number;
+    is_available: boolean;
+};
 export type ModifierGroup = {
     id: number;
     name: string;
@@ -115,7 +120,12 @@ export type ModifierGroup = {
     required: boolean;
     modifiers: Modifier[];
 };
-export type Variant = { id: number; name: string; price: number };
+export type Variant = {
+    id: number;
+    name: string;
+    price: number;
+    is_available: boolean;
+};
 
 export type Product = {
     id: number;

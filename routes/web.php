@@ -27,6 +27,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Pos\OrderController;
 use App\Http\Controllers\Pos\PosController;
 use App\Http\Controllers\Pos\QzTrayController;
+use App\Http\Controllers\Pos\SoldOutController;
 use App\Http\Controllers\Print\PrintStationController;
 use App\Http\Controllers\Qr\QrMenuController;
 use App\Http\Controllers\Qr\QrPaymentController;
@@ -109,6 +110,9 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::post('bills/{bill}/reprint', [ReceiptController::class, 'reprint'])->name('bills.reprint');
 
         Route::post('tables/{table}/qr', [FloorController::class, 'toggleQr'])->name('tables.qr');
+        Route::post('products/{product}/stock', [SoldOutController::class, 'stock'])->name('products.stock');
+        Route::post('modifiers/{modifier}/availability', [SoldOutController::class, 'modifier'])->name('modifiers.availability');
+        Route::post('variants/{variant}/availability', [SoldOutController::class, 'variant'])->name('variants.availability');
         Route::post('products/{product}/availability', [MenuController::class, 'availability'])->name('products.availability');
 
         Route::get('qz/certificate', [QzTrayController::class, 'certificate'])->name('qz.certificate');

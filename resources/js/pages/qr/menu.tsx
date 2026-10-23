@@ -358,6 +358,7 @@ export default function QrMenu({
                                     const hasOptions =
                                         p.variants.length > 0 ||
                                         p.modifier_groups.length > 0;
+                                    const out = !p.is_available;
                                     const inCart = cart
                                         .filter((l) => l.product.id === p.id)
                                         .reduce((a, l) => a + l.qty, 0);
@@ -383,7 +384,9 @@ export default function QrMenu({
                                                 </span>
                                             </div>
                                             <div className="relative mb-4 size-24 shrink-0">
-                                                <div className="size-full overflow-hidden rounded-xl">
+                                                <div
+                                                    className={`size-full overflow-hidden rounded-xl ${out ? 'opacity-40 grayscale' : ''}`}
+                                                >
                                                     <ProductArt
                                                         name={p.name}
                                                         image={p.image}
@@ -394,7 +397,11 @@ export default function QrMenu({
                                                     />
                                                 </div>
                                                 <div className="absolute inset-x-0 -bottom-4 flex justify-center">
-                                                    {hasOptions ? (
+                                                    {out ? (
+                                                        <span className="h-9 rounded-full border bg-muted px-4 text-sm leading-9 font-semibold text-muted-foreground">
+                                                            Habis
+                                                        </span>
+                                                    ) : hasOptions ? (
                                                         <button
                                                             onClick={() =>
                                                                 setPicking(p)
@@ -896,7 +903,8 @@ function Picker({
     onAdd: (l: Line) => void;
 }) {
     const [variantId, setVariantId] = useState<number | null>(
-        product.variants[0]?.id ?? null,
+        (product.variants.find((v) => v.is_available) ?? product.variants[0])
+            ?.id ?? null,
     );
     const [picked, setPicked] = useState<Record<number, number[]>>({});
     const [qty, setQty] = useState(1);
@@ -943,10 +951,12 @@ function Picker({
                             <button
                                 key={v.id}
                                 aria-pressed={variantId === v.id}
+                                disabled={!v.is_available}
                                 onClick={() => setVariantId(v.id)}
-                                className={`h-12 rounded-xl border bg-card px-2 text-sm ${variantId === v.id ? 'border-primary bg-primary text-primary-foreground' : ''}`}
+                                className={`h-12 rounded-xl border bg-card px-2 text-sm disabled:opacity-50 ${variantId === v.id ? 'border-primary bg-primary text-primary-foreground' : ''}`}
                             >
-                                {v.name} · {rp(v.price)}
+                                {v.name} ·{' '}
+                                {v.is_available ? rp(v.price) : 'Habis'}
                             </button>
                         ))}
                     </div>
@@ -967,13 +977,16 @@ function Picker({
                                 <button
                                     key={m.id}
                                     aria-pressed={on}
+                                    disabled={!m.is_available}
                                     onClick={() => toggle(g.id, m.id, g.max)}
-                                    className={`h-12 rounded-xl border bg-card px-2 text-sm ${on ? 'border-primary bg-primary text-primary-foreground' : ''}`}
+                                    className={`h-12 rounded-xl border bg-card px-2 text-sm disabled:opacity-50 ${on ? 'border-primary bg-primary text-primary-foreground' : ''}`}
                                 >
                                     {m.name}
-                                    {m.price_delta
-                                        ? ` +${rp(m.price_delta)}`
-                                        : ''}
+                                    {!m.is_available
+                                        ? ' · Habis'
+                                        : m.price_delta
+                                          ? ` +${rp(m.price_delta)}`
+                                          : ''}
                                 </button>
                             );
                         })}

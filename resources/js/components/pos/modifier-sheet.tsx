@@ -45,7 +45,8 @@ function Body({
     onAdd: (line: CartLine) => void;
 }) {
     const [variantId, setVariantId] = useState<number | null>(
-        product.variants[0]?.id ?? null,
+        (product.variants.find((v) => v.is_available) ?? product.variants[0])
+            ?.id ?? null,
     );
     const [picked, setPicked] = useState<Record<number, number[]>>({});
     const [qty, setQty] = useState(1);
@@ -126,12 +127,15 @@ function Body({
                                     variantId === v.id ? 'default' : 'outline'
                                 }
                                 className="h-12 justify-between"
+                                disabled={!v.is_available}
                                 onClick={() => setVariantId(v.id)}
                                 aria-pressed={variantId === v.id}
                             >
                                 <span>{v.name}</span>
                                 <span className="tabular-nums">
-                                    {rupiah(v.price)}
+                                    {v.is_available
+                                        ? rupiah(v.price)
+                                        : t('Habis')}
                                 </span>
                             </Button>
                         ))}
@@ -160,14 +164,19 @@ function Body({
                                     type="button"
                                     variant={on ? 'default' : 'outline'}
                                     className="h-12 justify-between"
+                                    disabled={!m.is_available}
                                     onClick={() => toggle(g.id, m.id, g.max)}
                                     aria-pressed={on}
                                 >
                                     <span>{m.name}</span>
-                                    {m.price_delta !== 0 && (
-                                        <span className="tabular-nums">
-                                            +{rupiah(m.price_delta)}
-                                        </span>
+                                    {!m.is_available ? (
+                                        <span>{t('Habis')}</span>
+                                    ) : (
+                                        m.price_delta !== 0 && (
+                                            <span className="tabular-nums">
+                                                +{rupiah(m.price_delta)}
+                                            </span>
+                                        )
                                     )}
                                 </Button>
                             );

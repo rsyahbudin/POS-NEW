@@ -1,7 +1,10 @@
 <?php
 
+use App\Domain\Catalog\Models\Modifier;
 use App\Domain\Floor\Models\Table;
 use App\Domain\Ordering\Actions\VoidItemAction;
+use App\Domain\Ordering\Exceptions\OrderException;
+use App\Http\Presenters\MenuPresenter;
 use App\Http\Presenters\ReceiptPresenter;
 use Illuminate\Support\Str;
 use Spatie\Activitylog\Models\Activity;
@@ -94,15 +97,15 @@ it('validates QR payloads and rejects a missing name', function () {
     $this->postJson("/m/{$table->qr_token}/order", ['customer_name' => 'A', 'items' => []])->assertUnprocessable();
 });
 
-it('hides sold-out products from the QR menu but marks them for the cashier', function () {
+it('keeps sold-out products on the QR menu, flagged, and lists them for the cashier', function () {
     product('Americano')->update(['is_available' => false]);
     $table = Table::query()->first();
 
-    $this->get("/m/{$table->qr_token}")->assertOk()->assertInertia(fn ($page) => $page->where('menu', fn ($menu) => collect($menu)->flatMap(fn ($c) => $c['products'])->pluck('name')->doesntContain('Americano')));
+    $this->get("/m/{$table->qr_token}")->assertOk()->assertInertia(fn ($page) => $page->where('menu', fn ($menu) => collect($menu)->flatMap(fn ($c) => $c['products'])->firstWhere('name', 'Americano')['is_available'] === false));
     $this->actingAs(userWithRole('cashier'))->get('/pos')->assertOk()->assertInertia(fn ($page) => $page->where('state.sold_out', [product('Americano')->id]));
 });
 
-it('lets only people with the sold-out permission mark a menu item, and the QR menu hides it', function () {
+it('lets only people with the sold-out permission mark a menu item', function () {
     $p = product('Americano');
     $cashier = userWithRole('cashier');
     $this->actingAs($cashier)->postJson("/pos/products/{$p->id}/availability", ['is_available' => false])->assertForbidden();
@@ -194,4 +197,37 @@ it('formats receipt dates in Indonesian (20 Okt 2026)', function () {
 
     $date = ReceiptPresenter::forBill($order->bills()->first())['date'];
     expect($date)->toMatch('/^\d{2} (Jan|Feb|Mar|Apr|Mei|Jun|Jul|Agu|Sep|Okt|Nov|Des) \d{4} \d{2}:\d{2}$/');
+});
+
+it('marks one option sold out without hiding the menu, and blocks ordering it', function () {
+    $latte = product('Caffe Latte');
+    $oat = Modifier::query()->where('name', 'Oat Milk')->firstOrFail();
+    $cashier = userWithRole('cashier');
+    $this->actingAs($cashier)->postJson("/pos/modifiers/{$oat->id}/availability", ['is_available' => false])->assertForbidden();
+    $cashier->givePermissionTo('mark-sold-out');
+    $this->actingAs($cashier)->postJson("/pos/modifiers/{$oat->id}/availability", ['is_available' => false])->assertOk();
+
+    $menu = collect(MenuPresenter::categories($latte->outlet_id))->flatMap(fn ($c) => $c['products'])->firstWhere('id', $latte->id);
+    $listed = collect($menu['modifier_groups'])->flatMap(fn ($g) => $g['modifiers'])->firstWhere('id', $oat->id);
+    expect($listed['is_available'])->toBeFalse();
+
+    openShiftFor($cashier, 0);
+    $variant = $latte->variants->first();
+    $sugar = Modifier::query()->whereHas('modifierGroup', fn ($g) => $g->where('name', 'Sugar Level'))->firstOrFail()->id;
+    $item = fn (array $mods) => [['product_id' => $latte->id, 'qty' => 1, 'variant_id' => $variant?->id, 'modifier_ids' => $mods]];
+    expect(fn () => placeOrder($cashier, $item([$sugar, $oat->id]), 'takeaway'))->toThrow(OrderException::class, 'Oat Milk');
+});
+
+it('keeps a sold-out product on the QR menu, flagged, and sets or corrects stock', function () {
+    $p = product('Americano');
+    $p->update(['stock_qty' => 5]);
+    $owner = userWithRole('owner');
+    $this->actingAs($owner)->postJson("/pos/products/{$p->id}/stock", ['stock_qty' => 0])->assertOk()->assertJson(['is_available' => false]);
+    $this->actingAs($owner)->postJson("/pos/products/{$p->id}/stock", ['stock_qty' => 3])->assertOk()->assertJson(['is_available' => true, 'stock_qty' => 3]);
+    $this->actingAs($owner)->postJson("/pos/products/{$p->id}/availability", ['is_available' => false])->assertOk();
+
+    $listed = collect(MenuPresenter::categories($p->outlet_id))->flatMap(fn ($c) => $c['products'])->firstWhere('id', $p->id);
+    expect($listed)->not->toBeNull()->and($listed['is_available'])->toBeFalse();
+    $none = product('Caffe Latte');
+    $this->actingAs($owner)->postJson("/pos/products/{$none->id}/stock", ['stock_qty' => 2])->assertStatus(422);
 });

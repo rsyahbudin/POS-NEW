@@ -13,13 +13,11 @@ import type { Category, Product } from '@/types/pos';
 export function ProductGrid({
     menu,
     soldOut,
-    markMode,
     inCart,
     onPick,
 }: {
     menu: Category[];
     soldOut: number[];
-    markMode: boolean;
     inCart: Record<number, number>;
     onPick: (p: Product) => void;
 }) {
@@ -96,13 +94,12 @@ export function ProductGrid({
                         return (
                             <button
                                 key={p.id}
-                                disabled={out && !markMode}
+                                disabled={out}
                                 onClick={() => onPick(p)}
                                 className={cn(
                                     'group relative flex flex-col overflow-hidden rounded-xl border bg-card text-left transition outline-none hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]',
                                     n > 0 &&
                                         'border-primary/60 ring-1 ring-primary/30',
-                                    markMode && 'ring-2 ring-amber-500',
                                 )}
                             >
                                 <div

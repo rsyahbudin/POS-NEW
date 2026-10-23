@@ -31,7 +31,7 @@ class QrMenuController extends Controller
             'token' => $token,
             'table' => ['name' => $table->name, 'public_id' => $table->public_id],
             'outlet' => Outlet::query()->find($table->outlet_id)?->name,
-            'menu' => MenuPresenter::categories($table->outlet_id, onlyAvailable: true),
+            'menu' => MenuPresenter::categories($table->outlet_id),
             'outletId' => $table->outlet_id,
             'status' => $this->status($table),
             'qris' => app(OnlinePaymentService::class)->enabled(),

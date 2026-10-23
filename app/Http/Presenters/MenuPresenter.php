@@ -10,10 +10,11 @@ use App\Support\MediaUrl;
 class MenuPresenter
 {
     /**
-     * @param  bool  $onlyAvailable  QR menu hides sold-out products; the cashier sees them flagged
+     * Sold-out products, variants and options stay in the list, flagged, for the cashier and the QR menu alike.
+     *
      * @return array<int, array<string, mixed>>
      */
-    public static function categories(int $outletId, bool $onlyAvailable = false): array
+    public static function categories(int $outletId): array
     {
         return Category::query()->where('outlet_id', $outletId)->orderBy('sort')
             ->with(['products' => fn ($q) => $q->orderBy('sort')->with(['variants', 'modifierGroups.modifiers'])])
@@ -21,15 +22,15 @@ class MenuPresenter
             ->map(fn (Category $c) => [
                 'id' => $c->id,
                 'name' => $c->name,
-                'products' => $c->products->filter(fn ($p) => ! $onlyAvailable || $p->is_available)->map(fn ($p) => [
+                'products' => $c->products->map(fn ($p) => [
                     'id' => $p->id, 'name' => $p->name, 'sku' => $p->sku, 'description' => $p->description,
                     'price' => $p->base_price, 'image' => MediaUrl::public($p->image_path),
                     'is_available' => $p->is_available, 'stock_qty' => $p->stock_qty,
-                    'variants' => $p->variants->map(fn ($v) => ['id' => $v->id, 'name' => $v->name, 'price' => $v->price])->all(),
+                    'variants' => $p->variants->map(fn ($v) => ['id' => $v->id, 'name' => $v->name, 'price' => $v->price, 'is_available' => $v->is_available])->all(),
                     'modifier_groups' => $p->modifierGroups->map(fn ($g) => [
                         'id' => $g->id, 'name' => $g->name, 'min' => $g->is_required ? max(1, $g->min_select) : $g->min_select,
                         'max' => $g->max_select, 'required' => $g->is_required,
-                        'modifiers' => $g->modifiers->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'price_delta' => $m->price_delta])->all(),
+                        'modifiers' => $g->modifiers->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'price_delta' => $m->price_delta, 'is_available' => $m->is_available])->all(),
                     ])->all(),
                 ])->values()->all(),
             ])->filter(fn ($c) => $c['products'] !== [])->values()->all();

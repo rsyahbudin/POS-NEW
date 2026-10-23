@@ -55,6 +55,9 @@ class ItemBuilder
                 if (! $variant) {
                     throw new OrderException("Varian {$product->name} tidak valid.");
                 }
+                if (! $variant->is_available) {
+                    throw new OrderException("{$product->name} ({$variant->name}) sedang habis.");
+                }
                 $price = $variant->price;
                 $name .= " ({$variant->name})";
             } elseif ($product->variants->isNotEmpty()) {
@@ -75,6 +78,9 @@ class ItemBuilder
                     throw new OrderException("Pilih maksimal {$group->max_select} untuk {$group->name} ({$product->name}).");
                 }
                 foreach ($picked as $m) {
+                    if (! $m->is_available) {
+                        throw new OrderException("{$m->name} ({$product->name}) sedang habis.");
+                    }
                     $price += $m->price_delta;
                     $pickedIds[] = $m->id;
                     $snapshot[] = ['group' => $group->name, 'name' => $m->name, 'price_delta' => $m->price_delta];

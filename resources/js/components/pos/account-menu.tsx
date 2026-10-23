@@ -18,12 +18,10 @@ export function AccountMenu({
     onHistory,
     onPrinter,
     onSoldOut,
-    soldOutOn,
 }: {
     onHistory?: () => void;
     onPrinter?: () => void;
     onSoldOut?: () => void;
-    soldOutOn?: boolean;
 }) {
     const user = usePage().props.auth.user;
     const initials = useInitials();
@@ -70,9 +68,7 @@ export function AccountMenu({
                         onSelect={onSoldOut}
                     >
                         <Ban className="mr-2" />
-                        {soldOutOn
-                            ? t('Selesai tandai habis')
-                            : t('Tandai menu habis')}
+                        {t('Stok & menu habis')}
                     </DropdownMenuItem>
                 )}
                 {onPrinter && (

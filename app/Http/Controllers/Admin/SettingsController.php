@@ -6,6 +6,7 @@ use App\Domain\Accounting\Models\Account;
 use App\Domain\Notification\Jobs\DeliverMessageJob;
 use App\Domain\Notification\ReportDelivery;
 use App\Domain\Payment\Models\PaymentMethod;
+use App\Domain\Pricing\Models\DiscountPreset;
 use App\Domain\Pricing\Models\Promotion;
 use App\Domain\Pricing\Models\TaxRule;
 use App\Domain\Settings\Models\Outlet;
@@ -31,7 +32,7 @@ class SettingsController extends Controller
 {
     public function __construct(private OutletContext $outlet, private SettingsRepository $settings) {}
 
-    public function show(): Response
+    public function show(Request $request): Response
     {
         $id = $this->outlet->id();
         $values = $this->settings->withDefaults();
@@ -50,6 +51,7 @@ class SettingsController extends Controller
             'cashAccounts' => Account::query()->where('outlet_id', $id)->where('type', 'asset')->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
             'taxRules' => TaxRule::query()->where('outlet_id', $id)->orderBy('sequence')->get(['id', 'name', 'kind', 'rate_bp', 'sequence', 'base', 'is_inclusive', 'is_active']),
             'promotions' => Promotion::query()->where('outlet_id', $id)->get(),
+            'discountPresets' => $request->user()?->can('manage-discount-presets') ? DiscountPreset::query()->where('outlet_id', $id)->orderBy('sort')->orderBy('name')->get(['id', 'name', 'type', 'value', 'needs_pin', 'is_active']) : null,
         ]);
     }
 

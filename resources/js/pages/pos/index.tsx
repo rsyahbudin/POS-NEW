@@ -59,6 +59,7 @@ import type {
     Bill,
     CartLine,
     Category,
+    DiscountPreset,
     FloorTable,
     Order,
     OrderItem,
@@ -70,6 +71,7 @@ import type {
 } from '@/types/pos';
 
 type Props = {
+    discountPresets: DiscountPreset[];
     menu: Category[];
     paymentMethods: PaymentMethod[];
     shift: {
@@ -84,6 +86,7 @@ type Props = {
         void: boolean;
         refund: boolean;
         discount: boolean;
+        discount_custom: boolean;
         confirm_qr: boolean;
     };
     settings: {
@@ -1126,6 +1129,8 @@ export default function PosPage(props: Props) {
                     order={order}
                     item={dialog.item}
                     limit={settings.discount_limit_percent}
+                    presets={props.discountPresets}
+                    customAllowed={can.discount_custom}
                     onClose={() => setDialog(null)}
                     onDone={(o) => {
                         apply(o);

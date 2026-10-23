@@ -11,23 +11,23 @@ use Spatie\Permission\PermissionRegistrar;
 class RolesAndPermissionsSeeder extends Seeder
 {
     public const ALL = [
-        'create-order', 'receive-payment', 'discount-within-limit', 'discount-over-limit', 'void', 'refund',
+        'create-order', 'receive-payment', 'discount-within-limit', 'discount-custom', 'discount-over-limit', 'void', 'refund',
         'open-close-shift', 'manage-shifts-any', 'update-kitchen-status', 'input-expense',
         'view-sales-reports', 'view-own-shift-recap', 'view-accounting', 'manage-accounting',
         'cancel-order', 'use-print-station', 'view-kitchen-report', 'view-margin-report', 'manage-printers',
         'view-stock', 'count-stock', 'view-assets', 'manage-assets', 'import-data', 'record-purchase', 'view-activity-log', 'manage-suppliers', 'record-waste', 'view-waste-report', 'manage-online-payments',
-        'manage-menu', 'manage-inventory', 'manage-pricing', 'manage-users', 'manage-settings', 'manage-tables', 'manage-roles',
+        'manage-menu', 'manage-inventory', 'manage-pricing', 'manage-discount-presets', 'manage-users', 'manage-settings', 'manage-tables', 'manage-roles',
     ];
 
     public const ROLES = [
         'manager' => [
-            'create-order', 'receive-payment', 'discount-within-limit', 'discount-over-limit', 'void', 'refund',
+            'create-order', 'receive-payment', 'discount-within-limit', 'discount-custom', 'discount-over-limit', 'void', 'refund',
             'open-close-shift', 'manage-shifts-any', 'update-kitchen-status', 'input-expense',
             'view-sales-reports', 'view-own-shift-recap', 'view-accounting', 'manage-menu', 'manage-inventory', 'manage-tables',
             'cancel-order', 'use-print-station', 'view-kitchen-report', 'view-margin-report',
             'view-stock', 'count-stock', 'view-assets', 'manage-assets', 'import-data', 'record-purchase', 'view-activity-log', 'manage-suppliers', 'record-waste', 'view-waste-report', 'manage-online-payments',
         ],
-        'cashier' => ['create-order', 'receive-payment', 'discount-within-limit', 'open-close-shift', 'update-kitchen-status', 'view-own-shift-recap', 'cancel-order', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
+        'cashier' => ['create-order', 'receive-payment', 'discount-within-limit', 'discount-custom', 'open-close-shift', 'update-kitchen-status', 'view-own-shift-recap', 'cancel-order', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
         'waiter' => ['create-order', 'cancel-order', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
         'kitchen' => ['update-kitchen-status', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
     ];

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AccountingController;
 use App\Http\Controllers\Admin\ActivityController;
 use App\Http\Controllers\Admin\DayCloseController;
+use App\Http\Controllers\Admin\DiscountPresetController;
 use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\FloorController;
 use App\Http\Controllers\Admin\InventoryController;
@@ -84,6 +85,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::post('orders/{order}/close-zero', [OrderController::class, 'closeZero'])->name('orders.close-zero');
         Route::post('orders/{order}/void', [OrderController::class, 'void'])->name('orders.void');
         Route::post('orders/{order}/discounts', [OrderController::class, 'discount'])->name('orders.discount');
+        Route::post('orders/{order}/discount-presets/{preset}', [OrderController::class, 'discountPreset'])->name('orders.discount-preset');
         Route::delete('discounts/{discount}', [OrderController::class, 'removeDiscount'])->name('discounts.destroy');
         Route::post('orders/{order}/split', [OrderController::class, 'split'])->name('orders.split');
         Route::post('orders/{order}/carve', [OrderController::class, 'carve'])->name('orders.carve');
@@ -266,6 +268,10 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::delete('printers/{printer}', [PrinterController::class, 'destroy'])->name('printers.destroy');
         });
 
+        Route::middleware(['permission:manage-settings', 'permission:manage-discount-presets'])->group(function () {
+            Route::post('discount-presets', [DiscountPresetController::class, 'save'])->name('discount-presets.store');
+            Route::put('discount-presets/{preset}', [DiscountPresetController::class, 'save'])->name('discount-presets.update');
+        });
         Route::middleware('permission:manage-settings')->group(function () {
             Route::get('settings', [SettingsController::class, 'show'])->name('settings');
             Route::post('settings/outlet', [SettingsController::class, 'updateOutlet'])->name('settings.outlet');

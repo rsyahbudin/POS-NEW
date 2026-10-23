@@ -7,6 +7,7 @@ use App\Domain\Ordering\Models\Order;
 use App\Domain\Ordering\Models\OrderItem;
 use App\Domain\Ordering\Models\OrderRound;
 use App\Domain\Payment\Models\PaymentMethod;
+use App\Domain\Pricing\Models\DiscountPreset;
 use App\Domain\Settings\OutletContext;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Shift\Actions\OpenShiftAction;
@@ -38,7 +39,8 @@ class PosController extends Controller
                 'pay' => $user->can('receive-payment'),
                 'void' => $user->can('void'),
                 'refund' => $user->can('refund'),
-                'discount' => $user->can('discount-within-limit'),
+                'discount' => $user->can('discount-within-limit') || $user->can('discount-custom'),
+                'discount_custom' => $user->can('discount-custom'),
                 'confirm_qr' => $user->can('receive-payment'),
             ],
             'settings' => [
@@ -48,6 +50,7 @@ class PosController extends Controller
                 'quick_cash' => array_values(array_filter(array_map('intval', explode(',', (string) $this->settings->get('pos.quick_cash', '50000,100000,150000,200000'))))),
                 'outlet_id' => $outletId,
             ],
+            'discountPresets' => DiscountPreset::query()->where('outlet_id', $outletId)->where('is_active', true)->orderBy('sort')->orderBy('name')->get(['id', 'name', 'type', 'value', 'needs_pin']),
             'state' => $this->state(),
         ]);
     }

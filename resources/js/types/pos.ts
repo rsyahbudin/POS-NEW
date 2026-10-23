@@ -132,6 +132,14 @@ export type Product = {
 
 export type Category = { id: number; name: string; products: Product[] };
 
+export type DiscountPreset = {
+    id: number;
+    name: string;
+    type: 'percent' | 'fixed';
+    value: number;
+    needs_pin: boolean;
+};
+
 export type FloorTable = {
     id: number;
     public_id: string;

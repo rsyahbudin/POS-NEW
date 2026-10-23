@@ -7,6 +7,7 @@ use App\Domain\Ordering\Models\Order;
 use App\Domain\Ordering\Models\OrderItem;
 use App\Domain\Payment\SplitGuard;
 use App\Domain\Pricing\Models\Discount;
+use App\Domain\Pricing\Models\DiscountPreset;
 use App\Domain\Settings\SettingsRepository;
 use App\Models\User;
 use App\Support\ApprovalGate;
@@ -28,6 +29,9 @@ class ApplyDiscountAction
 
     public function handle(Order $order, User $actor, string $type, int $value, string $reason, ?OrderItem $item = null, ?string $pin = null): Discount
     {
+        if (! $actor->can('discount-custom')) {
+            throw new OrderException('Diskon manual tidak diizinkan untuk peran Anda. Pilih dari daftar diskon yang tersedia.');
+        }
         if (! in_array($type, ['percent', 'fixed'], true)) {
             throw new OrderException('Tipe diskon tidak valid.');
         }
@@ -74,6 +78,42 @@ class ApplyDiscountAction
             Audit::log('discount.applied', $order, [
                 'order' => $order->number, 'type' => $type, 'value' => $value,
                 'amount' => $discount->refresh()->amount, 'reason' => $reason, 'approved_by' => $approver->id,
+            ], $actor);
+
+            return $discount;
+        });
+    }
+
+    /** A registered discount: no value or reason to type, and the owner already approved it by creating it. */
+    public function preset(Order $order, User $actor, DiscountPreset $preset, ?OrderItem $item = null, ?string $pin = null): Discount
+    {
+        if (! $preset->is_active || $preset->outlet_id !== $order->outlet_id) {
+            throw new OrderException('Diskon ini tidak tersedia.');
+        }
+        if (! $actor->can('discount-within-limit') && ! $actor->can('create-order')) {
+            throw new OrderException('Anda tidak boleh memberi diskon.');
+        }
+
+        return DB::transaction(function () use ($order, $actor, $preset, $item, $pin) {
+            $order = Order::query()->lockForUpdate()->findOrFail($order->id);
+            if (! $order->status->isEditable()) {
+                throw new OrderException('Order sudah dikunci.');
+            }
+            if ($item && $item->order_id !== $order->id) {
+                throw new OrderException('Item bukan bagian dari order ini.');
+            }
+            $approver = $preset->needs_pin ? $this->gate->resolve($actor, 'discount-over-limit', $pin) : $actor;
+
+            $this->split->prepare($order, $item);
+            $discount = Discount::create([
+                'order_id' => $order->id, 'order_item_id' => $item?->id, 'type' => $preset->type, 'value' => $preset->value,
+                'reason' => $preset->name, 'preset_id' => $preset->id, 'created_by' => $actor->id, 'approved_by' => $approver->id,
+            ]);
+            $this->recalculate->handle($order);
+
+            Audit::log('discount.applied', $order, [
+                'order' => $order->number, 'preset' => $preset->name, 'type' => $preset->type, 'value' => $preset->value,
+                'amount' => $discount->refresh()->amount, 'reason' => $preset->name, 'approved_by' => $approver->id,
             ], $actor);
 
             return $discount;

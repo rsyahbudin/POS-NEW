@@ -71,10 +71,10 @@ Lima peran bawaan plus customer tamu. Hak akses berupa permission per aksi yang 
 
 | Kelompok | Permission |
 | --- | --- |
-| Pesanan & pembayaran | Buat / ubah order; Terima pembayaran; Diskon sampai batas kasir; Diskon di atas batas; Void & komplimen; Refund; Batalkan pesanan/item (belum dibayar); Pakai Stasiun Cetak; Update status dapur |
+| Pesanan & pembayaran | Buat / ubah order; Terima pembayaran; Diskon sampai batas kasir; Diskon manual (isi sendiri); Diskon di atas batas; Void & komplimen; Refund; Batalkan pesanan/item (belum dibayar); Pakai Stasiun Cetak; Update status dapur |
 | Shift & kas | Buka/tutup shift sendiri; Kelola shift orang lain & tutup hari; Lihat rekap shift sendiri; Input pengeluaran |
 | Laporan & akuntansi | Laporan penjualan & dashboard; Laporan kinerja dapur; Laporan margin & HPP; Jejak aktivitas; Lihat laporan akuntansi; Kelola akuntansi; Laporan waste |
-| Pengaturan & stok | Kelola menu; Kelola stok, bahan & resep; Kelola printer; Lihat daftar stok; Stok opname; Catat belanja bahan; Lihat dan kelola aset & alat; Impor dari Excel; Kelola data pemasok; Catat bahan/menu terbuang; Pembayaran QRIS online; Kelola meja & QR; Harga & pajak; Pengaturan outlet; Kelola user; Kelola peran & akses |
+| Pengaturan & stok | Kelola menu; Kelola stok, bahan & resep; Kelola printer; Lihat daftar stok; Stok opname; Catat belanja bahan; Lihat dan kelola aset & alat; Impor dari Excel; Kelola data pemasok; Catat bahan/menu terbuang; Pembayaran QRIS online; Kelola daftar diskon; Kelola meja & QR; Harga & pajak; Pengaturan outlet; Kelola user; Kelola peran & akses |
 
 **Default peran bawaan (ringkas):**
 
@@ -193,7 +193,9 @@ Modul 4.1–4.15 adalah inti POS; 4.16–4.27 ditambahkan setelah MVP. Setiap kr
 
 **Story:** Sebagai owner, saya ingin setiap pengurangan nilai tercatat siapa pelaku dan penyetujunya.
 
-- Diskon per item atau per order (nominal/persen), alasan wajib; batas diskon kasir tanpa PIN diatur (default 10%).
+- **Daftar diskon bernama:** owner mendaftarkan diskon seperti "Staff 10%" atau "Owner 20%" di Pengaturan › Promo (nominal atau persen, opsi minta PIN manager, bisa dinonaktifkan). Kasir cukup mengetuk satu diskon tanpa mengisi nilai atau alasan; nama diskon menjadi alasannya dan tercatat di audit log.
+- **Diskon manual** (kasir mengetik nilai sendiri) dikendalikan izin tersendiri "Diskon manual". Cabut izin itu dari peran Kasir agar kasir hanya bisa memilih diskon yang sudah terdaftar.
+- Diskon manual per item atau per order (nominal/persen), alasan wajib; batas diskon kasir tanpa PIN diatur (default 10%).
 - Promo terjadwal (Happy Hour) dari pengaturan.
 - Void sebelum bayar: butuh PIN manager bila diatur, alasan wajib.
 - Komplimen dan staff meal: nilai tidak masuk omzet, tercatat di laporan.

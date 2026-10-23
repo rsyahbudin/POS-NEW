@@ -27,6 +27,7 @@ use App\Domain\Payment\Models\Bill;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Pricing\Actions\ApplyDiscountAction;
 use App\Domain\Pricing\Models\Discount;
+use App\Domain\Pricing\Models\DiscountPreset;
 use App\Http\Controllers\Controller;
 use App\Http\Presenters\OrderPresenter;
 use App\Http\Requests\PayRequest;
@@ -115,6 +116,15 @@ class OrderController extends Controller
         ]);
         $item = isset($data['item_id']) ? OrderItem::query()->where('order_id', $order->id)->whereKey((int) $data['item_id'])->firstOrFail() : null;
         $action->handle($order, $this->actor($request), $data['type'], (int) $data['value'], $data['reason'], $item, $data['pin'] ?? null);
+
+        return $this->respond($order);
+    }
+
+    public function discountPreset(Order $order, DiscountPreset $preset, Request $request, ApplyDiscountAction $action): JsonResponse
+    {
+        $data = $request->validate(['item_id' => 'nullable|integer', 'pin' => 'nullable|digits:6']);
+        $item = isset($data['item_id']) ? OrderItem::query()->where('order_id', $order->id)->whereKey((int) $data['item_id'])->firstOrFail() : null;
+        $action->preset($order, $this->actor($request), $preset, $item, $data['pin'] ?? null);
 
         return $this->respond($order);
     }

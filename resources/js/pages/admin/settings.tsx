@@ -69,6 +69,16 @@ type Props = {
     cashAccounts: Acc[];
     taxRules: Tax[];
     promotions: Promo[];
+    discountPresets: DPreset[] | null;
+};
+
+type DPreset = {
+    id: number;
+    name: string;
+    type: 'percent' | 'fixed';
+    value: number;
+    needs_pin: boolean;
+    is_active: boolean;
 };
 
 export default function SettingsPage({
@@ -79,6 +89,7 @@ export default function SettingsPage({
     cashAccounts,
     taxRules,
     promotions,
+    discountPresets,
 }: Props) {
     const [tab, setTab] = useState<string>('outlet');
     const errors = usePage().props.errors as Record<string, string>;
@@ -121,7 +132,14 @@ export default function SettingsPage({
                     <Methods methods={paymentMethods} accounts={cashAccounts} />
                 )}
                 {tab === 'tax' && <Taxes rules={taxRules} />}
-                {tab === 'promo' && <Promos promos={promotions} />}
+                {tab === 'promo' && (
+                    <>
+                        {discountPresets && (
+                            <DiscountPresets presets={discountPresets} />
+                        )}
+                        <Promos promos={promotions} />
+                    </>
+                )}
             </div>
         </>
     );
@@ -653,6 +671,182 @@ function TaxRow({ r }: { r: Tax }) {
                 </Button>
             </div>
         </div>
+    );
+}
+
+function DiscountPresets({ presets }: { presets: DPreset[] }) {
+    const errors = usePage().props.errors as Record<string, string>;
+    const [n, setN] = useState({
+        name: '',
+        type: 'percent' as 'percent' | 'fixed',
+        value: '' as number | '',
+        needs_pin: false,
+    });
+    const show = (p: DPreset) =>
+        p.type === 'percent'
+            ? `${(p.value / 100).toLocaleString('id-ID')}%`
+            : `Rp${p.value.toLocaleString('id-ID')}`;
+    const opts = { preserveScroll: true };
+
+    return (
+        <section className="grid max-w-2xl gap-3">
+            <div>
+                <h2 className="text-lg font-semibold">Daftar diskon kasir</h2>
+                <p className="text-sm text-muted-foreground">
+                    Diskon bernama yang tinggal diketuk kasir, misalnya Staff
+                    10% atau Owner 20%. Untuk membuat kasir hanya bisa memilih
+                    dari daftar ini, cabut izin "Diskon manual" dari peran Kasir
+                    di Peran & Akses.
+                </p>
+            </div>
+            {presets.map((p) => (
+                <div
+                    key={p.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card p-3 text-sm"
+                >
+                    <span
+                        className={p.is_active ? '' : 'text-muted-foreground'}
+                    >
+                        <strong>{p.name}</strong> · {show(p)}
+                        {p.needs_pin && ' · butuh PIN manager'}
+                        {!p.is_active && ' (nonaktif)'}
+                    </span>
+                    <span className="flex gap-1">
+                        <Button
+                            variant="ghost"
+                            className="h-10"
+                            onClick={() =>
+                                router.put(
+                                    `/admin/discount-presets/${p.id}`,
+                                    {
+                                        name: p.name,
+                                        type: p.type,
+                                        value:
+                                            p.type === 'percent'
+                                                ? p.value / 100
+                                                : p.value,
+                                        needs_pin: !p.needs_pin,
+                                        is_active: p.is_active,
+                                    },
+                                    opts,
+                                )
+                            }
+                        >
+                            {p.needs_pin ? 'Tanpa PIN' : 'Minta PIN'}
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            className="h-10"
+                            onClick={() =>
+                                router.put(
+                                    `/admin/discount-presets/${p.id}`,
+                                    {
+                                        name: p.name,
+                                        type: p.type,
+                                        value:
+                                            p.type === 'percent'
+                                                ? p.value / 100
+                                                : p.value,
+                                        needs_pin: p.needs_pin,
+                                        is_active: !p.is_active,
+                                    },
+                                    opts,
+                                )
+                            }
+                        >
+                            {p.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+                        </Button>
+                    </span>
+                </div>
+            ))}
+            {presets.length === 0 && (
+                <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
+                    Belum ada diskon terdaftar.
+                </p>
+            )}
+            <div className="grid gap-2 rounded-xl border bg-card p-3">
+                <h3 className="font-medium">Diskon baru</h3>
+                <div className="grid gap-2 sm:grid-cols-[1fr_7rem_9rem]">
+                    <Input
+                        className="h-11"
+                        placeholder="Nama, mis. Staff 10%"
+                        aria-label="Nama diskon"
+                        value={n.name}
+                        maxLength={60}
+                        onChange={(e) => setN({ ...n, name: e.target.value })}
+                    />
+                    <Select
+                        aria-label="Jenis diskon"
+                        value={n.type}
+                        onChange={(e) =>
+                            setN({
+                                ...n,
+                                type: e.target.value as 'percent' | 'fixed',
+                            })
+                        }
+                    >
+                        <option value="percent">Persen (%)</option>
+                        <option value="fixed">Rupiah (Rp)</option>
+                    </Select>
+                    <Input
+                        className="h-11 text-right"
+                        type="number"
+                        min={1}
+                        max={n.type === 'percent' ? 100 : undefined}
+                        aria-label="Nilai diskon"
+                        placeholder={n.type === 'percent' ? '10' : '5000'}
+                        value={n.value}
+                        onChange={(e) =>
+                            setN({
+                                ...n,
+                                value:
+                                    e.target.value === ''
+                                        ? ''
+                                        : Number(e.target.value),
+                            })
+                        }
+                    />
+                </div>
+                {(errors?.name || errors?.value) && (
+                    <p role="alert" className="text-sm text-destructive">
+                        {errors.name ?? errors.value}
+                    </p>
+                )}
+                <label className="flex items-center gap-2 text-sm">
+                    <input
+                        type="checkbox"
+                        className="size-5"
+                        checked={n.needs_pin}
+                        onChange={(e) =>
+                            setN({ ...n, needs_pin: e.target.checked })
+                        }
+                    />
+                    Minta PIN manager saat dipakai kasir
+                </label>
+                <Button
+                    className="h-11 justify-self-start"
+                    disabled={n.name.trim() === '' || !n.value}
+                    onClick={() =>
+                        router.post(
+                            '/admin/discount-presets',
+                            { ...n },
+                            {
+                                ...opts,
+                                onSuccess: () =>
+                                    setN({
+                                        name: '',
+                                        type: 'percent',
+                                        value: '',
+                                        needs_pin: false,
+                                    }),
+                            },
+                        )
+                    }
+                >
+                    Tambah diskon
+                </Button>
+            </div>
+        </section>
     );
 }
 

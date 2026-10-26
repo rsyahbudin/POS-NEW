@@ -4,6 +4,7 @@ namespace App\Domain\Notification\Jobs;
 
 use App\Domain\Notification\ReportDelivery;
 use App\Domain\Settings\SettingsRepository;
+use App\Support\Branding;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Http;
@@ -54,11 +55,14 @@ class DeliverMessageJob implements ShouldQueue
         if ($to === []) {
             return;
         }
+        // The sender address comes from .env (it must be a domain verified with the mail provider); the name is the cafe's own.
+        $fromAddress = (string) config('mail.from.address');
+        $fromName = Branding::profile()['name'];
         $html = $this->html;
         $pdf = $this->pdfPath !== null && is_file($this->pdfPath) ? $this->pdfPath : null;
         if ($html === null) {
-            Mail::raw($this->text, function ($m) use ($to, $pdf) {
-                $m->to($to)->subject($this->subject);
+            Mail::raw($this->text, function ($m) use ($to, $pdf, $fromAddress, $fromName) {
+                $m->to($to)->from($fromAddress, $fromName)->subject($this->subject);
                 if ($pdf !== null) {
                     $m->attach($pdf, ['as' => basename($pdf), 'mime' => 'application/pdf']);
                 }
@@ -66,8 +70,8 @@ class DeliverMessageJob implements ShouldQueue
 
             return;
         }
-        Mail::send([], [], function ($m) use ($to, $html, $pdf) {
-            $m->to($to)->subject($this->subject)->html($html)->text($this->text);
+        Mail::send([], [], function ($m) use ($to, $html, $pdf, $fromAddress, $fromName) {
+            $m->to($to)->from($fromAddress, $fromName)->subject($this->subject)->html($html)->text($this->text);
             if ($pdf !== null) {
                 $m->attach($pdf, ['as' => basename($pdf), 'mime' => 'application/pdf']);
             }

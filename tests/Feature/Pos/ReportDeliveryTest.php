@@ -69,6 +69,7 @@ it('delivers email through the mail transport to the cleaned recipients', functi
 
     expect($sent)->toHaveCount(1);
     $message = $sent[0]->getOriginalMessage();
+    expect($message->getFrom()[0]->getName())->toBe(Outlet::query()->value('name'));
     expect($message->getSubject())->toBe('Laporan harian 21 Okt')->and(collect($message->getTo())->map->getAddress()->all())->toBe(['owner@toko.test', 'manager@toko.test']);
 });
 

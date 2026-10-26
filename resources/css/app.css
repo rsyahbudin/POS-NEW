@@ -168,3 +168,35 @@
         @apply mr-3 cursor-pointer rounded-lg border-0 bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary;
     }
 }
+
+/* Guest QR page: sheets rise from the bottom and fade their backdrop in. */
+@keyframes qr-rise {
+    from {
+        transform: translateY(24px);
+        opacity: 0;
+    }
+    to {
+        transform: none;
+        opacity: 1;
+    }
+}
+@keyframes qr-fade {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+.qr-rise {
+    animation: qr-rise 0.22s ease-out;
+}
+.qr-fade {
+    animation: qr-fade 0.18s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+    .qr-rise,
+    .qr-fade {
+        animation: none;
+    }
+}

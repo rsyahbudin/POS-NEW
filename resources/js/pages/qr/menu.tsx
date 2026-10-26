@@ -291,50 +291,63 @@ export default function QrMenu({
         return () => window.clearInterval(id);
     }, []);
 
+    const lastStatus = status.rounds[status.rounds.length - 1]?.status;
+
     return (
         <>
             <Head title={`Menu · ${table.name}`} />
-            <div className="min-h-dvh bg-background pb-28 text-foreground">
-                <div className="sticky top-0 z-10 border-b bg-card/95 backdrop-blur-sm">
-                    <header className="px-4 pt-3 pb-2">
-                        <p className="text-xs font-medium text-muted-foreground">
-                            {outlet}
-                        </p>
-                        <div className="flex items-center justify-between gap-3">
-                            <h1 className="text-xl font-semibold tracking-tight">
+            <div className="min-h-dvh bg-background pb-40 text-foreground">
+                <header className="px-5 pt-7 pb-4">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-muted-foreground">
+                                {outlet}
+                            </p>
+                            <h1 className="mt-0.5 text-[28px] leading-9 font-bold tracking-tight">
                                 Meja {table.name}
                             </h1>
-                            {call.enabled && (
-                                <CallWaiter
-                                    token={token}
-                                    reasons={call.reasons}
-                                    state={status.call ?? null}
-                                    onState={(c) =>
-                                        setStatus((s) => ({ ...s, call: c }))
-                                    }
-                                />
-                            )}
                         </div>
-                        {!qris && (
-                            <p className="text-xs text-muted-foreground">
-                                Pembayaran di kasir.
-                            </p>
-                        )}
-                    </header>
-                    {allCount > 8 && (
-                        <div className="px-4 pb-2">
-                            <input
-                                type="search"
-                                value={q}
-                                onChange={(e) => setQ(e.target.value)}
-                                placeholder="Cari menu…"
-                                aria-label="Cari menu"
-                                className="h-11 w-full rounded-lg border bg-background px-3 text-base outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                        {call.enabled && (
+                            <CallWaiter
+                                token={token}
+                                reasons={call.reasons}
+                                state={status.call ?? null}
+                                onState={(c) =>
+                                    setStatus((s) => ({ ...s, call: c }))
+                                }
                             />
+                        )}
+                    </div>
+                    <p className="mt-1.5 text-sm text-muted-foreground">
+                        {qris
+                            ? 'Pilih menu, kirim pesanan, bayar langsung dari HP.'
+                            : 'Pembayaran di kasir.'}
+                    </p>
+                </header>
+
+                <div className="sticky top-0 z-10 border-b bg-background/90 backdrop-blur-md">
+                    {allCount > 6 && (
+                        <div className="px-5 pt-2.5">
+                            <label className="relative block">
+                                <span
+                                    aria-hidden
+                                    className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-muted-foreground"
+                                >
+                                    ⌕
+                                </span>
+                                <input
+                                    type="search"
+                                    value={q}
+                                    onChange={(e) => setQ(e.target.value)}
+                                    placeholder="Cari menu"
+                                    aria-label="Cari menu"
+                                    className="h-11 w-full rounded-full border-0 bg-muted pr-4 pl-10 text-base outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/40"
+                                />
+                            </label>
                         </div>
                     )}
                     <nav
-                        className="flex [scrollbar-width:none] gap-2 overflow-x-auto px-4 pb-3"
+                        className="flex [scrollbar-width:none] gap-2 overflow-x-auto px-5 py-2.5"
                         aria-label="Kategori"
                     >
                         {sections.map((c) => (
@@ -350,7 +363,7 @@ export default function QrMenu({
                                         });
                                 }}
                                 aria-pressed={cat === c.id}
-                                className={`h-10 shrink-0 rounded-full border px-4 text-sm font-medium transition-colors ${cat === c.id ? 'border-primary bg-primary text-primary-foreground' : 'bg-card'}`}
+                                className={`h-10 shrink-0 rounded-full px-4 text-sm font-semibold transition-colors ${cat === c.id ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-muted text-foreground/80'}`}
                             >
                                 {c.name}
                             </button>
@@ -358,18 +371,21 @@ export default function QrMenu({
                     </nav>
                 </div>
 
-                <main className="grid gap-1 pb-4">
+                <main>
                     {sections.map((c) => (
                         <section
                             key={c.id}
                             id={`cat-${c.id}`}
                             data-cat={c.id}
-                            className="scroll-mt-44"
+                            className="scroll-mt-28 px-5 pt-6"
                         >
-                            <h2 className="px-4 pt-5 pb-2 text-lg font-semibold tracking-tight">
+                            <h2 className="flex items-baseline gap-2 text-xl font-bold tracking-tight">
                                 {c.name}
+                                <span className="text-sm font-medium text-muted-foreground">
+                                    {c.products.length}
+                                </span>
                             </h2>
-                            <div className="mx-4 divide-y overflow-hidden rounded-2xl border bg-card">
+                            <ul className="mt-1 divide-y divide-border/70">
                                 {c.products.map((p) => {
                                     const hasOptions =
                                         p.variants.length > 0 ||
@@ -380,28 +396,32 @@ export default function QrMenu({
                                         .reduce((a, l) => a + l.qty, 0);
 
                                     return (
-                                        <div
+                                        <li
                                             key={p.id}
-                                            className="flex items-start gap-3 p-3.5"
+                                            className="flex items-start gap-4 py-4"
                                         >
-                                            <div className="min-w-0 flex-1 py-0.5">
-                                                <span className="block text-base leading-snug font-semibold">
+                                            <div className="min-w-0 flex-1">
+                                                <h3
+                                                    className={`text-base leading-snug font-semibold ${out ? 'text-muted-foreground' : ''}`}
+                                                >
                                                     {p.name}
-                                                </span>
+                                                </h3>
                                                 {p.description && (
-                                                    <span className="mt-0.5 line-clamp-2 block text-[13px] leading-snug text-muted-foreground">
+                                                    <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-muted-foreground">
                                                         {p.description}
-                                                    </span>
+                                                    </p>
                                                 )}
-                                                <span className="mt-2 block text-[15px] font-semibold tabular-nums">
+                                                <p
+                                                    className={`mt-2.5 text-[15px] font-bold tabular-nums ${out ? 'text-muted-foreground' : ''}`}
+                                                >
                                                     {p.variants.length > 1
                                                         ? `dari ${rp(Math.min(...p.variants.map((v) => v.price)))}`
                                                         : rp(p.price)}
-                                                </span>
+                                                </p>
                                             </div>
-                                            <div className="relative mb-4 size-24 shrink-0">
+                                            <div className="relative size-[104px] shrink-0">
                                                 <div
-                                                    className={`size-full overflow-hidden rounded-xl ${out ? 'opacity-40 grayscale' : ''}`}
+                                                    className={`size-full overflow-hidden rounded-2xl shadow-sm ring-1 ring-black/5 ${out ? 'opacity-45 grayscale' : ''}`}
                                                 >
                                                     <ProductArt
                                                         name={p.name}
@@ -412,9 +432,9 @@ export default function QrMenu({
                                                         }
                                                     />
                                                 </div>
-                                                <div className="absolute inset-x-0 -bottom-4 flex justify-center">
+                                                <div className="absolute right-1.5 -bottom-2.5">
                                                     {out ? (
-                                                        <span className="h-9 rounded-full border bg-muted px-4 text-sm leading-9 font-semibold text-muted-foreground">
+                                                        <span className="inline-flex h-8 items-center rounded-full bg-foreground/85 px-3 text-xs font-semibold text-background">
                                                             Habis
                                                         </span>
                                                     ) : hasOptions ? (
@@ -423,11 +443,14 @@ export default function QrMenu({
                                                                 setPicking(p)
                                                             }
                                                             aria-label={`Pilih ${p.name}`}
-                                                            className="h-9 rounded-full border border-primary bg-card px-4 text-sm font-semibold text-primary shadow-sm active:scale-95"
+                                                            className="flex h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-md active:scale-95"
                                                         >
-                                                            {inCart > 0
-                                                                ? `${inCart} · Tambah`
-                                                                : 'Pilih'}
+                                                            {inCart > 0 && (
+                                                                <span className="grid min-w-5 place-items-center rounded-full bg-white/25 px-1 text-xs tabular-nums">
+                                                                    {inCart}
+                                                                </span>
+                                                            )}
+                                                            Pilih
                                                         </button>
                                                     ) : inCart === 0 ? (
                                                         <button
@@ -435,23 +458,23 @@ export default function QrMenu({
                                                                 bump(p, 1)
                                                             }
                                                             aria-label={`Tambah ${p.name}`}
-                                                            className="h-9 rounded-full border border-primary bg-card px-4 text-sm font-semibold text-primary shadow-sm active:scale-95"
+                                                            className="grid size-10 place-items-center rounded-full bg-primary text-2xl leading-none text-primary-foreground shadow-md active:scale-90"
                                                         >
-                                                            Tambah
+                                                            +
                                                         </button>
                                                     ) : (
-                                                        <div className="flex h-9 items-center rounded-full bg-primary text-primary-foreground shadow-sm">
+                                                        <div className="flex h-10 items-center rounded-full bg-primary text-primary-foreground shadow-md">
                                                             <button
                                                                 onClick={() =>
                                                                     bump(p, -1)
                                                                 }
                                                                 aria-label={`Kurangi ${p.name}`}
-                                                                className="size-9 text-xl leading-none active:scale-90"
+                                                                className="size-10 text-2xl leading-none active:scale-90"
                                                             >
                                                                 −
                                                             </button>
                                                             <span
-                                                                className="w-6 text-center text-sm font-semibold tabular-nums"
+                                                                className="min-w-5 text-center text-sm font-bold tabular-nums"
                                                                 aria-live="polite"
                                                             >
                                                                 {inCart}
@@ -461,7 +484,7 @@ export default function QrMenu({
                                                                     bump(p, 1)
                                                                 }
                                                                 aria-label={`Tambah ${p.name}`}
-                                                                className="size-9 text-xl leading-none active:scale-90"
+                                                                className="size-10 text-2xl leading-none active:scale-90"
                                                             >
                                                                 +
                                                             </button>
@@ -469,14 +492,14 @@ export default function QrMenu({
                                                     )}
                                                 </div>
                                             </div>
-                                        </div>
+                                        </li>
                                     );
                                 })}
-                            </div>
+                            </ul>
                         </section>
                     ))}
                     {sections.length === 0 && (
-                        <p className="py-10 text-center text-sm text-muted-foreground">
+                        <p className="px-5 py-16 text-center text-sm text-muted-foreground">
                             {q
                                 ? 'Menu tidak ditemukan.'
                                 : 'Menu belum tersedia.'}
@@ -485,37 +508,47 @@ export default function QrMenu({
                 </main>
 
                 <div
-                    className={`fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-20 grid gap-2 ${status.rounds.length === 0 && count === 0 ? 'hidden' : ''}`}
+                    className={`fixed inset-x-0 bottom-0 z-20 grid gap-2 px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${status.rounds.length === 0 && count === 0 ? 'hidden' : ''}`}
                 >
                     {status.rounds.length > 0 && (
                         <button
                             onClick={() => setOpen('status')}
-                            className="h-11 rounded-full border bg-card text-sm font-medium shadow-md"
+                            className="flex h-12 items-center justify-between rounded-2xl border bg-card px-4 text-sm font-semibold shadow-lg active:scale-[0.99]"
                         >
-                            Lihat status pesanan · total sementara{' '}
-                            {rp(status.total)}
+                            <span className="flex items-center gap-2">
+                                <span
+                                    aria-hidden
+                                    className={`size-2.5 rounded-full ${lastStatus === 'Siap' ? 'bg-emerald-500' : lastStatus === 'Ditolak' ? 'bg-red-500' : 'animate-pulse bg-amber-500'}`}
+                                />
+                                Lihat status pesanan
+                            </span>
+                            <span className="text-muted-foreground tabular-nums">
+                                {rp(status.total)}
+                            </span>
                         </button>
                     )}
                     {count > 0 && (
                         <button
                             onClick={() => setOpen('cart')}
-                            className="flex h-14 items-center justify-between rounded-2xl bg-primary pr-5 pl-3 text-base font-semibold text-primary-foreground shadow-lg active:scale-[0.99]"
+                            className="flex h-16 items-center justify-between rounded-2xl bg-primary pr-5 pl-3 text-base font-semibold text-primary-foreground shadow-xl active:scale-[0.99]"
                         >
                             <span className="flex items-center gap-3">
                                 <span
                                     aria-hidden
-                                    className="grid size-8 place-items-center rounded-full bg-white/20 text-sm tabular-nums"
+                                    className="grid size-10 place-items-center rounded-xl bg-white/20 text-base font-bold tabular-nums"
                                 >
                                     {count}
                                 </span>
                                 <span className="grid text-left leading-tight">
                                     <span>Lihat pesanan</span>
-                                    <span className="text-xs font-normal opacity-80">
+                                    <span className="text-xs font-normal opacity-85">
                                         {count} item
                                     </span>
                                 </span>
                             </span>
-                            <span className="tabular-nums">{rp(total)}</span>
+                            <span className="text-lg font-bold tabular-nums">
+                                {rp(total)}
+                            </span>
                         </button>
                     )}
                 </div>
@@ -532,133 +565,145 @@ export default function QrMenu({
                 )}
 
                 {open === 'cart' && (
-                    <Sheet title="Pesanan kamu" onClose={() => setOpen(null)}>
-                        <ul className="grid gap-2">
-                            {cart.map((l) => (
-                                <li
-                                    key={l.key}
-                                    className="rounded-lg border p-2 text-sm"
+                    <Sheet
+                        title="Pesanan kamu"
+                        onClose={() => setOpen(null)}
+                        footer={
+                            <>
+                                {error && (
+                                    <p
+                                        role="alert"
+                                        className="mb-2 text-sm text-red-700"
+                                    >
+                                        {error}
+                                    </p>
+                                )}
+                                <button
+                                    disabled={
+                                        busy ||
+                                        name.trim() === '' ||
+                                        cart.length === 0
+                                    }
+                                    onClick={submit}
+                                    className="h-14 w-full rounded-2xl bg-primary text-base font-bold text-primary-foreground shadow-md disabled:opacity-50"
                                 >
-                                    <div className="flex justify-between gap-2">
-                                        <span className="font-medium">
+                                    {busy
+                                        ? 'Mengirim…'
+                                        : `Kirim Pesanan · ${rp(total)}`}
+                                </button>
+                            </>
+                        }
+                    >
+                        <ul className="divide-y divide-border/70">
+                            {cart.map((l) => (
+                                <li key={l.key} className="py-3.5">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <span className="text-[15px] leading-snug font-semibold">
                                             {l.label}
                                         </span>
-                                        <span className="tabular-nums">
+                                        <span className="shrink-0 text-[15px] font-bold tabular-nums">
                                             {rp(l.unit * l.qty)}
                                         </span>
                                     </div>
-                                    <input
-                                        value={l.note}
-                                        maxLength={120}
-                                        placeholder="Catatan (mis. less ice, tanpa gula)"
-                                        aria-label={`Catatan ${l.label}`}
-                                        onChange={(e) =>
-                                            setCart((c) =>
-                                                c.map((x) =>
-                                                    x.key === l.key
-                                                        ? {
-                                                              ...x,
-                                                              note: e.target
-                                                                  .value,
-                                                          }
-                                                        : x,
-                                                ),
-                                            )
-                                        }
-                                        className="mt-1 h-10 w-full rounded-lg border px-2 text-sm"
-                                    />
-                                    <div className="mt-1 flex items-center gap-2">
-                                        <button
-                                            aria-label="Kurangi"
-                                            className="size-11 rounded-lg border"
-                                            onClick={() =>
-                                                setCart((c) =>
-                                                    l.qty <= 1
-                                                        ? c.filter(
-                                                              (x) =>
-                                                                  x.key !==
-                                                                  l.key,
-                                                          )
-                                                        : c.map((x) =>
-                                                              x.key === l.key
-                                                                  ? {
-                                                                        ...x,
-                                                                        qty:
-                                                                            x.qty -
-                                                                            1,
-                                                                    }
-                                                                  : x,
-                                                          ),
-                                                )
-                                            }
-                                        >
-                                            −
-                                        </button>
-                                        <span className="w-6 text-center">
-                                            {l.qty}
-                                        </span>
-                                        <button
-                                            aria-label="Tambah"
-                                            className="size-11 rounded-lg border"
-                                            onClick={() =>
+                                    <div className="mt-2.5 flex items-center gap-3">
+                                        <div className="flex h-10 items-center rounded-full bg-muted">
+                                            <button
+                                                aria-label="Kurangi"
+                                                className="size-10 text-xl leading-none active:scale-90"
+                                                onClick={() =>
+                                                    setCart((c) =>
+                                                        l.qty <= 1
+                                                            ? c.filter(
+                                                                  (x) =>
+                                                                      x.key !==
+                                                                      l.key,
+                                                              )
+                                                            : c.map((x) =>
+                                                                  x.key ===
+                                                                  l.key
+                                                                      ? {
+                                                                            ...x,
+                                                                            qty:
+                                                                                x.qty -
+                                                                                1,
+                                                                        }
+                                                                      : x,
+                                                              ),
+                                                    )
+                                                }
+                                            >
+                                                −
+                                            </button>
+                                            <span className="min-w-6 text-center text-sm font-bold tabular-nums">
+                                                {l.qty}
+                                            </span>
+                                            <button
+                                                aria-label="Tambah"
+                                                className="size-10 text-xl leading-none active:scale-90"
+                                                onClick={() =>
+                                                    setCart((c) =>
+                                                        c.map((x) =>
+                                                            x.key === l.key
+                                                                ? {
+                                                                      ...x,
+                                                                      qty: Math.min(
+                                                                          20,
+                                                                          x.qty +
+                                                                              1,
+                                                                      ),
+                                                                  }
+                                                                : x,
+                                                        ),
+                                                    )
+                                                }
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                        <input
+                                            value={l.note}
+                                            maxLength={120}
+                                            placeholder="Catatan (mis. less ice)"
+                                            aria-label={`Catatan ${l.label}`}
+                                            onChange={(e) =>
                                                 setCart((c) =>
                                                     c.map((x) =>
                                                         x.key === l.key
                                                             ? {
                                                                   ...x,
-                                                                  qty: Math.min(
-                                                                      20,
-                                                                      x.qty + 1,
-                                                                  ),
+                                                                  note: e.target
+                                                                      .value,
                                                               }
                                                             : x,
                                                     ),
                                                 )
                                             }
-                                        >
-                                            +
-                                        </button>
+                                            className="h-10 min-w-0 flex-1 rounded-full bg-muted px-4 text-base outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/40"
+                                        />
                                     </div>
                                 </li>
                             ))}
                         </ul>
-                        <label className="mt-4 grid gap-1 text-sm font-medium">
-                            Nama panggilan{' '}
-                            <span className="text-red-700">*</span>
+                        <label className="mt-4 grid gap-1.5 text-sm font-semibold">
+                            <span>
+                                Nama panggilan{' '}
+                                <span className="text-red-600">*</span>
+                            </span>
                             <input
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 maxLength={40}
                                 placeholder="Contoh: Rani"
-                                className="h-12 rounded-lg border px-3 text-base"
+                                className="h-12 rounded-xl border bg-background px-4 text-base font-normal outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                                 required
                             />
                         </label>
-                        <p className="mt-2 text-xs text-muted-foreground">
+                        <p className="mt-3 rounded-xl bg-muted p-3 text-[13px] leading-snug text-muted-foreground">
                             {autoConfirm
                                 ? 'Pesanan langsung diteruskan ke dapur.'
                                 : 'Pesanan dikonfirmasi kasir dulu sebelum dibuat.'}{' '}
                             Pembayaran di kasir.
                         </p>
-                        {error && (
-                            <p
-                                role="alert"
-                                className="mt-2 text-sm text-red-700"
-                            >
-                                {error}
-                            </p>
-                        )}
-                        <button
-                            disabled={
-                                busy || name.trim() === '' || cart.length === 0
-                            }
-                            onClick={submit}
-                            className="mt-3 h-14 w-full rounded-xl bg-primary text-base font-bold text-primary-foreground disabled:opacity-50"
-                        >
-                            {busy
-                                ? 'Mengirim…'
-                                : `Kirim Pesanan · ${rp(total)}`}
-                        </button>
                     </Sheet>
                 )}
 
@@ -673,8 +718,9 @@ export default function QrMenu({
                         {done && (
                             <p
                                 role="status"
-                                className="mb-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900"
+                                className="mb-3 flex gap-2 rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-900"
                             >
+                                <span aria-hidden>✓</span>
                                 {autoConfirm
                                     ? 'Pesanan terkirim dan sedang diproses dapur.'
                                     : 'Pesanan terkirim. Menunggu konfirmasi kasir.'}
@@ -684,40 +730,57 @@ export default function QrMenu({
                             {status.rounds.map((r) => (
                                 <li
                                     key={r.id}
-                                    className="rounded-xl border p-3"
+                                    className="rounded-2xl border bg-card p-4"
                                 >
-                                    <p
-                                        className={`mb-1 inline-block rounded-md px-2 py-0.5 text-xs font-bold ${r.status === 'Ditolak' ? 'bg-red-100 text-red-900' : r.status === 'Siap' ? 'bg-emerald-100 text-emerald-900' : r.status === 'Menunggu Konfirmasi' ? 'bg-muted text-foreground' : 'bg-amber-100 text-amber-900'}`}
-                                    >
-                                        {r.status}
-                                    </p>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <p
+                                            className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${r.status === 'Ditolak' ? 'bg-red-100 text-red-900' : r.status === 'Siap' ? 'bg-emerald-100 text-emerald-900' : r.status === 'Menunggu Konfirmasi' ? 'bg-muted text-foreground' : 'bg-amber-100 text-amber-900'}`}
+                                        >
+                                            {r.status}
+                                        </p>
+                                        <span className="text-xs text-muted-foreground">
+                                            {new Date(
+                                                r.created_at,
+                                            ).toLocaleTimeString('id-ID', {
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                            })}
+                                        </span>
+                                    </div>
+                                    {r.status !== 'Ditolak' && (
+                                        <Progress label={r.status} />
+                                    )}
                                     {r.reject_reason && (
-                                        <p className="text-sm text-red-800">
+                                        <p className="mt-2 text-sm text-red-800">
                                             Alasan: {r.reject_reason}
                                         </p>
                                     )}
-                                    <ul className="text-sm">
+                                    <ul className="mt-3 grid gap-1 text-sm">
                                         {r.items.map((i, k) => (
                                             <li
                                                 key={k}
-                                                className={
-                                                    i.voided
-                                                        ? 'line-through opacity-60'
-                                                        : ''
-                                                }
+                                                className={`flex gap-2 ${i.voided ? 'line-through opacity-60' : ''}`}
                                             >
-                                                {i.qty}× {i.name}
-                                                {i.modifiers.length
-                                                    ? ` (${i.modifiers.join(', ')})`
-                                                    : ''}
+                                                <span className="font-semibold tabular-nums">
+                                                    {i.qty}×
+                                                </span>
+                                                <span>
+                                                    {i.name}
+                                                    {i.modifiers.length
+                                                        ? ` (${i.modifiers.join(', ')})`
+                                                        : ''}
+                                                </span>
                                             </li>
                                         ))}
                                     </ul>
                                 </li>
                             ))}
                         </ul>
-                        <p className="mt-3 text-right font-semibold">
-                            Total sementara {rp(status.total)}
+                        <p className="mt-4 flex justify-between text-base font-bold">
+                            <span>Total sementara</span>
+                            <span className="tabular-nums">
+                                {rp(status.total)}
+                            </span>
                         </p>
                         {qris &&
                         status.rounds.length > 0 &&
@@ -727,7 +790,7 @@ export default function QrMenu({
                         status.rounds.some((r) => r.status !== 'Ditolak') ? (
                             <PayBox token={token} />
                         ) : (
-                            <p className="mt-1 text-center text-sm text-muted-foreground">
+                            <p className="mt-2 text-center text-sm text-muted-foreground">
                                 Pembayaran di kasir
                             </p>
                         )}
@@ -735,6 +798,36 @@ export default function QrMenu({
                 )}
             </div>
         </>
+    );
+}
+
+/** Where an order stands: confirmed by the cashier, being made, ready. */
+function Progress({ label }: { label: string }) {
+    const step =
+        label === 'Siap'
+            ? 3
+            : label === 'Dibuat'
+              ? 2
+              : label === 'Diterima'
+                ? 1
+                : 0;
+    const names = ['Dikirim', 'Diterima', 'Dibuat', 'Siap'];
+
+    return (
+        <ol className="mt-3 grid grid-cols-4 gap-1.5" aria-hidden>
+            {names.map((n, i) => (
+                <li key={n}>
+                    <span
+                        className={`block h-1.5 rounded-full ${i <= step ? (step === 3 ? 'bg-emerald-500' : 'bg-primary') : 'bg-muted'}`}
+                    />
+                    <span
+                        className={`mt-1 block text-[11px] ${i <= step ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+                    >
+                        {n}
+                    </span>
+                </li>
+            ))}
+        </ol>
     );
 }
 
@@ -807,7 +900,7 @@ function PayBox({ token }: { token: string }) {
         return (
             <p
                 role="status"
-                className="mt-3 rounded-lg bg-emerald-50 p-4 text-center font-semibold text-emerald-900"
+                className="mt-4 rounded-2xl bg-emerald-50 p-4 text-center font-semibold text-emerald-900"
             >
                 Pembayaran {rp(pay.amount)} berhasil. Terima kasih!
             </p>
@@ -816,7 +909,7 @@ function PayBox({ token }: { token: string }) {
 
     if (pay?.status === 'pending' && pay.qr) {
         return (
-            <div className="mt-3 grid justify-items-center gap-2 rounded-xl border p-4">
+            <div className="mt-4 grid justify-items-center gap-2 rounded-2xl border bg-card p-4 shadow-sm">
                 <p className="font-semibold">
                     Scan untuk membayar {rp(pay.amount)}
                 </p>
@@ -840,7 +933,7 @@ function PayBox({ token }: { token: string }) {
     }
 
     return (
-        <div className="mt-3 grid gap-2">
+        <div className="mt-4 grid gap-2">
             {pay && pay.status !== 'pending' && (
                 <p role="alert" className="text-center text-sm text-red-800">
                     Kode QR sudah tidak berlaku. Buat yang baru.
@@ -855,7 +948,7 @@ function PayBox({ token }: { token: string }) {
                 type="button"
                 disabled={busy}
                 onClick={() => void start()}
-                className="h-12 rounded-xl bg-primary font-semibold text-primary-foreground disabled:opacity-60"
+                className="h-14 rounded-2xl bg-primary text-base font-bold text-primary-foreground shadow-md disabled:opacity-60"
             >
                 {busy ? 'Membuat QR…' : 'Bayar dengan QRIS'}
             </button>
@@ -923,9 +1016,11 @@ function CallWaiter({
         <>
             <button
                 onClick={() => setOpen(true)}
-                className={`flex h-10 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold active:scale-95 ${waiting ? 'border-amber-400 bg-amber-100 text-amber-900' : state?.status === 'handled' ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'bg-card'}`}
+                className={`flex h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold shadow-sm active:scale-95 ${waiting ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300' : state?.status === 'handled' ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200' : 'bg-muted text-foreground'}`}
             >
-                <span aria-hidden>🔔</span>
+                <span aria-hidden className={waiting ? 'animate-pulse' : ''}>
+                    🔔
+                </span>
                 {waiting
                     ? 'Menunggu waiter…'
                     : state?.status === 'handled'
@@ -953,7 +1048,7 @@ function CallWaiter({
                                     key={key}
                                     disabled={busy}
                                     onClick={() => void send(key)}
-                                    className="h-14 rounded-xl border bg-card px-4 text-left text-base font-medium active:scale-[0.99] disabled:opacity-50"
+                                    className="h-14 rounded-2xl bg-muted px-4 text-left text-base font-semibold active:scale-[0.99] disabled:opacity-50"
                                 >
                                     {label}
                                 </button>
@@ -978,40 +1073,64 @@ function Sheet({
     title,
     onClose,
     children,
+    footer,
 }: {
     title: string;
     onClose: () => void;
     children: React.ReactNode;
+    footer?: React.ReactNode;
 }) {
+    // keep the page behind from scrolling while a sheet is open
+    useEffect(() => {
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+
+        return () => {
+            document.body.style.overflow = prev;
+        };
+    }, []);
+
     return (
         <div
-            className="fixed inset-0 z-30 flex items-end bg-black/50"
+            className="qr-fade fixed inset-0 z-30 flex items-end bg-black/45"
             role="dialog"
             aria-modal="true"
             aria-label={title}
             onClick={onClose}
         >
             <div
-                className="max-h-[90dvh] w-full overflow-y-auto rounded-t-3xl bg-card p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+                className="qr-rise flex max-h-[92dvh] w-full flex-col rounded-t-[28px] bg-card shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div
-                    aria-hidden
-                    className="mx-auto mb-3 h-1 w-10 rounded-full bg-border"
-                />
-                <div className="mb-3 flex items-center justify-between">
-                    <h2 className="text-xl font-semibold tracking-tight">
-                        {title}
-                    </h2>
-                    <button
-                        onClick={onClose}
-                        aria-label="Tutup"
-                        className="grid size-10 place-items-center rounded-full bg-muted text-base"
-                    >
-                        ✕
-                    </button>
+                <div className="px-5 pt-2.5">
+                    <div
+                        aria-hidden
+                        className="mx-auto mb-3 h-1.5 w-11 rounded-full bg-border"
+                    />
+                    <div className="flex items-center justify-between pb-2">
+                        <h2 className="text-xl font-bold tracking-tight">
+                            {title}
+                        </h2>
+                        <button
+                            onClick={onClose}
+                            aria-label="Tutup"
+                            className="grid size-10 place-items-center rounded-full bg-muted text-base active:scale-90"
+                        >
+                            ✕
+                        </button>
+                    </div>
                 </div>
-                {children}
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
+                    {children}
+                </div>
+                {footer && (
+                    <div className="border-t bg-card px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                        {footer}
+                    </div>
+                )}
+                {!footer && (
+                    <div className="pb-[max(0.5rem,env(safe-area-inset-bottom))]" />
+                )}
             </div>
         </div>
     );
@@ -1065,11 +1184,97 @@ function Picker({
                   };
         });
 
+    const chip = (on: boolean) =>
+        `flex min-h-12 items-center justify-between gap-2 rounded-2xl border-2 px-3.5 py-2 text-left text-sm font-medium transition-colors disabled:opacity-45 ${on ? 'border-primary bg-primary/10 text-foreground' : 'border-transparent bg-muted'}`;
+
     return (
-        <Sheet title={product.name} onClose={onClose}>
+        <Sheet
+            title={product.name}
+            onClose={onClose}
+            footer={
+                <>
+                    {missing && (
+                        <p className="mb-2 text-xs font-medium text-red-700">
+                            Pilih minimal {missing.min} untuk {missing.name}
+                        </p>
+                    )}
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-14 items-center rounded-2xl bg-muted">
+                            <button
+                                aria-label="Kurangi"
+                                className="size-12 text-2xl leading-none active:scale-90"
+                                onClick={() =>
+                                    setQty((q) => Math.max(1, q - 1))
+                                }
+                            >
+                                −
+                            </button>
+                            <span className="min-w-6 text-center text-base font-bold tabular-nums">
+                                {qty}
+                            </span>
+                            <button
+                                aria-label="Tambah"
+                                className="size-12 text-2xl leading-none active:scale-90"
+                                onClick={() =>
+                                    setQty((q) => Math.min(20, q + 1))
+                                }
+                            >
+                                +
+                            </button>
+                        </div>
+                        <button
+                            disabled={!!missing}
+                            onClick={() => {
+                                const ids = Object.values(picked).flat();
+                                const names = product.modifier_groups.flatMap(
+                                    (g) =>
+                                        g.modifiers
+                                            .filter((m) => ids.includes(m.id))
+                                            .map((m) => m.name),
+                                );
+                                const v = product.variants.find(
+                                    (x) => x.id === variantId,
+                                );
+                                onAdd({
+                                    key: crypto.randomUUID(),
+                                    product,
+                                    variantId,
+                                    modifierIds: ids,
+                                    qty,
+                                    note: note.trim(),
+                                    unit,
+                                    label: [
+                                        product.name,
+                                        v ? `(${v.name})` : '',
+                                        names.length
+                                            ? `· ${names.join(', ')}`
+                                            : '',
+                                    ]
+                                        .filter(Boolean)
+                                        .join(' '),
+                                });
+                            }}
+                            className="h-14 flex-1 rounded-2xl bg-primary text-base font-bold text-primary-foreground shadow-md disabled:opacity-50"
+                        >
+                            Tambah · {rp(unit * qty)}
+                        </button>
+                    </div>
+                </>
+            }
+        >
+            {product.description && (
+                <p className="-mt-1 mb-3 text-sm leading-snug text-muted-foreground">
+                    {product.description}
+                </p>
+            )}
             {product.variants.length > 0 && (
-                <fieldset className="mb-3">
-                    <legend className="mb-1 text-sm font-medium">Varian</legend>
+                <fieldset className="mb-5">
+                    <legend className="mb-2 text-sm font-bold">
+                        Varian{' '}
+                        <span className="font-medium text-muted-foreground">
+                            · pilih 1
+                        </span>
+                    </legend>
                     <div className="grid grid-cols-2 gap-2">
                         {product.variants.map((v) => (
                             <button
@@ -1077,109 +1282,63 @@ function Picker({
                                 aria-pressed={variantId === v.id}
                                 disabled={!v.is_available}
                                 onClick={() => setVariantId(v.id)}
-                                className={`h-12 rounded-xl border bg-card px-2 text-sm disabled:opacity-50 ${variantId === v.id ? 'border-primary bg-primary text-primary-foreground' : ''}`}
+                                className={chip(variantId === v.id)}
                             >
-                                {v.name} ·{' '}
-                                {v.is_available ? rp(v.price) : 'Habis'}
+                                <span>{v.name}</span>
+                                <span className="text-xs text-muted-foreground tabular-nums">
+                                    {v.is_available ? rp(v.price) : 'Habis'}
+                                </span>
                             </button>
                         ))}
                     </div>
                 </fieldset>
             )}
             {product.modifier_groups.map((g) => (
-                <fieldset key={g.id} className="mb-3">
-                    <legend className="mb-1 text-sm font-medium">
+                <fieldset key={g.id} className="mb-5">
+                    <legend className="mb-2 text-sm font-bold">
                         {g.name}{' '}
-                        <span className="font-normal text-muted-foreground">
+                        <span className="font-medium text-muted-foreground">
                             · {g.required ? 'wajib' : 'opsional'}
+                            {g.max > 1 ? `, maks ${g.max}` : ''}
                         </span>
                     </legend>
                     <div className="grid grid-cols-2 gap-2">
                         {g.modifiers.map((m) => {
-                            const on = picked[g.id]?.includes(m.id);
+                            const on = picked[g.id]?.includes(m.id) ?? false;
+
                             return (
                                 <button
                                     key={m.id}
                                     aria-pressed={on}
                                     disabled={!m.is_available}
                                     onClick={() => toggle(g.id, m.id, g.max)}
-                                    className={`h-12 rounded-xl border bg-card px-2 text-sm disabled:opacity-50 ${on ? 'border-primary bg-primary text-primary-foreground' : ''}`}
+                                    className={chip(on)}
                                 >
-                                    {m.name}
-                                    {!m.is_available
-                                        ? ' · Habis'
-                                        : m.price_delta
-                                          ? ` +${rp(m.price_delta)}`
-                                          : ''}
+                                    <span>{m.name}</span>
+                                    <span className="text-xs text-muted-foreground tabular-nums">
+                                        {!m.is_available
+                                            ? 'Habis'
+                                            : m.price_delta
+                                              ? `+${rp(m.price_delta)}`
+                                              : ''}
+                                    </span>
                                 </button>
                             );
                         })}
                     </div>
                 </fieldset>
             ))}
-            <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                maxLength={120}
-                placeholder="Catatan (opsional)"
-                aria-label="Catatan"
-                className="mb-3 h-12 w-full rounded-lg border px-3"
-            />
-            <div className="flex items-center gap-3">
-                <button
-                    aria-label="Kurangi"
-                    className="size-12 rounded-lg border"
-                    onClick={() => setQty((q) => Math.max(1, q - 1))}
-                >
-                    −
-                </button>
-                <span className="w-6 text-center">{qty}</span>
-                <button
-                    aria-label="Tambah"
-                    className="size-12 rounded-lg border"
-                    onClick={() => setQty((q) => Math.min(20, q + 1))}
-                >
-                    +
-                </button>
-                <button
-                    disabled={!!missing}
-                    onClick={() => {
-                        const ids = Object.values(picked).flat();
-                        const names = product.modifier_groups.flatMap((g) =>
-                            g.modifiers
-                                .filter((m) => ids.includes(m.id))
-                                .map((m) => m.name),
-                        );
-                        const v = product.variants.find(
-                            (x) => x.id === variantId,
-                        );
-                        onAdd({
-                            key: crypto.randomUUID(),
-                            product,
-                            variantId,
-                            modifierIds: ids,
-                            qty,
-                            note: note.trim(),
-                            unit,
-                            label: [
-                                product.name,
-                                v ? `(${v.name})` : '',
-                                names.length ? `· ${names.join(', ')}` : '',
-                            ]
-                                .filter(Boolean)
-                                .join(' '),
-                        });
-                    }}
-                    className="h-12 flex-1 rounded-xl bg-primary font-bold text-primary-foreground disabled:opacity-50"
-                >
-                    Tambah · {rp(unit * qty)}
-                </button>
-            </div>
-            {missing && (
-                <p className="mt-2 text-xs text-red-700">
-                    Pilih minimal {missing.min} untuk {missing.name}
-                </p>
-            )}
+            <label className="grid gap-1.5 text-sm font-bold">
+                Catatan
+                <input
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    maxLength={120}
+                    placeholder="Opsional, mis. tanpa es"
+                    aria-label="Catatan"
+                    className="h-12 rounded-2xl bg-muted px-4 text-base font-normal outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/40"
+                />
+            </label>
         </Sheet>
     );
 }

@@ -13,9 +13,9 @@ final class Branding
     public static function profile(): array
     {
         try {
-            $o = Outlet::query()->orderBy('id')->first(['name', 'logo_path']);
+            $o = Outlet::query()->orderBy('id')->firstOrFail(['name', 'logo_path']);
 
-            return ['name' => $o?->name ?? (string) config('app.name'), 'logo' => $o?->logo_path ? self::icon() : null];
+            return ['name' => $o->name, 'logo' => $o->logo_path ? self::icon() : null];
         } catch (Throwable) {
             return ['name' => (string) config('app.name'), 'logo' => null];
         }

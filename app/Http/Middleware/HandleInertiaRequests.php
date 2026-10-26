@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Domain\Printing\PrintDispatcher;
 use App\Domain\Settings\SettingsRepository;
+use App\Support\Branding;
 use App\Support\RealtimeConfig;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -41,6 +42,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+            'brand' => fn () => Branding::profile(),
             'auth' => [
                 'user' => $request->user() ? [
                     ...$request->user()->toArray(),

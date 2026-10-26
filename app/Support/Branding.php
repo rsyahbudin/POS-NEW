@@ -9,6 +9,18 @@ use Throwable;
 /** The cafe's own logo for places outside the app UI, such as the browser tab icon. */
 final class Branding
 {
+    /** @return array{name: string, logo: string|null} the cafe's name and logo for the sign-in pages and other public screens */
+    public static function profile(): array
+    {
+        try {
+            $o = Outlet::query()->orderBy('id')->first(['name', 'logo_path']);
+
+            return ['name' => $o?->name ?? (string) config('app.name'), 'logo' => $o?->logo_path ? self::icon() : null];
+        } catch (Throwable) {
+            return ['name' => (string) config('app.name'), 'logo' => null];
+        }
+    }
+
     /** URL of the outlet logo (with a cache-busting version), or null when none is uploaded. */
     public static function icon(): ?string
     {

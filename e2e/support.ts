@@ -32,10 +32,10 @@ export function resetDatabase(): { token: string } {
 
 export async function login(page: Page, email: string): Promise<void> {
     await page.goto('/login');
-    await page.getByRole('button', { name: /Login owner \/ manager/ }).click();
-    await page.getByPlaceholder('email@example.com').fill(email);
+    await page.getByRole('button', { name: /Masuk dengan email/ }).click();
+    await page.getByPlaceholder('nama@email.com').fill(email);
     await page.getByPlaceholder('Password').fill('password');
-    await page.getByRole('button', { name: 'Log in' }).click();
+    await page.getByRole('button', { name: 'Masuk', exact: true }).click();
     await page.waitForURL((url) => !url.pathname.startsWith('/login'));
 }
 

@@ -6,6 +6,7 @@ use App\Domain\Floor\Models\ServiceCall;
 use App\Domain\Floor\Models\Table;
 use App\Domain\Floor\ServiceCalls;
 use App\Domain\Ordering\Actions\SubmitQrOrderAction;
+use App\Domain\Settings\Models\Outlet;
 use App\Http\Presenters\MenuPresenter;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
@@ -169,4 +170,13 @@ it('uses the cafe logo as the browser tab icon, and the default icon when there 
     $this->actingAs(userWithRole('owner'))->post('/admin/settings/outlet', ['name' => 'Kafe Contoh', 'logo' => UploadedFile::fake()->image('logo.png', 300, 300)])->assertSessionHas('success');
     $this->get("/m/{$table->qr_token}")->assertSee('rel="icon" href="/storage/logo/', false)->assertDontSee('/favicon.ico', false);
     $this->actingAs(userWithRole('owner'))->get('/dashboard')->assertSee('rel="apple-touch-icon" href="/storage/logo/', false);
+});
+
+it('hands the cafe name and logo to the sign-in page', function () {
+    Storage::fake('public');
+    $this->get('/login')->assertOk()->assertInertia(fn ($p) => $p->component('auth/login')->where('brand.name', Outlet::query()->value('name'))->where('brand.logo', null));
+
+    $this->actingAs(userWithRole('owner'))->post('/admin/settings/outlet', ['name' => 'Kopi Tetangga', 'logo' => UploadedFile::fake()->image('logo.png', 300, 300)])->assertSessionHas('success');
+    auth()->logout();
+    $this->get('/login')->assertInertia(fn ($p) => $p->where('brand.name', 'Kopi Tetangga')->where('brand.logo', fn ($url) => str_starts_with($url, '/storage/logo/')));
 });

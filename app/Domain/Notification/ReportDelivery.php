@@ -111,10 +111,10 @@ class ReportDelivery
         ];
     }
 
-    /** The daily report as a designed email: headline, comparison, hours, payment methods, best sellers, expenses, things to check. */
+    /** The email body: a short note with the headline numbers. The full designed report travels as the attached PDF. */
     public function dailyHtml(string $date, ZReportSummary $s): string
     {
-        return view('emails.daily-report', $this->dailyData($date, $s))->render();
+        return view('emails.daily-report-brief', $this->dailyData($date, $s))->render();
     }
 
     /**

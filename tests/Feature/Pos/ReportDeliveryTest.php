@@ -172,7 +172,7 @@ it('shows the report of any day, lists its shifts, and sends it on request', fun
     $this->actingAs($cashier)->post('/admin/day-close/send', ['date' => $d])->assertForbidden();
 });
 
-it('emails the daily report as a designed message with a plain-text fallback', function () {
+it('emails the daily report as a short note with the designed report attached as PDF', function () {
     setUpChannels(false, true, false);
     config(['mail.default' => 'array']);
     openShiftFor(userWithRole('cashier'), 0);
@@ -184,8 +184,12 @@ it('emails the daily report as a designed message with a plain-text fallback', f
     $delivery->deliver('Laporan harian', $delivery->dailyTextFor($date, $summary, $date), null, $delivery->dailyHtml($date, $summary));
     $message = app('mailer')->getSymfonyTransport()->messages()[0]->getOriginalMessage();
 
-    expect($message->getHtmlBody())->toContain('Penjualan bersih')->toContain('Rp44.000')->toContain('Menu terlaris')->toContain('Penjualan per jam')->toContain('7 hari terakhir')->toContain('hari ini')->not->toContain('Hr 1')->toContain('Dilayani oleh')->toContain('/admin/reports/sales?from='.$date)
+    expect($message->getHtmlBody())->toContain('Penjualan bersih')->toContain('Rp44.000')->toContain('PDF terlampir')->not->toContain('Menu terlaris')->not->toContain('<table')
         ->and($message->getTextBody())->toContain('Omzet bersih')->toContain('Penjualan per jam:')->toContain('1 order');
+
+    // the designed report (charts and all) is what the PDF is made from
+    $full = view('emails.daily-report', ['pdf' => true] + $delivery->dailyData($date, $summary))->render();
+    expect($full)->toContain('Menu terlaris')->toContain('Penjualan per jam')->toContain('7 hari terakhir')->toContain('hari ini')->not->toContain('Hr 1')->toContain('Dilayani oleh');
 });
 
 it('sends the daily report as soon as the last shift closes, once, and again only when the numbers change', function () {
@@ -231,8 +235,7 @@ it('shows two staff lists in the report only when more than one person worked', 
     $summary = ZReportSummary::fromArray(app(ZReport::class)->build($date));
     $delivery = app(ReportDelivery::class);
 
-    $delivery->deliver('Laporan harian', 'x', null, $delivery->dailyHtml($date, $summary));
-    $html = app('mailer')->getSymfonyTransport()->messages()[0]->getOriginalMessage()->getHtmlBody();
+    $html = view('emails.daily-report', ['pdf' => true] + $delivery->dailyData($date, $summary))->render();
 
     expect($html)->toContain('Order dicatat oleh')->toContain('Pembayaran diterima oleh')->not->toContain('Dilayani oleh')
         ->and(app(SalesReports::class)->by('receiver', $date, $date)->first()->label)->toBe($cashier->name);
@@ -258,7 +261,9 @@ it('adds the cash that left the business to the report, from the drawer and from
     $delivery->deliver('Laporan harian', $delivery->dailyTextFor($date, $summary, $date), null, $delivery->dailyHtml($date, $summary), $delivery->dailyPdfFile($date, $summary));
     $message = app('mailer')->getSymfonyTransport()->messages()[0]->getOriginalMessage();
 
-    expect($message->getHtmlBody())->toContain('Pengeluaran kas')->toContain('beli es batu')->toContain('Rp45.000')->toContain('Order dihitung pada jam')
+    $full = view('emails.daily-report', ['pdf' => true] + $delivery->dailyData($date, $summary))->render();
+    expect($message->getHtmlBody())->toContain('Pengeluaran kas: Rp45.000')
+        ->and($full)->toContain('Pengeluaran kas')->toContain('beli es batu')->toContain('Rp45.000')->toContain('Order dihitung pada jam')
         ->and($message->getTextBody())->toContain('Pengeluaran kas: Rp45.000')
         ->and(collect($message->getAttachments())->map->getFilename()->all())->toBe(['laporan-harian-'.$date.'.pdf']);
 });

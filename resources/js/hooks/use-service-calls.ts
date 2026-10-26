@@ -9,6 +9,8 @@ import type { ServiceCall } from '@/types/pos';
 /** A bell left unanswered rings again after this long, a few times. */
 const RERING_MS = 45000;
 const MAX_RERINGS = 6;
+/** With "bunyi berulang" on, a call rings every few seconds until someone marks it handled. */
+const KEEP_RINGING_MS = 10000;
 
 /**
  * Guests pressing "Panggil waiter": the open calls for this screen, a sound and a toast for each new ring (also
@@ -20,6 +22,7 @@ export function useServiceCalls(
     initial: ServiceCall[],
     sound: ReturnType<typeof useSound>,
     enabled = true,
+    keepRinging = true,
 ) {
     const [calls, setCalls] = useState(initial);
     const rang = useRef<Record<number, string>>(
@@ -65,8 +68,9 @@ export function useServiceCalls(
 
             for (const c of calls) {
                 if (
-                    now - (last.current[c.id] ?? now) >= RERING_MS &&
-                    (count.current[c.id] ?? 0) < MAX_RERINGS
+                    now - (last.current[c.id] ?? now) >=
+                        (keepRinging ? KEEP_RINGING_MS : RERING_MS) &&
+                    (keepRinging || (count.current[c.id] ?? 0) < MAX_RERINGS)
                 ) {
                     last.current[c.id] = now;
                     count.current[c.id] = (count.current[c.id] ?? 0) + 1;
@@ -76,7 +80,7 @@ export function useServiceCalls(
         }, 5000);
 
         return () => window.clearInterval(id);
-    }, [calls, sound]);
+    }, [calls, sound, keepRinging]);
 
     const { online } = useRealtime(
         enabled

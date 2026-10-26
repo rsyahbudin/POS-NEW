@@ -34,8 +34,8 @@ it('lets a guest call staff, shows it on the table map and rings only when allow
     $this->postJson("/m/{$table->qr_token}/call", ['reason' => 'help'])->assertOk();
     expect(ServiceCall::query()->count())->toBe(1)->and(ServiceCall::query()->first()->repeats)->toBe(0);
     $this->travel(ServiceCalls::RERING_SECONDS + 1)->seconds();
-    $this->postJson("/m/{$table->qr_token}/call", ['reason' => 'water'])->assertOk();
-    expect(ServiceCall::query()->first()->repeats)->toBe(1)->and(ServiceCall::query()->first()->reason)->toBe('water');
+    $this->postJson("/m/{$table->qr_token}/call", ['reason' => 'other'])->assertOk();
+    expect(ServiceCall::query()->first()->repeats)->toBe(1)->and(ServiceCall::query()->first()->reason)->toBe('other');
 
     $flat = collect(MenuPresenter::floor($table->outlet_id))->flatMap(fn ($a) => $a['tables']);
     expect($flat->firstWhere('id', $table->id)['calling'])->toBeTrue();
@@ -102,4 +102,17 @@ it('shows calls on the kitchen screen for people allowed to handle them', functi
 
     $station = Station::query()->firstOrFail();
     $this->actingAs(userWithRole('kitchen'))->get("/kds/{$station->id}")->assertInertia(fn ($p) => $p->where('canHandleCalls', true)->has('calls', 1));
+});
+
+it('tells the screens whether alarms keep ringing until handled, and offers no water request', function () {
+    setting('call.enabled', true);
+    $table = callTable();
+    $this->get("/m/{$table->qr_token}")->assertInertia(fn ($p) => $p->has('call.reasons.bill')->missing('call.reasons.water'));
+
+    $cashier = userWithRole('cashier');
+    $this->actingAs($cashier)->get('/pos')->assertInertia(fn ($p) => $p->where('settings.keep_ringing', true));
+    setting('alert.keep_ringing', false);
+    $this->actingAs($cashier)->get('/pos')->assertInertia(fn ($p) => $p->where('settings.keep_ringing', false));
+    $station = Station::query()->firstOrFail();
+    $this->actingAs(userWithRole('kitchen'))->get("/kds/{$station->id}")->assertInertia(fn ($p) => $p->where('keepRinging', false));
 });

@@ -51,6 +51,7 @@ class PosController extends Controller
             ],
             'settings' => [
                 'discount_limit_percent' => (int) $this->settings->get('discount.cashier_limit_percent', 10),
+                'keep_ringing' => (bool) $this->settings->get('alert.keep_ringing', true),
                 'qr_alert_seconds' => (int) $this->settings->get('qr.confirm_alert_seconds', 180),
                 'kds_enabled' => (bool) $this->settings->get('kitchen.enabled', false),
                 'quick_cash' => array_values(array_filter(array_map('intval', explode(',', (string) $this->settings->get('pos.quick_cash', '50000,100000,150000,200000'))))),

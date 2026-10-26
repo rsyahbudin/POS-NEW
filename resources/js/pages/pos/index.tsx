@@ -101,6 +101,7 @@ type Props = {
     settings: {
         discount_limit_percent: number;
         qr_alert_seconds: number;
+        keep_ringing: boolean;
         quick_cash: number[];
         receipt_whatsapp: boolean;
         kds_enabled: boolean;
@@ -183,6 +184,7 @@ export default function PosPage(props: Props) {
         props.calls,
         sound,
         can.handle_calls,
+        settings.keep_ringing,
     );
     const alerted = useRef<Record<number, number>>({});
     const alertCount = useRef<Record<number, number>>({});
@@ -318,7 +320,8 @@ export default function PosPage(props: Props) {
                 if (
                     waited >= settings.qr_alert_seconds &&
                     now - last >= settings.qr_alert_seconds * 1000 &&
-                    (alertCount.current[r.id] ?? 0) < MAX_REALERTS
+                    (settings.keep_ringing ||
+                        (alertCount.current[r.id] ?? 0) < MAX_REALERTS)
                 ) {
                     alerted.current[r.id] = now;
                     alertCount.current[r.id] =
@@ -332,7 +335,12 @@ export default function PosPage(props: Props) {
         }, 10000);
 
         return () => window.clearInterval(id);
-    }, [state.pending_qr, settings.qr_alert_seconds, sound]);
+    }, [
+        state.pending_qr,
+        settings.qr_alert_seconds,
+        settings.keep_ringing,
+        sound,
+    ]);
 
     const soldOut = state.sold_out;
 

@@ -37,6 +37,7 @@ class KdsController extends Controller
             'outletId' => $this->outlet->id(),
             'calls' => $handle ? $this->calls->pending('kitchen') : [],
             'canHandleCalls' => $handle,
+            'keepRinging' => (bool) $this->settings->get('alert.keep_ringing', true),
             'thresholds' => [
                 'warn' => (int) $this->settings->get('kitchen.warn_minutes', 10),
                 'danger' => (int) $this->settings->get('kitchen.danger_minutes', 20),

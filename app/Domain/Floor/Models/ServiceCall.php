@@ -25,7 +25,7 @@ use Illuminate\Support\Carbon;
  */
 class ServiceCall extends Model
 {
-    public const REASONS = ['help' => 'Butuh bantuan', 'bill' => 'Minta bill', 'water' => 'Minta air / tambahan', 'other' => 'Lainnya'];
+    public const REASONS = ['help' => 'Butuh bantuan', 'bill' => 'Minta bill', 'other' => 'Lainnya'];
 
     protected $guarded = [];
 

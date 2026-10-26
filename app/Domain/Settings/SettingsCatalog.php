@@ -37,6 +37,7 @@ final class SettingsCatalog
                     ['key' => 'call.enabled', 'type' => 'bool', 'label' => 'Tombol "Panggil waiter" di halaman QR', 'hint' => 'Aktif: pelanggan bisa memanggil staf dari HP-nya (butuh bantuan, minta bill, minta air). Meja yang memanggil ditandai di peta meja dan staf mendengar bunyi.', 'default' => false],
                     ['key' => 'call.to_pos', 'type' => 'bool', 'label' => 'Tampilkan panggilan di layar kasir dan waiter', 'hint' => 'Panggilan muncul di atas layar Kasir (semua yang punya izin Tangani panggilan meja) dengan bunyi.', 'default' => true],
                     ['key' => 'call.to_kitchen', 'type' => 'bool', 'label' => 'Tampilkan panggilan di layar dapur (KDS)', 'hint' => 'Berguna kalau dapur yang mengantar pesanan atau tidak ada waiter. Boleh aktif bersama layar kasir.', 'default' => false],
+                    ['key' => 'alert.keep_ringing', 'type' => 'bool', 'label' => 'Bunyi berulang sampai ditangani', 'hint' => 'Aktif: bunyi terus berulang sampai pesanan QR dikonfirmasi, panggilan meja ditandai selesai, dan tiket baru di dapur mulai dibuat. Mati: bunyi hanya beberapa kali. Bunyi bisa dibisukan lewat tombol speaker di layar.', 'default' => true],
                 ],
             ], [
                 'title' => 'Anti-spam',

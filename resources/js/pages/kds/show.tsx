@@ -40,6 +40,7 @@ type Props = {
     outletId: number;
     calls: ServiceCall[];
     canHandleCalls: boolean;
+    keepRinging: boolean;
     thresholds: { warn: number; danger: number };
 };
 
@@ -57,6 +58,7 @@ export default function KdsPage({
     outletId,
     calls: initialCalls,
     canHandleCalls,
+    keepRinging,
     thresholds,
 }: Props) {
     const [tickets, setTickets] = useState(initial);
@@ -77,6 +79,7 @@ export default function KdsPage({
         initialCalls,
         sound,
         canHandleCalls,
+        keepRinging,
     );
     const seen = useRef(new Set(initial.map((x) => x.round_id)));
 
@@ -92,6 +95,20 @@ export default function KdsPage({
             }
         };
     }, []);
+
+    // A ticket nobody has started keeps ringing, so a new order is not missed.
+    const waiting = tickets.some((tk) =>
+        tk.items.some((i) => i.status === 'new'),
+    );
+    useEffect(() => {
+        if (!keepRinging || !waiting) {
+            return;
+        }
+
+        const id = window.setInterval(() => sound.beep('order'), 15000);
+
+        return () => window.clearInterval(id);
+    }, [keepRinging, waiting, sound]);
 
     useEffect(() => {
         const id = window.setInterval(() => setNow(Date.now()), 15000);

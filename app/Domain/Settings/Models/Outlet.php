@@ -12,6 +12,13 @@ use Illuminate\Support\Carbon;
  * @property string $timezone
  * @property string|null $npwp
  * @property string|null $logo_path
+ * @property string|null $banner_path
+ * @property string|null $tagline
+ * @property string|null $opening_hours
+ * @property string|null $phone
+ * @property string|null $instagram
+ * @property string|null $wifi_name
+ * @property string|null $wifi_password
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */

@@ -28,6 +28,13 @@ type Props = {
         address: string | null;
         npwp: string | null;
         logo: string | null;
+        banner: string | null;
+        tagline: string | null;
+        opening_hours: string | null;
+        phone: string | null;
+        instagram: string | null;
+        wifi_name: string | null;
+        wifi_password: string | null;
     };
     settings: Record<string, string | number | boolean | null>;
     catalog: CatalogTab[];
@@ -79,53 +86,142 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
         address: outlet.address ?? '',
         npwp: outlet.npwp ?? '',
         logo: null as File | null,
+        banner: null as File | null,
+        remove_banner: false,
+        tagline: outlet.tagline ?? '',
+        opening_hours: outlet.opening_hours ?? '',
+        phone: outlet.phone ?? '',
+        instagram: outlet.instagram ?? '',
+        wifi_name: outlet.wifi_name ?? '',
+        wifi_password: outlet.wifi_password ?? '',
     });
+    const text = (
+        key: keyof typeof f,
+        label: string,
+        hint?: string,
+        ph?: string,
+    ) => (
+        <Field label={label} hint={hint}>
+            <Input
+                className="h-11"
+                value={String(f[key] ?? '')}
+                placeholder={ph}
+                onChange={(e) => setF({ ...f, [key]: e.target.value })}
+            />
+        </Field>
+    );
 
     return (
-        <section className="grid max-w-xl gap-3 rounded-xl border bg-card p-4">
-            <Field label="Nama outlet">
-                <Input
-                    className="h-11"
-                    value={f.name}
-                    onChange={(e) => setF({ ...f, name: e.target.value })}
-                />
-            </Field>
-            <Field label="Alamat">
-                <Input
-                    className="h-11"
-                    value={f.address}
-                    onChange={(e) => setF({ ...f, address: e.target.value })}
-                />
-            </Field>
-            <Field label="NPWP (opsional)">
-                <Input
-                    className="h-11"
-                    value={f.npwp}
-                    onChange={(e) => setF({ ...f, npwp: e.target.value })}
-                />
-            </Field>
-            <Field label="Logo">
-                <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) =>
-                        setF({ ...f, logo: e.target.files?.[0] ?? null })
-                    }
-                />
-            </Field>
+        <div className="grid max-w-xl gap-4">
+            <section className="grid gap-3 rounded-xl border bg-card p-4">
+                <h2 className="font-semibold">Profil outlet</h2>
+                {text('name', 'Nama outlet')}
+                {text('address', 'Alamat')}
+                {text('npwp', 'NPWP (opsional)')}
+                <Field label="Logo">
+                    <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) =>
+                            setF({ ...f, logo: e.target.files?.[0] ?? null })
+                        }
+                    />
+                </Field>
+            </section>
+            <section className="grid gap-3 rounded-xl border bg-card p-4">
+                <div>
+                    <h2 className="font-semibold">
+                        Tampil di halaman QR pelanggan
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                        Semua kolom opsional. Yang diisi akan tampil sebagai
+                        banner dan tombol Info kafe di HP pelanggan.
+                    </p>
+                </div>
+                <Field
+                    label="Banner"
+                    hint="Gambar lebar, mis. foto interior atau promo. Disarankan 1400 × 600 px."
+                >
+                    {outlet.banner && !f.remove_banner && (
+                        <img
+                            src={outlet.banner}
+                            alt="Banner saat ini"
+                            className="mb-2 aspect-[7/3] w-full rounded-xl object-cover"
+                        />
+                    )}
+                    <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) =>
+                            setF({
+                                ...f,
+                                banner: e.target.files?.[0] ?? null,
+                                remove_banner: false,
+                            })
+                        }
+                    />
+                    {outlet.banner && (
+                        <label className="mt-2 flex items-center gap-2 text-sm">
+                            <input
+                                type="checkbox"
+                                className="size-4"
+                                checked={f.remove_banner}
+                                onChange={(e) =>
+                                    setF({
+                                        ...f,
+                                        remove_banner: e.target.checked,
+                                        banner: null,
+                                    })
+                                }
+                            />
+                            Hapus banner
+                        </label>
+                    )}
+                </Field>
+                {text(
+                    'tagline',
+                    'Slogan singkat',
+                    undefined,
+                    'Mis. Kopi lokal, suasana hangat',
+                )}
+                {text(
+                    'opening_hours',
+                    'Jam buka',
+                    undefined,
+                    'Mis. Setiap hari 08.00–22.00',
+                )}
+                {text(
+                    'phone',
+                    'Telepon / WhatsApp',
+                    undefined,
+                    'Mis. 0812-3456-7890',
+                )}
+                {text('instagram', 'Instagram', undefined, '@namakafe')}
+                {text('wifi_name', 'Nama WiFi')}
+                {text(
+                    'wifi_password',
+                    'Password WiFi',
+                    'Ditampilkan ke pelanggan di Info kafe.',
+                )}
+            </section>
             <Button
                 className="h-12"
                 onClick={() =>
                     router.post(
                         '/admin/settings/outlet',
-                        { ...f, logo: f.logo ?? undefined },
+                        {
+                            ...f,
+                            logo: f.logo ?? undefined,
+                            banner: f.banner ?? undefined,
+                            remove_banner: f.remove_banner ? 1 : 0,
+                        },
                         { forceFormData: true, preserveScroll: true },
                     )
                 }
             >
                 Simpan
             </Button>
-        </section>
+        </div>
     );
 }
 

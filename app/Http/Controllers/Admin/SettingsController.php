@@ -44,19 +44,35 @@ class SettingsController extends Controller
         }
 
         return Inertia::render('admin/settings', [
-            'outlet' => Outlet::find($id)?->only(['name', 'address', 'npwp']) + ['logo' => Outlet::find($id)?->logo_path ? MediaUrl::public(Outlet::find($id)->logo_path) : null],
+            'outlet' => $this->outletProps(Outlet::findOrFail($id)),
             'settings' => $values,
             'catalog' => SettingsCatalog::tabs(),
         ]);
     }
 
+    /** @return array<string, mixed> */
+    private function outletProps(Outlet $o): array
+    {
+        return $o->only(['name', 'address', 'npwp', 'tagline', 'opening_hours', 'phone', 'instagram', 'wifi_name', 'wifi_password'])
+            + ['logo' => MediaUrl::public($o->logo_path), 'banner' => MediaUrl::public($o->banner_path)];
+    }
+
     public function updateOutlet(Request $request, ImageOptimizer $images): RedirectResponse
     {
-        $data = $request->validate(['name' => 'required|string|max:80', 'address' => 'nullable|string|max:200', 'npwp' => 'nullable|string|max:40', 'logo' => 'nullable|image|max:4096']);
+        $data = $request->validate([
+            'name' => 'required|string|max:80', 'address' => 'nullable|string|max:200', 'npwp' => 'nullable|string|max:40', 'logo' => 'nullable|image|max:4096',
+            'banner' => 'nullable|image|max:8192', 'remove_banner' => 'nullable|boolean', 'tagline' => 'nullable|string|max:120', 'opening_hours' => 'nullable|string|max:160',
+            'phone' => 'nullable|string|max:40', 'instagram' => 'nullable|string|max:60', 'wifi_name' => 'nullable|string|max:60', 'wifi_password' => 'nullable|string|max:80',
+        ]);
         $outlet = Outlet::findOrFail($this->outlet->id());
-        $fields = Arr::except($data, ['logo']);
+        $fields = Arr::except($data, ['logo', 'banner', 'remove_banner']);
         if ($request->hasFile('logo')) {
             $fields['logo_path'] = $images->store($request->file('logo'), 'logo');
+        }
+        if ($request->hasFile('banner')) {
+            $fields['banner_path'] = $images->store($request->file('banner'), 'banner', 1400, 220 * 1024);
+        } elseif (! empty($data['remove_banner'])) {
+            $fields['banner_path'] = null;
         }
         $outlet->update($fields);
         Audit::log('settings.outlet', $outlet, $fields);

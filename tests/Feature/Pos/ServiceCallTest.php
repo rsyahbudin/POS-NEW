@@ -5,8 +5,11 @@ use App\Domain\Floor\Events\ServiceCallChanged;
 use App\Domain\Floor\Models\ServiceCall;
 use App\Domain\Floor\Models\Table;
 use App\Domain\Floor\ServiceCalls;
+use App\Domain\Ordering\Actions\SubmitQrOrderAction;
 use App\Http\Presenters\MenuPresenter;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\PermissionRegistrar;
 
 function callTable(): Table
@@ -125,4 +128,35 @@ it('tells the QR page whether a kitchen screen exists, so order progress is not 
     $this->get("/m/{$table->qr_token}")->assertInertia(fn ($p) => $p->where('kds', false));
     setting('kitchen.enabled', true);
     $this->get("/m/{$table->qr_token}")->assertInertia(fn ($p) => $p->where('kds', true));
+});
+
+it('lets the owner fill in the cafe info shown on the QR page, with a banner that can be replaced and removed', function () {
+    Storage::fake('public');
+    $owner = userWithRole('owner');
+    $table = callTable();
+
+    $this->actingAs($owner)->post('/admin/settings/outlet', [
+        'name' => 'Kafe Contoh', 'tagline' => 'Kopi lokal', 'opening_hours' => 'Setiap hari 08.00–22.00', 'phone' => '0812-0000-1111', 'instagram' => '@kafe',
+        'wifi_name' => 'KafeWifi', 'wifi_password' => 'rahasia123', 'address' => 'Jl. Melati 1',
+        'banner' => UploadedFile::fake()->image('banner.jpg', 1400, 600),
+    ])->assertSessionHas('success');
+
+    $venue = fn () => $this->get("/m/{$table->qr_token}")->viewData('page')['props']['venue'];
+    expect($venue())->toMatchArray(['tagline' => 'Kopi lokal', 'hours' => 'Setiap hari 08.00–22.00', 'phone' => '0812-0000-1111', 'instagram' => '@kafe', 'wifi_name' => 'KafeWifi', 'wifi_password' => 'rahasia123', 'address' => 'Jl. Melati 1'])
+        ->and($venue()['banner'])->toStartWith('/storage/banner/');
+    Storage::disk('public')->assertExists(str_replace('/storage/', '', $venue()['banner']));
+
+    $this->actingAs($owner)->post('/admin/settings/outlet', ['name' => 'Kafe Contoh', 'remove_banner' => 1, 'tagline' => ''])->assertSessionHas('success');
+    expect($venue()['banner'])->toBeNull()->and($venue()['tagline'])->toBeNull();    // an emptied field is cleared
+    $this->actingAs(userWithRole('cashier'))->post('/admin/settings/outlet', ['name' => 'X'])->assertForbidden();
+});
+
+it('gives the guest the price of every item in the order status', function () {
+    $cashier = userWithRole('cashier');
+    openShiftFor($cashier, 0);
+    $table = callTable();
+    app(SubmitQrOrderAction::class)->handle($table->qr_token, ['customer_name' => 'Rani', 'items' => [['product_id' => product('Americano')->id, 'qty' => 2]]]);
+
+    $item = $this->getJson("/m/{$table->qr_token}/status")->json('rounds.0.items.0');
+    expect($item['qty'])->toBe(2)->and($item['price'])->toBe(44000);
 });

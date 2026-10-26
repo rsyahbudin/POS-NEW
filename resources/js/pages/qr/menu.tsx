@@ -28,9 +28,21 @@ type StatusRound = {
     items: {
         name: string;
         qty: number;
+        price: number;
         modifiers: string[];
         voided: boolean;
     }[];
+};
+type Venue = {
+    logo: string | null;
+    banner: string | null;
+    tagline: string | null;
+    hours: string | null;
+    address: string | null;
+    phone: string | null;
+    instagram: string | null;
+    wifi_name: string | null;
+    wifi_password: string | null;
 };
 type CallState = { status: string; reason: string; at: string } | null;
 type Status = { rounds: StatusRound[]; total: number; call?: CallState };
@@ -39,6 +51,7 @@ type Props = {
     token: string;
     table: { name: string; public_id: string };
     outlet: string | null;
+    venue: Venue;
     menu: Category[];
     outletId: number;
     autoConfirm: boolean;
@@ -60,6 +73,7 @@ export default function QrMenu({
     token,
     table,
     outlet,
+    venue,
     menu: initialMenu,
     status: initialStatus,
     autoConfirm,
@@ -78,7 +92,13 @@ export default function QrMenu({
         }
     });
     const [picking, setPicking] = useState<Product | null>(null);
-    const [open, setOpen] = useState<'cart' | 'status' | null>(null);
+    const [open, setOpen] = useState<'cart' | 'status' | 'info' | null>(null);
+    const hasInfo = !!(
+        venue.address ||
+        venue.phone ||
+        venue.instagram ||
+        venue.wifi_name
+    );
     const [cat, setCat] = useState<number | 'all'>('all');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
@@ -299,15 +319,35 @@ export default function QrMenu({
         <>
             <Head title={`Menu · ${table.name}`} />
             <div className="min-h-dvh bg-background pb-40 text-foreground">
-                <header className="px-5 pt-7 pb-4">
+                {venue.banner && (
+                    <div className="px-4 pt-4">
+                        <img
+                            src={venue.banner}
+                            alt=""
+                            className="aspect-[7/3] w-full rounded-3xl object-cover shadow-sm ring-1 ring-black/5"
+                        />
+                    </div>
+                )}
+                <header
+                    className={`px-5 pb-4 ${venue.banner ? 'pt-5' : 'pt-7'}`}
+                >
                     <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-muted-foreground">
-                                {outlet}
-                            </p>
-                            <h1 className="mt-0.5 text-[28px] leading-9 font-bold tracking-tight">
-                                Meja {table.name}
-                            </h1>
+                        <div className="flex min-w-0 items-center gap-3">
+                            {venue.logo && (
+                                <img
+                                    src={venue.logo}
+                                    alt=""
+                                    className="size-12 shrink-0 rounded-2xl object-cover ring-1 ring-black/5"
+                                />
+                            )}
+                            <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-muted-foreground">
+                                    {outlet}
+                                </p>
+                                <h1 className="mt-0.5 text-[28px] leading-9 font-bold tracking-tight">
+                                    Meja {table.name}
+                                </h1>
+                            </div>
                         </div>
                         {call.enabled && (
                             <CallWaiter
@@ -320,7 +360,31 @@ export default function QrMenu({
                             />
                         )}
                     </div>
-                    <p className="mt-1.5 text-sm text-muted-foreground">
+                    {venue.tagline && (
+                        <p className="mt-2.5 text-[15px] leading-snug font-medium">
+                            {venue.tagline}
+                        </p>
+                    )}
+                    {(venue.hours || hasInfo) && (
+                        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                            {venue.hours && (
+                                <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-muted px-3 text-xs font-medium">
+                                    <span aria-hidden>🕘</span>
+                                    {venue.hours}
+                                </span>
+                            )}
+                            {hasInfo && (
+                                <button
+                                    onClick={() => setOpen('info')}
+                                    className="inline-flex h-8 items-center gap-1.5 rounded-full bg-muted px-3 text-xs font-semibold active:scale-95"
+                                >
+                                    <span aria-hidden>ℹ️</span>
+                                    Info kafe
+                                </button>
+                            )}
+                        </div>
+                    )}
+                    <p className="mt-2 text-sm text-muted-foreground">
                         {qris
                             ? 'Pilih menu, kirim pesanan, bayar langsung dari HP.'
                             : 'Pembayaran di kasir.'}
@@ -711,6 +775,67 @@ export default function QrMenu({
                     </Sheet>
                 )}
 
+                {open === 'info' && (
+                    <Sheet title="Info kafe" onClose={() => setOpen(null)}>
+                        <dl className="grid gap-4 text-sm">
+                            {venue.hours && (
+                                <InfoRow label="Jam buka">
+                                    {venue.hours}
+                                </InfoRow>
+                            )}
+                            {venue.address && (
+                                <InfoRow label="Alamat">
+                                    <span>{venue.address}</span>
+                                    <a
+                                        className="mt-1 block font-semibold text-primary underline"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${outlet ?? ''} ${venue.address}`)}`}
+                                    >
+                                        Buka di Maps
+                                    </a>
+                                </InfoRow>
+                            )}
+                            {venue.phone && (
+                                <InfoRow label="Telepon / WhatsApp">
+                                    <a
+                                        className="font-semibold text-primary underline"
+                                        href={`tel:${venue.phone.replace(/[^\d+]/g, '')}`}
+                                    >
+                                        {venue.phone}
+                                    </a>
+                                </InfoRow>
+                            )}
+                            {venue.instagram && (
+                                <InfoRow label="Instagram">
+                                    <a
+                                        className="font-semibold text-primary underline"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        href={`https://instagram.com/${venue.instagram.replace(/^@/, '')}`}
+                                    >
+                                        {venue.instagram.startsWith('@')
+                                            ? venue.instagram
+                                            : `@${venue.instagram}`}
+                                    </a>
+                                </InfoRow>
+                            )}
+                            {venue.wifi_name && (
+                                <InfoRow label="WiFi">
+                                    <span className="block font-semibold">
+                                        {venue.wifi_name}
+                                    </span>
+                                    {venue.wifi_password && (
+                                        <CopyField
+                                            value={venue.wifi_password}
+                                        />
+                                    )}
+                                </InfoRow>
+                            )}
+                        </dl>
+                    </Sheet>
+                )}
+
                 {open === 'status' && (
                     <Sheet
                         title="Status pesanan"
@@ -768,11 +893,14 @@ export default function QrMenu({
                                                 <span className="font-semibold tabular-nums">
                                                     {i.qty}×
                                                 </span>
-                                                <span>
+                                                <span className="min-w-0 flex-1">
                                                     {i.name}
                                                     {i.modifiers.length
                                                         ? ` (${i.modifiers.join(', ')})`
                                                         : ''}
+                                                </span>
+                                                <span className="shrink-0 tabular-nums">
+                                                    {rp(i.price)}
                                                 </span>
                                             </li>
                                         ))}
@@ -802,6 +930,50 @@ export default function QrMenu({
                 )}
             </div>
         </>
+    );
+}
+
+function InfoRow({
+    label,
+    children,
+}: {
+    label: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <div className="rounded-2xl bg-muted p-3.5">
+            <dt className="mb-1 text-xs font-semibold text-muted-foreground">
+                {label}
+            </dt>
+            <dd className="text-[15px] leading-snug break-words">{children}</dd>
+        </div>
+    );
+}
+
+/** A value the guest wants to copy (the WiFi password), with a tap-to-copy button. */
+function CopyField({ value }: { value: string }) {
+    const [copied, setCopied] = useState(false);
+
+    return (
+        <span className="mt-1.5 flex items-center gap-2">
+            <code className="min-w-0 flex-1 rounded-lg bg-background px-2.5 py-1.5 text-sm break-all">
+                {value}
+            </code>
+            <button
+                onClick={async () => {
+                    try {
+                        await navigator.clipboard.writeText(value);
+                        setCopied(true);
+                        window.setTimeout(() => setCopied(false), 2000);
+                    } catch {
+                        // clipboard blocked: the password stays visible to type
+                    }
+                }}
+                className="h-9 shrink-0 rounded-full bg-primary px-3.5 text-xs font-semibold text-primary-foreground active:scale-95"
+            >
+                {copied ? 'Tersalin ✓' : 'Salin'}
+            </button>
+        </span>
     );
 }
 

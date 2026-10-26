@@ -12,6 +12,7 @@ use App\Domain\Settings\Models\Outlet;
 use App\Domain\Settings\SettingsRepository;
 use App\Http\Controllers\Controller;
 use App\Http\Presenters\MenuPresenter;
+use App\Support\MediaUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -33,6 +34,7 @@ class QrMenuController extends Controller
             'token' => $token,
             'table' => ['name' => $table->name, 'public_id' => $table->public_id],
             'outlet' => Outlet::query()->find($table->outlet_id)?->name,
+            'venue' => $this->venue($table->outlet_id),
             'menu' => MenuPresenter::categories($table->outlet_id),
             'outletId' => $table->outlet_id,
             'status' => $this->status($table),
@@ -41,6 +43,17 @@ class QrMenuController extends Controller
             'kds' => (bool) app(SettingsRepository::class)->get('kitchen.enabled', false),
             'autoConfirm' => (bool) app(SettingsRepository::class)->get('qr.auto_confirm', false),
         ]);
+    }
+
+    /** @return array<string, mixed> what the guest sees about the cafe: banner, hours, contact, wifi */
+    private function venue(int $outletId): array
+    {
+        $o = Outlet::query()->findOrFail($outletId);
+
+        return [
+            'logo' => MediaUrl::public($o->logo_path), 'banner' => MediaUrl::public($o->banner_path), 'tagline' => $o->tagline, 'hours' => $o->opening_hours,
+            'address' => $o->address, 'phone' => $o->phone, 'instagram' => $o->instagram, 'wifi_name' => $o->wifi_name, 'wifi_password' => $o->wifi_password,
+        ];
     }
 
     /** @return array<string, mixed> */
@@ -67,7 +80,7 @@ class QrMenuController extends Controller
 
             return [
                 'id' => $r->id, 'status' => $label, 'reject_reason' => $r->reject_reason, 'created_at' => $r->created_at?->toIso8601String(),
-                'items' => $r->items->map(fn ($i) => ['name' => $i->name_snapshot, 'qty' => $i->qty, 'modifiers' => collect($i->modifiers_snapshot ?? [])->pluck('name')->all(), 'voided' => $i->status->value === 'voided'])->values()->all(),
+                'items' => $r->items->map(fn ($i) => ['name' => $i->name_snapshot, 'qty' => $i->qty, 'price' => $i->line_total, 'modifiers' => collect($i->modifiers_snapshot ?? [])->pluck('name')->all(), 'voided' => $i->status->value === 'voided'])->values()->all(),
             ];
         })->values()->all();
 

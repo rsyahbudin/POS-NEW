@@ -688,3 +688,4 @@ Halaman publik (tanpa login):
 **Alur kunci yang harus mulus:** (1) Customer scan → pilih → pesan → status → (opsional) bayar QRIS. (2) Kasir/waiter pilih meja → tambah menu (varian/modifier) → kirim ke dapur → tambah ronde → bayar → struk. (3) Karyawan belanja: cari bahan → jumlah/satuan/harga → kirim → lihat status persetujuan. (4) Manager: lonceng → setujui belanja/opname → lihat laporan.
 
 - **Istilah dalam bahasa Indonesia:** layar, laporan, email, dan izin memakai "Batalkan" / "Pembatalan" / "Dibatalkan" untuk membatalkan item atau order (bukan "void"), agar mudah dimengerti staf. Nama teknis di kode dan database tidak berubah.
+- **Ikon tab browser:** logo outlet (Pengaturan › Outlet) dipakai sebagai ikon tab browser dan ikon layar utama HP di semua halaman, termasuk QR pelanggan; tanpa logo dipakai ikon bawaan. PDF struk bulanan berjalan di antrean khusus `exports` (memori 1,3 GB, batas 30 menit) agar tidak terputus oleh batas worker biasa.

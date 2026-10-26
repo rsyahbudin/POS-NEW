@@ -71,3 +71,30 @@ Secrets GitHub yang dibutuhkan: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`.
 # unduh backup terbaru dari R2, lalu
 unzip backup.zip && gunzip -c db-dumps/pgsql-pos.sql.gz | psql -U pos -d pos_restore
 ```
+
+## Update lewat `git pull` (tanpa Deployer)
+
+Urutan di server setiap kali ada versi baru dari `main`:
+
+```bash
+cd /var/www/pos            # folder aplikasi
+php artisan backup:run --only-db         # cadangan database dulu
+git pull origin main
+composer install --no-dev --optimize-autoloader
+npm ci && npm run build    # public/build TIDAK ikut git; atau build di laptop lalu upload folder public/build
+php artisan migrate --force
+php artisan storage:link   # sekali saja, untuk foto menu, logo, banner
+php artisan optimize:clear && php artisan optimize
+php artisan horizon:terminate            # Supervisor menyalakan ulang dengan kode baru
+php artisan reverb:restart
+sudo supervisorctl status                # pos-horizon dan pos-reverb harus RUNNING
+```
+
+Hal yang perlu diperhatikan:
+
+- `.env` untuk email laporan harian lewat Resend: `MAIL_MAILER=resend`, `RESEND_API_KEY=...`, `MAIL_FROM_ADDRESS=` (domain terverifikasi di Resend).
+- Jangan jalankan `db:seed` di produksi: migrasi sudah memberi izin baru ke peran yang ada.
+- PDF struk bulanan berjalan di antrean `exports` (worker Horizon `supervisor-exports`, memori 1,3 GB, batas 30 menit); pastikan Horizon RUNNING.
+- Cron `schedule:run` tiap menit sudah cukup; perintah terjadwal baru ikut otomatis.
+- Ekstensi PHP `gd` dengan dukungan WebP dibutuhkan untuk foto menu, logo, dan banner.
+- Setelah deploy, cek: login, kirim email uji di Pengaturan > Notifikasi, dan nyalakan opsi baru yang dibutuhkan (Panggil waiter, Bunyi berulang) di Pengaturan.

@@ -15,7 +15,10 @@ class ExportReceiptsPdfJob implements ShouldQueue
 
     public int $tries = 1;
 
-    public function __construct(public int $exportId) {}
+    public function __construct(public int $exportId)
+    {
+        $this->onQueue('exports');
+    }
 
     public function handle(ReceiptArchive $archive): void
     {

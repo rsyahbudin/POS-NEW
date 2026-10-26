@@ -160,3 +160,13 @@ it('gives the guest the price of every item in the order status', function () {
     $item = $this->getJson("/m/{$table->qr_token}/status")->json('rounds.0.items.0');
     expect($item['qty'])->toBe(2)->and($item['price'])->toBe(44000)->and($item['note'])->toBe('less ice');
 });
+
+it('uses the cafe logo as the browser tab icon, and the default icon when there is none', function () {
+    Storage::fake('public');
+    $table = callTable();
+    $this->get("/m/{$table->qr_token}")->assertSee('/favicon.ico', false)->assertDontSee('/storage/logo/', false);
+
+    $this->actingAs(userWithRole('owner'))->post('/admin/settings/outlet', ['name' => 'Kafe Contoh', 'logo' => UploadedFile::fake()->image('logo.png', 300, 300)])->assertSessionHas('success');
+    $this->get("/m/{$table->qr_token}")->assertSee('rel="icon" href="/storage/logo/', false)->assertDontSee('/favicon.ico', false);
+    $this->actingAs(userWithRole('owner'))->get('/dashboard')->assertSee('rel="apple-touch-icon" href="/storage/logo/', false);
+});

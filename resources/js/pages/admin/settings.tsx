@@ -118,7 +118,10 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
                 {text('name', 'Nama outlet')}
                 {text('address', 'Alamat')}
                 {text('npwp', 'NPWP (opsional)')}
-                <Field label="Logo">
+                <Field
+                    label="Logo"
+                    hint="Juga dipakai sebagai ikon tab browser dan ikon saat halaman ditambahkan ke layar utama HP."
+                >
                     <input
                         type="file"
                         accept="image/*"

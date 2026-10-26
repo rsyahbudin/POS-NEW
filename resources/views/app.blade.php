@@ -30,9 +30,15 @@
             }
         </style>
 
-        <link rel="icon" href="/favicon.ico" sizes="any">
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        @php($brandIcon = \App\Support\Branding::icon())
+        @if ($brandIcon)
+            <link rel="icon" href="{{ $brandIcon }}" type="image/webp">
+            <link rel="apple-touch-icon" href="{{ $brandIcon }}">
+        @else
+            <link rel="icon" href="/favicon.ico" sizes="any">
+            <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+            <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        @endif
 
         @fonts
 

@@ -1,9 +1,11 @@
 <?php
 
+use App\Domain\Reporting\Jobs\ExportReceiptsPdfJob;
 use App\Domain\Reporting\Models\ReceiptExport;
 use App\Domain\Reporting\ReceiptArchive;
 use App\Domain\Settings\Models\Outlet;
 use App\Domain\Shift\Models\Shift;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 
 beforeEach(fn () => Storage::fake(ReceiptArchive::DISK));
@@ -83,4 +85,14 @@ it('prunes old files', function () {
     $this->artisan('receipt-exports:prune')->assertSuccessful();
     expect(ReceiptExport::query()->count())->toBe(0);
     Storage::disk(ReceiptArchive::DISK)->assertMissing('receipt-exports/x.pdf');
+});
+
+it('queues the monthly PDF on its own worker that has the memory and time it needs', function () {
+    Queue::fake();
+    ExportReceiptsPdfJob::dispatch(1);
+    Queue::assertPushedOn('exports', ExportReceiptsPdfJob::class);
+
+    $worker = config('horizon.defaults.supervisor-exports');
+    expect($worker['queue'])->toBe(['exports'])->and($worker['memory'])->toBeGreaterThanOrEqual(1024)->and($worker['timeout'])->toBeGreaterThanOrEqual(1800);
+    expect((int) config('queue.connections.redis.retry_after'))->toBeGreaterThan($worker['timeout']);
 });

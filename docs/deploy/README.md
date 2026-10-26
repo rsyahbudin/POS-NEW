@@ -98,3 +98,19 @@ Hal yang perlu diperhatikan:
 - Cron `schedule:run` tiap menit sudah cukup; perintah terjadwal baru ikut otomatis.
 - Ekstensi PHP `gd` dengan dukungan WebP dibutuhkan untuk foto menu, logo, dan banner.
 - Setelah deploy, cek: login, kirim email uji di Pengaturan > Notifikasi, dan nyalakan opsi baru yang dibutuhkan (Panggil waiter, Bunyi berulang) di Pengaturan.
+
+## Instalasi pertama di server baru
+
+```bash
+php artisan migrate --force      # buat semua tabel (JANGAN pakai migrate:fresh atau db:seed di server)
+php artisan pos:install          # tanya nama kafe, alamat, dan nama/email/password owner
+```
+
+`pos:install` menyiapkan peran dan izin, outlet beserta bagan akun, metode bayar, dan satu akun owner dengan
+password pilihanmu (minimal 10 karakter). Tidak ada menu contoh, pengguna contoh, atau password bawaan.
+`db:seed` hanya untuk komputer pengembangan: ia membuat akun `owner@pos.test` dengan password `password`
+dan PIN `111111`.
+Perintah ini menolak berjalan jika sudah ada pengguna.
+
+Kalau server pernah di-seed dengan `db:seed`, akun contoh itu masih ada dan **berbahaya**: hapus semuanya
+(atau kosongkan database dan ulangi dari `migrate`) sebelum dipakai sungguhan.

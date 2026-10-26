@@ -174,7 +174,7 @@ it('emails the daily report as a designed message with a plain-text fallback', f
     $delivery->deliver('Laporan harian', $delivery->dailyTextFor($date, $summary, $date), null, $delivery->dailyHtml($date, $summary));
     $message = app('mailer')->getSymfonyTransport()->messages()[0]->getOriginalMessage();
 
-    expect($message->getHtmlBody())->toContain('Penjualan bersih')->toContain('Rp44.000')->toContain('Menu terlaris')->toContain('Penjualan per jam')->toContain('7 hari terakhir')->toContain('Dilayani oleh')->toContain('/admin/reports/sales?from='.$date)
+    expect($message->getHtmlBody())->toContain('Penjualan bersih')->toContain('Rp44.000')->toContain('Menu terlaris')->toContain('Penjualan per jam')->toContain('7 hari terakhir')->toContain('hari ini')->not->toContain('Hr 1')->toContain('Dilayani oleh')->toContain('/admin/reports/sales?from='.$date)
         ->and($message->getTextBody())->toContain('Omzet bersih')->toContain('Penjualan per jam:')->toContain('1 order');
 });
 

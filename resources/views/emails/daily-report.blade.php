@@ -84,7 +84,7 @@
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
             @foreach ($week as $d)
                 <tr>
-                    <td width="86" style="padding:4px 0;color:{{ $d['today'] ? $ac : '#475569' }};{{ $d['today'] ? 'font-weight:700;' : '' }}">{{ $d['name'] }}</td>
+                    <td width="118" style="padding:4px 0;color:{{ $d['today'] ? $ac : '#475569' }};{{ $d['today'] ? 'font-weight:700;' : '' }}">{{ $d['name'] }}@if (! empty($d['tag'])) <span style="font-size:11px;font-weight:600;">· {{ $d['tag'] }}</span>@endif</td>
                     <td style="padding:4px 8px;"><div style="height:11px;width:{{ max(1, (int) round($d['total'] / $weekMax * 100)) }}%;background:{{ $d['today'] ? $ac : '#5eead4' }};border-radius:4px;font-size:0;line-height:0;">&nbsp;</div></td>
                     <td width="84" align="right" style="padding:4px 0;{{ $d['today'] ? 'font-weight:700;' : '' }}">{{ $m($d['total']) }}</td>
                 </tr>

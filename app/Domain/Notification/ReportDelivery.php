@@ -127,7 +127,7 @@ class ReportDelivery
     /**
      * The 7 days up to and including the report day; days without sales count as zero.
      *
-     * @return list<array{name: string, orders: int, total: int, today: bool}>
+     * @return list<array{name: string, tag: string|null, orders: int, total: int, today: bool}>
      */
     private function week(SalesReports $sales, CarbonImmutable $day): array
     {
@@ -136,7 +136,7 @@ class ReportDelivery
         for ($i = 6; $i >= 0; $i--) {
             $d = $day->subDays($i);
             $row = $by->get($d->toDateString());
-            $out[] = ['name' => $d->translatedFormat('D, d M'), 'orders' => (int) ($row->orders ?? 0), 'total' => (int) ($row->total ?? 0), 'today' => $i === 0];
+            $out[] = ['name' => $d->translatedFormat('D, d M'), 'tag' => $i === 0 && $d->isToday() ? 'hari ini' : null, 'orders' => (int) ($row->orders ?? 0), 'total' => (int) ($row->total ?? 0), 'today' => $i === 0];
         }
 
         return $out;

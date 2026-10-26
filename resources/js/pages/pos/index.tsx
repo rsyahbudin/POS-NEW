@@ -988,7 +988,7 @@ export default function PosPage(props: Props) {
                                 key={i.id}
                                 className="shrink-0 rounded-full bg-emerald-200 px-2 py-1 dark:bg-emerald-900/60"
                             >
-                                ✔ {i.table}: {i.qty}× {i.name}
+                                {i.table}: {i.qty}× {i.name}
                             </span>
                         ))}
                     </div>

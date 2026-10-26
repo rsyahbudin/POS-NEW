@@ -48,7 +48,7 @@ type Props = {
 const NEXT: Record<string, string> = {
     new: 'Mulai dibuat',
     preparing: 'Tandai siap',
-    ready: 'Siap ✔',
+    ready: 'Siap',
 };
 const AUTOPRINT = 'pos.kds.autoprint';
 

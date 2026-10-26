@@ -592,7 +592,7 @@ function Promos({ promos, menu }: { promos: Promo[]; menu: MenuChoices }) {
                                                 (x) => x.id === id,
                                             )?.name
                                         }{' '}
-                                        ✕
+                                        ×
                                     </button>
                                 ))}
                             </div>

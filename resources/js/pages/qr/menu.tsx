@@ -61,6 +61,45 @@ type Props = {
     kds: boolean;
 };
 
+/** Small line icons (24px grid, 2px stroke) so the guest page needs no icon library and no emoji. */
+const ICONS = {
+    bell: [
+        'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9',
+        'M10.3 21a1.94 1.94 0 0 0 3.4 0',
+    ],
+    clock: ['M12 6v6l4 2', 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18'],
+    info: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18', 'M12 16v-4', 'M12 8h.01'],
+    search: ['m21 21-4.3-4.3', 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16'],
+    close: ['M18 6 6 18', 'm6 6 12 12'],
+    check: ['M20 6 9 17l-5-5'],
+    list: ['M4 6h16', 'M4 12h16', 'M4 18h10'],
+} as const;
+
+function Ico({
+    name,
+    className = 'size-4',
+}: {
+    name: keyof typeof ICONS;
+    className?: string;
+}) {
+    return (
+        <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={`shrink-0 ${className}`}
+            aria-hidden
+        >
+            {ICONS[name].map((d) => (
+                <path key={d} d={d} />
+            ))}
+        </svg>
+    );
+}
+
 const rp = (n: number) => `Rp${Math.trunc(n).toLocaleString('id-ID')}`;
 
 function xsrf(): string {
@@ -92,7 +131,9 @@ export default function QrMenu({
         }
     });
     const [picking, setPicking] = useState<Product | null>(null);
-    const [open, setOpen] = useState<'cart' | 'status' | 'info' | null>(null);
+    const [open, setOpen] = useState<
+        'cart' | 'status' | 'info' | 'cats' | null
+    >(null);
     const hasInfo = !!(
         venue.address ||
         venue.phone ||
@@ -104,6 +145,17 @@ export default function QrMenu({
     const [error, setError] = useState('');
     const [done, setDone] = useState(false);
     const submitting = useRef(false);
+    const chips = useRef<HTMLElement | null>(null);
+
+    const lock = useRef(0);
+    const goTo = (id: number) => {
+        lock.current = Date.now() + 1500; // the scroll we start must not hand the highlight to another category
+        setCat(id);
+        document.getElementById(`cat-${id}`)?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+        });
+    };
 
     const refresh = useCallback(async () => {
         try {
@@ -163,7 +215,7 @@ export default function QrMenu({
                             a.boundingClientRect.top - b.boundingClientRect.top,
                     )[0];
 
-                if (top) {
+                if (top && Date.now() > lock.current) {
                     setCat(Number((top.target as HTMLElement).dataset.cat));
                 }
             },
@@ -173,6 +225,19 @@ export default function QrMenu({
 
         return () => io.disconnect();
     }, [sections]);
+    // keep the chip of the category being read in view, however many categories there are
+    useEffect(() => {
+        const bar = chips.current;
+        const chip = bar?.querySelector<HTMLElement>(`[data-chip="${cat}"]`);
+
+        if (bar && chip) {
+            bar.scrollTo({
+                left:
+                    chip.offsetLeft - (bar.clientWidth - chip.clientWidth) / 2,
+                behavior: 'smooth',
+            });
+        }
+    }, [cat]);
     const total = cart.reduce((s, l) => s + l.unit * l.qty, 0);
     const count = cart.reduce((s, l) => s + l.qty, 0);
 
@@ -369,7 +434,7 @@ export default function QrMenu({
                         <div className="mt-2.5 flex flex-wrap items-center gap-2">
                             {venue.hours && (
                                 <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-muted px-3 text-xs font-medium">
-                                    <span aria-hidden>🕘</span>
+                                    <Ico name="clock" className="size-3.5" />
                                     {venue.hours}
                                 </span>
                             )}
@@ -378,7 +443,7 @@ export default function QrMenu({
                                     onClick={() => setOpen('info')}
                                     className="inline-flex h-8 items-center gap-1.5 rounded-full bg-muted px-3 text-xs font-semibold active:scale-95"
                                 >
-                                    <span aria-hidden>ℹ️</span>
+                                    <Ico name="info" className="size-3.5" />
                                     Info kafe
                                 </button>
                             )}
@@ -395,12 +460,10 @@ export default function QrMenu({
                     {allCount > 6 && (
                         <div className="px-5 pt-2.5">
                             <label className="relative block">
-                                <span
-                                    aria-hidden
-                                    className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-muted-foreground"
-                                >
-                                    ⌕
-                                </span>
+                                <Ico
+                                    name="search"
+                                    className="pointer-events-none absolute top-1/2 left-4 size-[18px] -translate-y-1/2 text-muted-foreground"
+                                />
                                 <input
                                     type="search"
                                     value={q}
@@ -412,29 +475,34 @@ export default function QrMenu({
                             </label>
                         </div>
                     )}
-                    <nav
-                        className="flex [scrollbar-width:none] gap-2 overflow-x-auto px-5 py-2.5"
-                        aria-label="Kategori"
-                    >
-                        {sections.map((c) => (
+                    <div className="flex items-center gap-2 px-5 py-2.5">
+                        {sections.length > 4 && (
                             <button
-                                key={c.id}
-                                onClick={() => {
-                                    setCat(c.id);
-                                    document
-                                        .getElementById(`cat-${c.id}`)
-                                        ?.scrollIntoView({
-                                            behavior: 'smooth',
-                                            block: 'start',
-                                        });
-                                }}
-                                aria-pressed={cat === c.id}
-                                className={`h-10 shrink-0 rounded-full px-4 text-sm font-semibold transition-colors ${cat === c.id ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-muted text-foreground/80'}`}
+                                onClick={() => setOpen('cats')}
+                                aria-label="Semua kategori"
+                                className="grid size-10 shrink-0 place-items-center rounded-full bg-muted active:scale-95"
                             >
-                                {c.name}
+                                <Ico name="list" className="size-[18px]" />
                             </button>
-                        ))}
-                    </nav>
+                        )}
+                        <nav
+                            ref={chips}
+                            className="relative flex min-w-0 flex-1 [scrollbar-width:none] gap-2 overflow-x-auto"
+                            aria-label="Kategori"
+                        >
+                            {sections.map((c) => (
+                                <button
+                                    key={c.id}
+                                    data-chip={c.id}
+                                    onClick={() => goTo(c.id)}
+                                    aria-pressed={cat === c.id}
+                                    className={`h-10 shrink-0 rounded-full px-4 text-sm font-semibold transition-colors ${cat === c.id ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-muted text-foreground/80'}`}
+                                >
+                                    {c.name}
+                                </button>
+                            ))}
+                        </nav>
+                    </div>
                 </div>
 
                 <main>
@@ -775,6 +843,33 @@ export default function QrMenu({
                     </Sheet>
                 )}
 
+                {open === 'cats' && (
+                    <Sheet title="Kategori" onClose={() => setOpen(null)}>
+                        <ul className="divide-y divide-border/70">
+                            {sections.map((c) => (
+                                <li key={c.id}>
+                                    <button
+                                        onClick={() => {
+                                            setOpen(null);
+                                            goTo(c.id);
+                                        }}
+                                        className="flex min-h-14 w-full items-center justify-between gap-3 py-2 text-left"
+                                    >
+                                        <span
+                                            className={`text-base ${cat === c.id ? 'font-bold text-primary' : 'font-medium'}`}
+                                        >
+                                            {c.name}
+                                        </span>
+                                        <span className="text-sm text-muted-foreground tabular-nums">
+                                            {c.products.length} menu
+                                        </span>
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </Sheet>
+                )}
+
                 {open === 'info' && (
                     <Sheet title="Info kafe" onClose={() => setOpen(null)}>
                         <dl className="grid gap-4 text-sm">
@@ -849,7 +944,7 @@ export default function QrMenu({
                                 role="status"
                                 className="mb-3 flex gap-2 rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200"
                             >
-                                <span aria-hidden>✓</span>
+                                <Ico name="check" className="mt-0.5 size-4" />
                                 {autoConfirm
                                     ? 'Pesanan terkirim dan sedang diproses dapur.'
                                     : 'Pesanan terkirim. Menunggu konfirmasi kasir.'}
@@ -971,7 +1066,7 @@ function CopyField({ value }: { value: string }) {
                 }}
                 className="h-9 shrink-0 rounded-full bg-primary px-3.5 text-xs font-semibold text-primary-foreground active:scale-95"
             >
-                {copied ? 'Tersalin ✓' : 'Salin'}
+                {copied ? 'Tersalin' : 'Salin'}
             </button>
         </span>
     );
@@ -1221,13 +1316,14 @@ function CallWaiter({
                 onClick={() => setOpen(true)}
                 className={`flex h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold shadow-sm active:scale-95 ${waiting ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:ring-amber-800' : handled ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-200 dark:ring-emerald-800' : 'bg-muted text-foreground'}`}
             >
-                <span aria-hidden className={waiting ? 'animate-pulse' : ''}>
-                    🔔
-                </span>
+                <Ico
+                    name={handled ? 'check' : 'bell'}
+                    className={`size-4 ${waiting ? 'animate-pulse' : ''}`}
+                />
                 {waiting
                     ? 'Menunggu waiter…'
                     : handled
-                      ? '✓ Sudah ditangani'
+                      ? 'Sudah ditangani'
                       : 'Panggil waiter'}
             </button>
             {open &&
@@ -1317,9 +1413,9 @@ function Sheet({
                         <button
                             onClick={onClose}
                             aria-label="Tutup"
-                            className="grid size-10 place-items-center rounded-full bg-muted text-base active:scale-90"
+                            className="grid size-10 place-items-center rounded-full bg-muted active:scale-90"
                         >
-                            ✕
+                            <Ico name="close" className="size-[18px]" />
                         </button>
                     </div>
                 </div>

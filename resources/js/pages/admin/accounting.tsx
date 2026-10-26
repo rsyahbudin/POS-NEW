@@ -308,7 +308,7 @@ export default function Accounting(p: Props) {
                                 hint={
                                     p.balanceSheet.total_assets ===
                                     p.balanceSheet.total_liabilities_equity
-                                        ? 'Seimbang ✔'
+                                        ? 'Seimbang'
                                         : 'TIDAK SEIMBANG'
                                 }
                             />
@@ -521,7 +521,7 @@ function Coa({
                 headers={['Akun', 'Tipe', 'Saldo periode']}
                 numeric={[2]}
                 rows={accounts.map((a) => [
-                    `${a.name}${a.is_system ? ' 🔒' : ''}${a.is_active ? '' : ' (nonaktif)'}`,
+                    `${a.name}${a.is_system ? ' (sistem)' : ''}${a.is_active ? '' : ' (nonaktif)'}`,
                     TYPE_LABEL[a.type] ?? a.type,
                     rupiah(balances.find((b) => b.id === a.id)?.balance ?? 0),
                 ])}
@@ -719,7 +719,7 @@ function Manual({
                 aria-live="polite"
             >
                 Debit {rupiah(d)} · Kredit {rupiah(c)}{' '}
-                {d === c && d > 0 ? '✔ seimbang' : '— belum seimbang'}
+                {d === c && d > 0 ? 'Seimbang' : '— belum seimbang'}
             </p>
             <Button
                 className="h-12"

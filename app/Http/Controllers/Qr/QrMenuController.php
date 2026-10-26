@@ -80,7 +80,7 @@ class QrMenuController extends Controller
 
             return [
                 'id' => $r->id, 'status' => $label, 'reject_reason' => $r->reject_reason, 'created_at' => $r->created_at?->toIso8601String(),
-                'items' => $r->items->map(fn ($i) => ['name' => $i->name_snapshot, 'qty' => $i->qty, 'price' => $i->line_total, 'modifiers' => collect($i->modifiers_snapshot ?? [])->pluck('name')->all(), 'voided' => $i->status->value === 'voided'])->values()->all(),
+                'items' => $r->items->map(fn ($i) => ['name' => $i->name_snapshot, 'qty' => $i->qty, 'price' => $i->line_total, 'note' => $i->note, 'modifiers' => collect($i->modifiers_snapshot ?? [])->pluck('name')->all(), 'voided' => $i->status->value === 'voided'])->values()->all(),
             ];
         })->values()->all();
 

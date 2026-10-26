@@ -155,8 +155,8 @@ it('gives the guest the price of every item in the order status', function () {
     $cashier = userWithRole('cashier');
     openShiftFor($cashier, 0);
     $table = callTable();
-    app(SubmitQrOrderAction::class)->handle($table->qr_token, ['customer_name' => 'Rani', 'items' => [['product_id' => product('Americano')->id, 'qty' => 2]]]);
+    app(SubmitQrOrderAction::class)->handle($table->qr_token, ['customer_name' => 'Rani', 'items' => [['product_id' => product('Americano')->id, 'qty' => 2, 'note' => 'less ice']]]);
 
     $item = $this->getJson("/m/{$table->qr_token}/status")->json('rounds.0.items.0');
-    expect($item['qty'])->toBe(2)->and($item['price'])->toBe(44000);
+    expect($item['qty'])->toBe(2)->and($item['price'])->toBe(44000)->and($item['note'])->toBe('less ice');
 });

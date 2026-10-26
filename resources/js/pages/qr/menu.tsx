@@ -29,6 +29,7 @@ type StatusRound = {
         name: string;
         qty: number;
         price: number;
+        note: string | null;
         modifiers: string[];
         voided: boolean;
     }[];
@@ -993,6 +994,11 @@ export default function QrMenu({
                                                     {i.modifiers.length
                                                         ? ` (${i.modifiers.join(', ')})`
                                                         : ''}
+                                                    {i.note && (
+                                                        <span className="mt-0.5 block text-[13px] leading-snug text-muted-foreground italic">
+                                                            Catatan: {i.note}
+                                                        </span>
+                                                    )}
                                                 </span>
                                                 <span className="shrink-0 tabular-nums">
                                                     {rp(i.price)}

@@ -66,6 +66,14 @@ type Props = {
         total: number;
         paid_by: string;
     }[];
+    unsettled: {
+        id: number;
+        number: string;
+        where: string;
+        total: number;
+        paid: number;
+        status: string;
+    }[];
     can: { operate: boolean; reopen_id: number | null };
 };
 
@@ -74,6 +82,7 @@ export default function ShiftPage({
     suggestedOpening,
     accounts,
     recent,
+    unsettled,
     transactions,
     can,
 }: Props) {
@@ -109,6 +118,7 @@ export default function ShiftPage({
                         shift={shift}
                         accounts={accounts}
                         operate={can.operate}
+                        unsettled={unsettled}
                     />
                 ) : can.operate ? (
                     <>
@@ -389,10 +399,12 @@ function Open({
     shift,
     accounts,
     operate,
+    unsettled,
 }: {
     shift: ShiftData;
     accounts: Props['accounts'];
     operate: boolean;
+    unsettled: Props['unsettled'];
 }) {
     const s = shift.summary;
 
@@ -424,7 +436,13 @@ function Open({
                 movements={shift.movements}
                 operate={operate}
             />
-            {operate && <CloseForm shift={shift} accounts={accounts.bank} />}
+            {operate && (
+                <CloseForm
+                    shift={shift}
+                    accounts={accounts.bank}
+                    unsettled={unsettled}
+                />
+            )}
         </>
     );
 }
@@ -564,11 +582,14 @@ function CloseForm({
     shift,
     accounts,
     shiftId,
+    unsettled = [],
 }: {
     shift: ShiftData;
     accounts: Acc[];
     shiftId?: number;
+    unsettled?: Props['unsettled'];
 }) {
+    const blocked = unsettled.length > 0;
     const expected = shift.summary.expected;
     const [counted, setCounted] = useState<number | ''>('');
     const [left, setLeft] = useState<number | ''>('');
@@ -586,6 +607,47 @@ function CloseForm({
     return (
         <section className="grid gap-3 rounded-xl border bg-card p-4">
             <h2 className="font-semibold">{t('Tutup shift')}</h2>
+
+            {blocked && (
+                <div
+                    role="alert"
+                    className="grid gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+                >
+                    <p className="font-semibold">
+                        {t('Belum bisa menutup shift')}: {unsettled.length}{' '}
+                        {t('pesanan belum dibayar')}
+                    </p>
+                    <ul className="grid gap-1">
+                        {unsettled.map((o) => (
+                            <li
+                                key={o.id}
+                                className="flex justify-between gap-3"
+                            >
+                                <span>
+                                    {o.where} · {o.number}
+                                    {o.paid > 0 &&
+                                        ` (${t('dibayar sebagian')})`}
+                                </span>
+                                <span className="tabular-nums">
+                                    {rupiah(o.total - o.paid)}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                    <p>
+                        {t(
+                            'Lunasi atau batalkan di Kasir dulu. Pesanan yang sudah dibayar sebagian harus dilunasi.',
+                        )}
+                    </p>
+                    <Button
+                        asChild
+                        variant="outline"
+                        className="h-11 bg-background"
+                    >
+                        <Link href="/pos">{t('Buka Kasir')}</Link>
+                    </Button>
+                </div>
+            )}
 
             <dl className="grid gap-1 rounded-lg bg-muted p-3 text-sm">
                 <div className="flex justify-between">
@@ -686,6 +748,7 @@ function CloseForm({
                 variant="destructive"
                 className="h-12"
                 disabled={
+                    blocked ||
                     busy ||
                     bad ||
                     counted === '' ||

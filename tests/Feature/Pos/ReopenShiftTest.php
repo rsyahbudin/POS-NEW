@@ -78,3 +78,21 @@ it('dates sales by the open shift, so a shift running past midnight is one day, 
     app(CloseShiftAction::class)->handle($shift, $cashier, 0, 0, null, null, 'rk7');
     expect(BusinessDate::for())->toBe(now()->toDateString());
 });
+
+it('refuses to close the shift while an order is still unpaid or half paid, and says which', function () {
+    $cashier = userWithRole('cashier');
+    $shift = openShiftFor($cashier, 0);
+    $open = placeOrder($cashier, type: 'takeaway');
+    $half = placeOrder($cashier, type: 'takeaway');
+    pay($half, $cashier, 'cash', 10000);                          // only part of the bill
+
+    $this->actingAs($cashier)->get('/shift')->assertInertia(fn ($p) => $p->has('unsettled', 2)->where('unsettled.0.number', $open->number));
+    $this->actingAs($cashier)->post('/shift/close', ['counted_cash' => 10000, 'cash_left' => 0, 'close_key' => 'u1'])->assertSessionHas('error');
+    expect($shift->fresh()->isOpen())->toBeTrue();
+    expect(session('error'))->toContain('2 pesanan')->toContain('belum dibayar');
+    $this->actingAs($cashier)->get('/shift')->assertInertia(fn ($p) => $p->where('unsettled.1.paid', 10000));
+
+    pay($open, $cashier);
+    pay($half->fresh(), $cashier, 'cash', 34000);                     // a half-paid order must be settled, it cannot be cancelled
+    $this->actingAs($cashier)->get('/shift')->assertInertia(fn ($p) => $p->has('unsettled', 0));
+});

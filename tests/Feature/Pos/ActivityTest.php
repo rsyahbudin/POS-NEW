@@ -84,9 +84,10 @@ it('records who cooked and who closed the shift', function () {
     expect($item->fresh()->preparing_by)->toBe(userWithRole('kitchen')->id)->and($item->fresh()->ready_by)->toBe(userWithRole('waiter')->id);
     expect(Activity::query()->where('event', 'item.status')->pluck('causer_id')->all())->toBe([userWithRole('kitchen')->id, userWithRole('waiter')->id]);
 
+    pay($order, $cashier);                                    // an unpaid order would block closing the shift
     $owner = userWithRole('owner');
     $shift = Shift::query()->first();
-    $this->actingAs($owner)->post('/shift/close', ['shift_id' => $shift->id, 'counted_cash' => 0, 'cash_left' => 0, 'close_key' => 'kk'])->assertSessionHasNoErrors();
+    $this->actingAs($owner)->post('/shift/close', ['shift_id' => $shift->id, 'counted_cash' => 44000, 'cash_left' => 0, 'close_key' => 'kk'])->assertSessionHasNoErrors();
     expect($shift->fresh()->user_id)->toBe($cashier->id)->and($shift->fresh()->closed_by)->toBe($owner->id);
 });
 

@@ -7,18 +7,33 @@ use App\Domain\Accounting\SystemAccount;
 use App\Domain\Notification\Jobs\SendDailyReportJob;
 use App\Domain\Notification\Notifier;
 use App\Domain\Notification\ReportDelivery;
+use App\Domain\Ordering\Enums\OrderStatus;
 use App\Domain\Ordering\Exceptions\OrderException;
+use App\Domain\Ordering\Models\Order;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Shift\Models\Shift;
 use App\Domain\Shift\ShiftCash;
 use App\Models\User;
 use App\Support\Audit;
 use App\Support\BusinessDate;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class CloseShiftAction
 {
     public function __construct(private PostJournalAction $journal, private ShiftCash $cash) {}
+
+    /**
+     * Orders of the store that are still open or only partly paid. A shift cannot close while any exist: their payment
+     * would otherwise land in a shift that is already counted.
+     *
+     * @return Collection<int, Order>
+     */
+    public static function unsettled(int $outletId): Collection
+    {
+        return Order::query()->where('outlet_id', $outletId)->whereIn('status', [OrderStatus::Open->value, OrderStatus::PartiallyPaid->value])
+            ->with('table:id,name')->oldest('id')->get();
+    }
 
     /**
      * @param  int  $countedCash  physical cash the cashier counted in the drawer
@@ -40,6 +55,12 @@ class CloseShiftAction
                     return $shift; // idempotent retry
                 }
                 throw new OrderException('Shift sudah ditutup.');
+            }
+
+            $open = self::unsettled($shift->outlet_id);
+            if ($open->isNotEmpty()) {
+                $names = $open->take(5)->map(fn (Order $o) => $o->table->name ?? $o->call_number ?? $o->number)->implode(', ');
+                throw new OrderException("Masih ada {$open->count()} pesanan yang belum dibayar ({$names}".($open->count() > 5 ? ', ...' : '').'). Lunasi atau batalkan dulu (yang sudah dibayar sebagian harus dilunasi) sebelum menutup shift.');
             }
 
             if ($countedCash < 0) {

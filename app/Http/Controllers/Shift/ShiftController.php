@@ -48,6 +48,10 @@ class ShiftController extends Controller
                     'at' => $o->created_at?->toIso8601String(), 'status' => $o->status->label(), 'total' => $o->grand_total - $o->refunded_total,
                     'paid_by' => $o->payments->map(fn ($p) => $p->receiver?->name)->filter()->unique()->implode(', '),
                 ])->all() : [],
+            'unsettled' => $shift ? CloseShiftAction::unsettled($outletId)->map(fn (Order $o) => [
+                'id' => $o->id, 'number' => $o->number, 'where' => $o->table->name ?? $o->call_number ?? $o->platform ?? ucfirst((string) $o->type->value),
+                'total' => $o->grand_total, 'paid' => $o->paid_total, 'status' => $o->status->label(),
+            ])->all() : [],
             'can' => ['operate' => $operate, 'reopen_id' => $shift ? null : $this->reopenable($request)],
         ]);
     }

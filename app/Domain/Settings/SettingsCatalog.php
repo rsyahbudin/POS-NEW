@@ -38,6 +38,7 @@ final class SettingsCatalog
                     ['key' => 'call.to_pos', 'type' => 'bool', 'label' => 'Tampilkan panggilan di layar kasir dan waiter', 'hint' => 'Panggilan muncul di atas layar Kasir (semua yang punya izin Tangani panggilan meja) dengan bunyi.', 'default' => true],
                     ['key' => 'call.to_kitchen', 'type' => 'bool', 'label' => 'Tampilkan panggilan di layar dapur (KDS)', 'hint' => 'Berguna kalau dapur yang mengantar pesanan atau tidak ada waiter. Boleh aktif bersama layar kasir.', 'default' => false],
                     ['key' => 'alert.keep_ringing', 'type' => 'bool', 'label' => 'Bunyi berulang sampai ditangani', 'hint' => 'Aktif: bunyi terus berulang sampai pesanan QR dikonfirmasi, panggilan meja ditandai selesai, dan tiket baru di dapur mulai dibuat. Mati: bunyi hanya beberapa kali. Bunyi bisa dibisukan lewat tombol speaker di layar.', 'default' => true],
+                    ['key' => 'alert.repeat_seconds', 'type' => 'int', 'label' => 'Jeda bunyi berulang (detik)', 'hint' => 'Selang waktu antar bunyi saat "Bunyi berulang sampai ditangani" aktif. Makin kecil makin sering berbunyi; 4 sampai 8 detik cukup mendesak.', 'default' => 5, 'min' => 2, 'max' => 60],
                 ],
             ], [
                 'title' => 'Anti-spam',

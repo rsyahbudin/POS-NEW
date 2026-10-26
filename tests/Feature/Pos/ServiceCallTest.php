@@ -110,7 +110,9 @@ it('tells the screens whether alarms keep ringing until handled, and offers no w
     $this->get("/m/{$table->qr_token}")->assertInertia(fn ($p) => $p->has('call.reasons.bill')->missing('call.reasons.water'));
 
     $cashier = userWithRole('cashier');
-    $this->actingAs($cashier)->get('/pos')->assertInertia(fn ($p) => $p->where('settings.keep_ringing', true));
+    $this->actingAs($cashier)->get('/pos')->assertInertia(fn ($p) => $p->where('settings.keep_ringing', true)->where('settings.repeat_seconds', 5));
+    setting('alert.repeat_seconds', 3);
+    $this->actingAs($cashier)->get('/pos')->assertInertia(fn ($p) => $p->where('settings.repeat_seconds', 3));
     setting('alert.keep_ringing', false);
     $this->actingAs($cashier)->get('/pos')->assertInertia(fn ($p) => $p->where('settings.keep_ringing', false));
     $station = Station::query()->firstOrFail();

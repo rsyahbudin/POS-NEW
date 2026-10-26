@@ -102,6 +102,7 @@ type Props = {
         discount_limit_percent: number;
         qr_alert_seconds: number;
         keep_ringing: boolean;
+        repeat_seconds: number;
         quick_cash: number[];
         receipt_whatsapp: boolean;
         kds_enabled: boolean;
@@ -185,6 +186,7 @@ export default function PosPage(props: Props) {
         sound,
         can.handle_calls,
         settings.keep_ringing,
+        settings.repeat_seconds,
     );
     const alerted = useRef<Record<number, number>>({});
     const alertCount = useRef<Record<number, number>>({});
@@ -317,9 +319,13 @@ export default function PosPage(props: Props) {
                 const last =
                     alerted.current[r.id] ?? new Date(r.created_at).getTime();
 
+                const gap = settings.keep_ringing
+                    ? settings.repeat_seconds
+                    : settings.qr_alert_seconds;
+
                 if (
-                    waited >= settings.qr_alert_seconds &&
-                    now - last >= settings.qr_alert_seconds * 1000 &&
+                    waited >= gap &&
+                    now - last >= gap * 1000 &&
                     (settings.keep_ringing ||
                         (alertCount.current[r.id] ?? 0) < MAX_REALERTS)
                 ) {
@@ -327,18 +333,22 @@ export default function PosPage(props: Props) {
                     alertCount.current[r.id] =
                         (alertCount.current[r.id] ?? 0) + 1;
                     sound.beep('alert');
-                    toast.warning(
-                        `${t('QR belum dikonfirmasi')}: ${r.table ?? ''} · ${r.customer_name}`,
-                    );
+
+                    if ((alertCount.current[r.id] ?? 0) <= 1) {
+                        toast.warning(
+                            `${t('QR belum dikonfirmasi')}: ${r.table ?? ''} · ${r.customer_name}`,
+                        );
+                    }
                 }
             }
-        }, 10000);
+        }, 1000);
 
         return () => window.clearInterval(id);
     }, [
         state.pending_qr,
         settings.qr_alert_seconds,
         settings.keep_ringing,
+        settings.repeat_seconds,
         sound,
     ]);
 

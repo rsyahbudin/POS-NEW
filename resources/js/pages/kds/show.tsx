@@ -41,6 +41,7 @@ type Props = {
     calls: ServiceCall[];
     canHandleCalls: boolean;
     keepRinging: boolean;
+    repeatSeconds: number;
     thresholds: { warn: number; danger: number };
 };
 
@@ -59,6 +60,7 @@ export default function KdsPage({
     calls: initialCalls,
     canHandleCalls,
     keepRinging,
+    repeatSeconds,
     thresholds,
 }: Props) {
     const [tickets, setTickets] = useState(initial);
@@ -80,6 +82,7 @@ export default function KdsPage({
         sound,
         canHandleCalls,
         keepRinging,
+        repeatSeconds,
     );
     const seen = useRef(new Set(initial.map((x) => x.round_id)));
 
@@ -105,10 +108,13 @@ export default function KdsPage({
             return;
         }
 
-        const id = window.setInterval(() => sound.beep('order'), 15000);
+        const id = window.setInterval(
+            () => sound.beep('order'),
+            repeatSeconds * 1000,
+        );
 
         return () => window.clearInterval(id);
-    }, [keepRinging, waiting, sound]);
+    }, [keepRinging, waiting, repeatSeconds, sound]);
 
     useEffect(() => {
         const id = window.setInterval(() => setNow(Date.now()), 15000);

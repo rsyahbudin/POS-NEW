@@ -73,7 +73,7 @@ export function QrInbox({
                                 {r.table ?? '-'} · {r.customer_name}
                             </h3>
                             <span
-                                className={`text-xs ${ageMinutes(r.created_at) >= 3 ? 'font-bold text-red-600' : 'text-muted-foreground'}`}
+                                className={`text-xs ${ageMinutes(r.created_at) >= 3 ? 'font-bold text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}
                             >
                                 {timeId(r.created_at)} ·{' '}
                                 {ageMinutes(r.created_at)} {t('mnt')}

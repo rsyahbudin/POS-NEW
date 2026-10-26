@@ -58,7 +58,7 @@ export default function Dashboard({
                                 'Belum ada pembanding'
                             ) : (
                                 <span
-                                    className={`inline-flex items-center gap-1 font-medium ${metrics.change_percent >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}
+                                    className={`inline-flex items-center gap-1 font-medium ${metrics.change_percent >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}
                                 >
                                     {metrics.change_percent >= 0 ? (
                                         <TrendingUp className="size-3.5" />

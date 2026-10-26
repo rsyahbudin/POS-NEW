@@ -33,10 +33,16 @@ type History = {
 const STATUS: Record<string, { label: string; cls: string }> = {
     pending: {
         label: 'Menunggu persetujuan',
-        cls: 'bg-amber-100 text-amber-900',
+        cls: 'bg-amber-100 dark:bg-amber-950/50 dark:text-amber-200 text-amber-900',
     },
-    approved: { label: 'Masuk stok', cls: 'bg-emerald-100 text-emerald-900' },
-    rejected: { label: 'Ditolak', cls: 'bg-red-100 text-red-900' },
+    approved: {
+        label: 'Masuk stok',
+        cls: 'bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-200 text-emerald-900',
+    },
+    rejected: {
+        label: 'Ditolak',
+        cls: 'bg-red-100 dark:bg-red-950/50 dark:text-red-200 text-red-900',
+    },
 };
 
 export default function PurchasePage({
@@ -92,7 +98,7 @@ export default function PurchasePage({
                 {needsApproval && (
                     <p
                         role="status"
-                        className="rounded-lg bg-amber-50 p-3 text-sm text-amber-950"
+                        className="rounded-lg bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/50 dark:text-amber-200"
                     >
                         Stok baru bertambah setelah manager menyetujui catatan
                         belanja ini.

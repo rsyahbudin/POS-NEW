@@ -161,7 +161,7 @@ export default function DailyReport({
                 {openShifts.length > 0 && (
                     <div
                         role="alert"
-                        className="rounded-xl border border-amber-500 bg-amber-50 p-3 text-sm text-amber-950"
+                        className="rounded-xl border border-amber-500 bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/50 dark:text-amber-200"
                     >
                         Masih ada shift terbuka:{' '}
                         {openShifts
@@ -196,7 +196,10 @@ export default function DailyReport({
                             s.closed_at ? (
                                 timeId(s.closed_at)
                             ) : (
-                                <span key={s.id} className="text-amber-700">
+                                <span
+                                    key={s.id}
+                                    className="text-amber-700 dark:text-amber-400"
+                                >
                                     Masih terbuka
                                 </span>
                             ),

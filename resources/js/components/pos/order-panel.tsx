@@ -17,10 +17,22 @@ const ITEM_STATUS: Record<string, { label: string; cls: string }> = {
         label: 'Menunggu konfirmasi',
         cls: 'bg-muted text-muted-foreground',
     },
-    new: { label: 'Baru', cls: 'bg-sky-100 text-sky-900' },
-    preparing: { label: 'Dibuat', cls: 'bg-amber-100 text-amber-900' },
-    ready: { label: 'Siap', cls: 'bg-emerald-100 text-emerald-900' },
-    voided: { label: 'VOID', cls: 'bg-red-100 text-red-800' },
+    new: {
+        label: 'Baru',
+        cls: 'bg-sky-100 dark:bg-sky-950/50 dark:text-sky-200 text-sky-900',
+    },
+    preparing: {
+        label: 'Dibuat',
+        cls: 'bg-amber-100 dark:bg-amber-950/50 dark:text-amber-200 text-amber-900',
+    },
+    ready: {
+        label: 'Siap',
+        cls: 'bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-200 text-emerald-900',
+    },
+    voided: {
+        label: 'VOID',
+        cls: 'bg-red-100 dark:bg-red-950/50 dark:text-red-200 text-red-800',
+    },
     rejected: { label: 'Dihapus', cls: 'bg-muted text-muted-foreground' },
 };
 
@@ -144,7 +156,7 @@ export function OrderPanel({
                                 </span>
                             )}
                             {round.source === 'qr' && (
-                                <span className="rounded bg-violet-100 px-1.5 text-[10px] font-semibold text-violet-800">
+                                <span className="rounded bg-violet-100 px-1.5 text-[10px] font-semibold text-violet-800 dark:bg-violet-950/50 dark:text-violet-200">
                                     QR{' '}
                                     {round.customer_name
                                         ? `· ${round.customer_name}`
@@ -191,7 +203,7 @@ export function OrderPanel({
                                                     </p>
                                                 )}
                                                 {i.comp_type && (
-                                                    <p className="text-xs font-medium text-fuchsia-700">
+                                                    <p className="text-xs font-medium text-fuchsia-700 dark:text-fuchsia-400">
                                                         {i.comp_type ===
                                                         'staff_meal'
                                                             ? t('Staff meal')
@@ -199,7 +211,7 @@ export function OrderPanel({
                                                     </p>
                                                 )}
                                                 {i.void_reason && (
-                                                    <p className="text-xs text-red-700">
+                                                    <p className="text-xs text-red-700 dark:text-red-400">
                                                         {i.void_reason}
                                                     </p>
                                                 )}
@@ -310,7 +322,7 @@ export function OrderPanel({
 
                 {cart.length > 0 && (
                     <div>
-                        <p className="mb-1 text-xs font-semibold text-emerald-700">
+                        <p className="mb-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
                             {t('Item baru (belum dikirim)')}
                         </p>
                         <ul className="grid gap-1">
@@ -371,7 +383,7 @@ export function OrderPanel({
                                         )}
                                         {b.status === 'unpaid' &&
                                             b.is_unallocated && (
-                                                <span className="text-xs text-amber-700">
+                                                <span className="text-xs text-amber-700 dark:text-amber-400">
                                                     {t('Alokasikan dulu')}
                                                 </span>
                                             )}
@@ -380,7 +392,7 @@ export function OrderPanel({
                             ))}
                         </ul>
                         {unallocated && (
-                            <p className="mt-1 text-xs text-amber-700">
+                            <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                                 {t(
                                     'Ada item baru setelah split. Pecah ulang atau alokasikan sebelum membayar.',
                                 )}
@@ -446,7 +458,7 @@ export function OrderPanel({
                         {order.discounts.map((d) => (
                             <div
                                 key={d.id}
-                                className="flex items-center justify-between text-emerald-700"
+                                className="flex items-center justify-between text-emerald-700 dark:text-emerald-400"
                             >
                                 <dt>
                                     {t('Diskon')}: {d.reason}
@@ -809,7 +821,7 @@ function PickRow({ item, pick }: { item: OrderItem; pick: PickState }) {
 
     if (avail <= 0) {
         return (
-            <p className="mt-1 text-xs font-medium text-emerald-700">
+            <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
                 {t('Sudah dibayar')}
             </p>
         );
@@ -885,7 +897,7 @@ function PickSummary({ pick }: { pick: PickState }) {
                         </dd>
                     </div>
                     {p && p.discount_total > 0 && (
-                        <div className="flex justify-between text-emerald-700">
+                        <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
                             <dt>{t('Diskon')}</dt>
                             <dd className="tabular-nums">
                                 -{rupiah(p.discount_total)}

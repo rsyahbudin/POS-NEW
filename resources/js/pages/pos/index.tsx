@@ -809,8 +809,8 @@ export default function PosPage(props: Props) {
                             className={cn(
                                 'min-w-0 truncate rounded-md px-2 py-0.5 text-xs',
                                 props.shift
-                                    ? 'bg-emerald-100 text-emerald-900'
-                                    : 'bg-amber-100 text-amber-900',
+                                    ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200'
+                                    : 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200',
                             )}
                         >
                             {props.shift
@@ -824,7 +824,7 @@ export default function PosPage(props: Props) {
                         <span
                             role="status"
                             aria-label="Offline"
-                            className="flex items-center gap-1 rounded bg-red-100 px-2 py-0.5 text-xs text-red-900"
+                            className="flex items-center gap-1 rounded bg-red-100 px-2 py-0.5 text-xs text-red-900 dark:bg-red-950/50 dark:text-red-200"
                         >
                             <WifiOff className="size-3" />{' '}
                             <span className="hidden min-[400px]:inline">
@@ -922,7 +922,7 @@ export default function PosPage(props: Props) {
                 {sound.hintVisible && (
                     <div
                         role="status"
-                        className="fixed inset-x-3 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-40 flex items-center justify-between gap-2 rounded-xl bg-sky-100 px-3 py-2 text-sm text-sky-950 shadow-lg md:bottom-3"
+                        className="fixed inset-x-3 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-40 flex items-center justify-between gap-2 rounded-xl bg-sky-100 px-3 py-2 text-sm text-sky-950 shadow-lg md:bottom-3 dark:bg-sky-950/50 dark:text-sky-200"
                     >
                         <span>
                             {t(
@@ -955,7 +955,7 @@ export default function PosPage(props: Props) {
                 {!props.shift && can.pay && (
                     <div
                         role="alert"
-                        className="flex items-center justify-between gap-2 bg-amber-100 px-3 py-2 text-sm text-amber-950"
+                        className="flex items-center justify-between gap-2 bg-amber-100 px-3 py-2 text-sm text-amber-950 dark:bg-amber-950/50 dark:text-amber-200"
                     >
                         <span>
                             {t('Buka shift untuk menerima pembayaran.')}
@@ -979,14 +979,14 @@ export default function PosPage(props: Props) {
 
                 {state.ready_items.length > 0 && (
                     <div
-                        className="flex gap-2 overflow-x-auto bg-emerald-50 px-3 py-1.5 text-xs text-emerald-950"
+                        className="flex gap-2 overflow-x-auto bg-emerald-50 px-3 py-1.5 text-xs text-emerald-950 dark:bg-emerald-950/50 dark:text-emerald-200"
                         role="status"
                         aria-label={t('Item siap diantar')}
                     >
                         {state.ready_items.map((i) => (
                             <span
                                 key={i.id}
-                                className="shrink-0 rounded-full bg-emerald-200 px-2 py-1"
+                                className="shrink-0 rounded-full bg-emerald-200 px-2 py-1 dark:bg-emerald-900/60"
                             >
                                 ✔ {i.table}: {i.qty}× {i.name}
                             </span>

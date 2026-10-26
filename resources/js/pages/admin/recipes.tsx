@@ -187,7 +187,10 @@ export default function RecipesPage({
                                 p.category,
                                 rupiah(p.price),
                                 p.lines.length === 0 ? (
-                                    <span key="n" className="text-amber-700">
+                                    <span
+                                        key="n"
+                                        className="text-amber-700 dark:text-amber-400"
+                                    >
                                         Belum ada resep
                                     </span>
                                 ) : (

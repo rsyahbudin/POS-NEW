@@ -33,10 +33,22 @@ type Preview = {
 };
 
 const BADGE: Record<string, { label: string; cls: string }> = {
-    ok: { label: 'Siap', cls: 'bg-emerald-100 text-emerald-900' },
-    new: { label: 'Baru', cls: 'bg-sky-100 text-sky-900' },
-    update: { label: 'Diperbarui', cls: 'bg-amber-100 text-amber-900' },
-    error: { label: 'Salah', cls: 'bg-red-100 text-red-900' },
+    ok: {
+        label: 'Siap',
+        cls: 'bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-200 text-emerald-900',
+    },
+    new: {
+        label: 'Baru',
+        cls: 'bg-sky-100 dark:bg-sky-950/50 dark:text-sky-200 text-sky-900',
+    },
+    update: {
+        label: 'Diperbarui',
+        cls: 'bg-amber-100 dark:bg-amber-950/50 dark:text-amber-200 text-amber-900',
+    },
+    error: {
+        label: 'Salah',
+        cls: 'bg-red-100 dark:bg-red-950/50 dark:text-red-200 text-red-900',
+    },
 };
 
 /**
@@ -203,7 +215,7 @@ export function ImportDialog({
             {error && (
                 <p
                     role="alert"
-                    className="rounded-lg bg-red-50 p-3 text-sm text-red-900"
+                    className="rounded-lg bg-red-50 p-3 text-sm text-red-900 dark:bg-red-950/50 dark:text-red-200"
                 >
                     {error}
                 </p>
@@ -288,7 +300,7 @@ export function ImportDialog({
                         </table>
                     </div>
                     {preview.summary.error > 0 && (
-                        <p className="text-sm text-amber-800">
+                        <p className="text-sm text-amber-800 dark:text-amber-200">
                             Baris yang salah dilewati. Perbaiki di Excel lalu
                             unggah lagi, atau lanjutkan dengan baris yang benar.
                         </p>

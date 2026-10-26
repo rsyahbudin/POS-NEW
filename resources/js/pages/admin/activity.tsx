@@ -122,7 +122,7 @@ export default function ActivityPage({ filters, rows, users, groups }: Props) {
                 {rows.length >= 800 && (
                     <p
                         role="status"
-                        className="rounded-lg bg-amber-50 p-3 text-sm text-amber-950"
+                        className="rounded-lg bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/50 dark:text-amber-200"
                     >
                         Menampilkan 800 aktivitas terbaru. Persempit tanggal,
                         pelaku, atau kelompok untuk melihat yang lebih lama.

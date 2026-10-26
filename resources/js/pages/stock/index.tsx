@@ -89,12 +89,15 @@ export default function StockList({
                         i.low ? (
                             <span
                                 key="l"
-                                className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900"
+                                className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900 dark:bg-red-950/50 dark:text-red-200"
                             >
                                 Menipis
                             </span>
                         ) : (
-                            <span key="o" className="text-emerald-700">
+                            <span
+                                key="o"
+                                className="text-emerald-700 dark:text-emerald-400"
+                            >
                                 Cukup
                             </span>
                         ),

@@ -20,7 +20,7 @@ export default function ReceiptPage({ receipt }: { receipt: Receipt }) {
     return (
         <>
             <Head title={`Struk ${receipt.order_number}`} />
-            <main className="min-h-dvh bg-slate-100 p-3 print:bg-white print:p-0">
+            <main className="min-h-dvh bg-slate-100 p-3 dark:bg-slate-950/50 print:bg-white print:p-0">
                 <ReceiptView r={shown} />
             </main>
         </>

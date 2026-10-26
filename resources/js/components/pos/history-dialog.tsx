@@ -38,11 +38,13 @@ const FILTERS = [
 ] as const;
 
 const TONE: Record<string, string> = {
-    paid: 'bg-emerald-100 text-emerald-900',
-    refunded: 'bg-amber-100 text-amber-900',
+    paid: 'bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-200 text-emerald-900',
+    refunded:
+        'bg-amber-100 dark:bg-amber-950/50 dark:text-amber-200 text-amber-900',
     cancelled: 'bg-muted text-muted-foreground',
-    open: 'bg-sky-100 text-sky-900',
-    partially_paid: 'bg-sky-100 text-sky-900',
+    open: 'bg-sky-100 dark:bg-sky-950/50 dark:text-sky-200 text-sky-900',
+    partially_paid:
+        'bg-sky-100 dark:bg-sky-950/50 dark:text-sky-200 text-sky-900',
 };
 
 /** Today's bills for the cashier: what was sold, what is still open, and a way to print a receipt again. */

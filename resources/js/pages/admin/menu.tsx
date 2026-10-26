@@ -288,7 +288,10 @@ export default function MenuPage({
                                         NONAKTIF
                                     </span>
                                 ) : on ? (
-                                    <span key="s" className="text-emerald-700">
+                                    <span
+                                        key="s"
+                                        className="text-emerald-700 dark:text-emerald-400"
+                                    >
                                         Tersedia
                                     </span>
                                 ) : (

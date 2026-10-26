@@ -387,7 +387,7 @@ export default function PrintStation({
                                         )?.name ?? ''}
                                     </span>
                                     {j.status === 'printed' ? (
-                                        <span className="text-emerald-700">
+                                        <span className="text-emerald-700 dark:text-emerald-400">
                                             Tercetak
                                         </span>
                                     ) : (

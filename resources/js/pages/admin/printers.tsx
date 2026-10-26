@@ -111,7 +111,10 @@ export default function PrintersPage({
                         `${p.paper_width} mm`,
                         `${p.copies}×`,
                         p.is_active ? (
-                            <span key="a" className="text-emerald-700">
+                            <span
+                                key="a"
+                                className="text-emerald-700 dark:text-emerald-400"
+                            >
                                 Aktif
                             </span>
                         ) : (

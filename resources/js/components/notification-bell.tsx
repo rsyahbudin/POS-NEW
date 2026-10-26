@@ -32,9 +32,9 @@ type Feed = { unread: number; items: Item[] };
 
 const ICON = { info: Info, warning: AlertTriangle, danger: OctagonAlert };
 const TONE = {
-    info: 'text-sky-600',
-    warning: 'text-amber-600',
-    danger: 'text-red-600',
+    info: 'text-sky-600 dark:text-sky-400',
+    warning: 'text-amber-600 dark:text-amber-400',
+    danger: 'text-red-600 dark:text-red-400',
 };
 
 function ago(iso: string | null): string {

@@ -575,7 +575,7 @@ export default function QrMenu({
                                 {error && (
                                     <p
                                         role="alert"
-                                        className="mb-2 text-sm text-red-700"
+                                        className="mb-2 text-sm text-red-700 dark:text-red-400"
                                     >
                                         {error}
                                     </p>
@@ -689,7 +689,9 @@ export default function QrMenu({
                         <label className="mt-4 grid gap-1.5 text-sm font-semibold">
                             <span>
                                 Nama panggilan{' '}
-                                <span className="text-red-600">*</span>
+                                <span className="text-red-600 dark:text-red-400">
+                                    *
+                                </span>
                             </span>
                             <input
                                 value={name}
@@ -720,7 +722,7 @@ export default function QrMenu({
                         {done && (
                             <p
                                 role="status"
-                                className="mb-3 flex gap-2 rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-900"
+                                className="mb-3 flex gap-2 rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200"
                             >
                                 <span aria-hidden>✓</span>
                                 {autoConfirm
@@ -736,7 +738,7 @@ export default function QrMenu({
                                 >
                                     <div className="flex items-center justify-between gap-2">
                                         <p
-                                            className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${r.status === 'Ditolak' ? 'bg-red-100 text-red-900' : r.status === 'Siap' ? 'bg-emerald-100 text-emerald-900' : r.status === 'Menunggu Konfirmasi' ? 'bg-muted text-foreground' : 'bg-amber-100 text-amber-900'}`}
+                                            className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${r.status === 'Ditolak' ? 'bg-red-100 text-red-900 dark:bg-red-950/60 dark:text-red-200' : r.status === 'Siap' ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200' : r.status === 'Menunggu Konfirmasi' ? 'bg-muted text-foreground' : 'bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200'}`}
                                         >
                                             {r.status}
                                         </p>
@@ -753,7 +755,7 @@ export default function QrMenu({
                                         <Progress label={r.status} kds={kds} />
                                     )}
                                     {r.reject_reason && (
-                                        <p className="mt-2 text-sm text-red-800">
+                                        <p className="mt-2 text-sm text-red-800 dark:text-red-200">
                                             Alasan: {r.reject_reason}
                                         </p>
                                     )}
@@ -908,7 +910,7 @@ function PayBox({ token }: { token: string }) {
         return (
             <p
                 role="status"
-                className="mt-4 rounded-2xl bg-emerald-50 p-4 text-center font-semibold text-emerald-900"
+                className="mt-4 rounded-2xl bg-emerald-50 p-4 text-center font-semibold text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200"
             >
                 Pembayaran {rp(pay.amount)} berhasil. Terima kasih!
             </p>
@@ -932,7 +934,7 @@ function PayBox({ token }: { token: string }) {
                     lunas.
                 </p>
                 {pay.simulated && (
-                    <p className="text-xs text-amber-800">
+                    <p className="text-xs text-amber-800 dark:text-amber-200">
                         Mode simulasi: tidak ada uang yang bergerak.
                     </p>
                 )}
@@ -943,12 +945,18 @@ function PayBox({ token }: { token: string }) {
     return (
         <div className="mt-4 grid gap-2">
             {pay && pay.status !== 'pending' && (
-                <p role="alert" className="text-center text-sm text-red-800">
+                <p
+                    role="alert"
+                    className="text-center text-sm text-red-800 dark:text-red-200"
+                >
                     Kode QR sudah tidak berlaku. Buat yang baru.
                 </p>
             )}
             {error && (
-                <p role="alert" className="text-center text-sm text-red-800">
+                <p
+                    role="alert"
+                    className="text-center text-sm text-red-800 dark:text-red-200"
+                >
                     {error}
                 </p>
             )}
@@ -1039,7 +1047,7 @@ function CallWaiter({
         <>
             <button
                 onClick={() => setOpen(true)}
-                className={`flex h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold shadow-sm active:scale-95 ${waiting ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300' : handled ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200' : 'bg-muted text-foreground'}`}
+                className={`flex h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold shadow-sm active:scale-95 ${waiting ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:ring-amber-800' : handled ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-200 dark:ring-emerald-800' : 'bg-muted text-foreground'}`}
             >
                 <span aria-hidden className={waiting ? 'animate-pulse' : ''}>
                     🔔
@@ -1057,7 +1065,7 @@ function CallWaiter({
                         onClose={() => setOpen(false)}
                     >
                         {waiting && (
-                            <p className="mb-3 rounded-xl bg-amber-100 p-3 text-sm text-amber-900">
+                            <p className="mb-3 rounded-xl bg-amber-100 p-3 text-sm text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
                                 Waiter sudah dipanggil ({state?.reason}). Tekan
                                 lagi kalau belum datang.
                             </p>
@@ -1080,7 +1088,7 @@ function CallWaiter({
                         {error && (
                             <p
                                 role="alert"
-                                className="mt-3 text-sm text-red-700"
+                                className="mt-3 text-sm text-red-700 dark:text-red-400"
                             >
                                 {error}
                             </p>
@@ -1217,7 +1225,7 @@ function Picker({
             footer={
                 <>
                     {missing && (
-                        <p className="mb-2 text-xs font-medium text-red-700">
+                        <p className="mb-2 text-xs font-medium text-red-700 dark:text-red-400">
                             Pilih minimal {missing.min} untuk {missing.name}
                         </p>
                     )}

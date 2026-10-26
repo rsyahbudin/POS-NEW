@@ -10,13 +10,16 @@ const TINTS = [
     [215, 0.955, 0.42],
 ] as const;
 
-export function tintFor(index: number) {
+/** Light and dark colours as CSS variables, so the monogram follows the theme without a re-render. */
+export function tintFor(index: number): React.CSSProperties {
     const [h, l, ink] = TINTS[Math.abs(index) % TINTS.length];
 
     return {
-        background: `oklch(${l} 0.04 ${h})`,
-        color: `oklch(${ink} 0.1 ${h})`,
-    };
+        '--art-bg': `oklch(${l} 0.04 ${h})`,
+        '--art-ink': `oklch(${ink} 0.1 ${h})`,
+        '--art-bg-dark': `oklch(0.3 0.05 ${h})`,
+        '--art-ink-dark': `oklch(0.88 0.07 ${h})`,
+    } as React.CSSProperties;
 }
 
 const initials = (name: string) =>
@@ -55,7 +58,7 @@ export function ProductArt({
             aria-hidden
             style={tintFor(tint)}
             className={cn(
-                'grid size-full place-items-center text-2xl font-semibold tracking-tight select-none',
+                'grid size-full place-items-center bg-[var(--art-bg)] text-2xl font-semibold tracking-tight text-[var(--art-ink)] select-none dark:bg-[var(--art-bg-dark)] dark:text-[var(--art-ink-dark)]',
                 className,
             )}
         >

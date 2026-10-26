@@ -66,10 +66,12 @@ type Form = {
 };
 
 const BADGE: Record<string, string> = {
-    good: 'bg-emerald-100 text-emerald-900',
-    needs_service: 'bg-amber-100 text-amber-900',
-    broken: 'bg-red-100 text-red-900',
-    retired: 'bg-slate-200 text-slate-800',
+    good: 'bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-200 text-emerald-900',
+    needs_service:
+        'bg-amber-100 dark:bg-amber-950/50 dark:text-amber-200 text-amber-900',
+    broken: 'bg-red-100 dark:bg-red-950/50 dark:text-red-200 text-red-900',
+    retired:
+        'bg-slate-200 dark:bg-slate-900/60 dark:text-slate-200 text-slate-800',
 };
 const blank: Form = {
     code: '',

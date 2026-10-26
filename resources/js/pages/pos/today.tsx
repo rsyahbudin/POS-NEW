@@ -58,7 +58,7 @@ export default function Today({
                                 t('Belum ada pembanding')
                             ) : (
                                 <span
-                                    className={`inline-flex items-center gap-1 font-medium ${change >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}
+                                    className={`inline-flex items-center gap-1 font-medium ${change >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}
                                 >
                                     {change >= 0 ? (
                                         <TrendingUp className="size-3.5" />

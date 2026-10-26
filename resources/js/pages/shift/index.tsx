@@ -181,8 +181,8 @@ export default function ShiftPage({
                                         <span
                                             className={
                                                 s.difference
-                                                    ? 'font-semibold text-red-700'
-                                                    : 'text-emerald-700'
+                                                    ? 'font-semibold text-red-700 dark:text-red-400'
+                                                    : 'text-emerald-700 dark:text-emerald-400'
                                             }
                                         >
                                             {t('Selisih')}{' '}
@@ -216,7 +216,7 @@ function ReopenCard({ id }: { id: number }) {
     const [busy, setBusy] = useState(false);
 
     return (
-        <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
             <p className="min-w-0 flex-1">
                 <strong>{t('Salah tutup shift?')}</strong>{' '}
                 {t(
@@ -225,7 +225,7 @@ function ReopenCard({ id }: { id: number }) {
             </p>
             <Button
                 variant="outline"
-                className="h-11 bg-white"
+                className="h-11 bg-white dark:bg-card"
                 onClick={() => setAsking(true)}
             >
                 {t('Buka kembali shift')}
@@ -644,7 +644,7 @@ function CloseForm({
                 <MoneyInput value={counted} onChange={setCounted} autoFocus />
             </Field>
             <div
-                className={`flex justify-between rounded-lg p-3 text-sm font-semibold ${counted === '' ? 'bg-muted' : diff === 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}
+                className={`flex justify-between rounded-lg p-3 text-sm font-semibold ${counted === '' ? 'bg-muted' : diff === 0 ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200' : 'bg-red-50 text-red-800 dark:bg-red-950/50 dark:text-red-200'}`}
                 aria-live="polite"
             >
                 <span>{t('Selisih')}</span>
@@ -714,7 +714,7 @@ function CloseForm({
                         <dd className="tabular-nums">{rupiah(c)}</dd>
                     </div>
                     <div
-                        className={`flex justify-between font-semibold ${diff === 0 ? 'text-emerald-800' : 'text-red-700'}`}
+                        className={`flex justify-between font-semibold ${diff === 0 ? 'text-emerald-800 dark:text-emerald-200' : 'text-red-700 dark:text-red-400'}`}
                     >
                         <dt>{t('Selisih')}</dt>
                         <dd className="tabular-nums">

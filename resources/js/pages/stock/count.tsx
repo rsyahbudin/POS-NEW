@@ -33,10 +33,16 @@ type Props = {
 const STATUS: Record<string, { label: string; cls: string }> = {
     submitted: {
         label: 'Menunggu persetujuan',
-        cls: 'bg-amber-100 text-amber-900',
+        cls: 'bg-amber-100 dark:bg-amber-950/50 dark:text-amber-200 text-amber-900',
     },
-    approved: { label: 'Disetujui', cls: 'bg-emerald-100 text-emerald-900' },
-    rejected: { label: 'Ditolak', cls: 'bg-red-100 text-red-900' },
+    approved: {
+        label: 'Disetujui',
+        cls: 'bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-200 text-emerald-900',
+    },
+    rejected: {
+        label: 'Ditolak',
+        cls: 'bg-red-100 dark:bg-red-950/50 dark:text-red-200 text-red-900',
+    },
 };
 const num = (n: number) =>
     n.toLocaleString('id-ID', { maximumFractionDigits: 3 });

@@ -440,17 +440,17 @@ function Journals({
                         <p className="font-medium">
                             #{j.id} · {dateId(j.date)} · {j.memo}
                             {j.is_manual && (
-                                <span className="ml-1 rounded bg-amber-200 px-1 text-xs">
+                                <span className="ml-1 rounded bg-amber-200 px-1 text-xs dark:bg-amber-900/60">
                                     manual
                                 </span>
                             )}
                             {j.reversed_by && (
-                                <span className="ml-1 rounded bg-red-200 px-1 text-xs">
+                                <span className="ml-1 rounded bg-red-200 px-1 text-xs dark:bg-red-900/60">
                                     dibalik
                                 </span>
                             )}
                             {j.reverses && (
-                                <span className="ml-1 rounded bg-slate-200 px-1 text-xs">
+                                <span className="ml-1 rounded bg-slate-200 px-1 text-xs dark:bg-slate-900/60">
                                     pembalik
                                 </span>
                             )}
@@ -712,7 +712,9 @@ function Manual({
             </Button>
             <p
                 className={
-                    d === c && d > 0 ? 'text-emerald-700' : 'text-destructive'
+                    d === c && d > 0
+                        ? 'text-emerald-700 dark:text-emerald-400'
+                        : 'text-destructive'
                 }
                 aria-live="polite"
             >

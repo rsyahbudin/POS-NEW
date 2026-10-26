@@ -102,7 +102,7 @@ export default function OnlinePaymentsPage({
                             ) : (
                                 <span
                                     key="n"
-                                    className="font-medium text-red-700"
+                                    className="font-medium text-red-700 dark:text-red-400"
                                 >
                                     Belum
                                 </span>

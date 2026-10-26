@@ -459,7 +459,10 @@ export default function InventoryPage({
                                             : ''}
                                     </span>
                                 ) : (
-                                    <span key="o" className="text-emerald-700">
+                                    <span
+                                        key="o"
+                                        className="text-emerald-700 dark:text-emerald-400"
+                                    >
                                         Masuk stok
                                     </span>
                                 ),
@@ -482,10 +485,10 @@ export default function InventoryPage({
                                     <span
                                         className={
                                             c.status === 'submitted'
-                                                ? 'rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900'
+                                                ? 'rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950/50 dark:text-amber-200'
                                                 : c.status === 'approved'
-                                                  ? 'rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900'
-                                                  : 'rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900'
+                                                  ? 'rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200'
+                                                  : 'rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900 dark:bg-red-950/50 dark:text-red-200'
                                         }
                                     >
                                         {c.status === 'submitted'

@@ -144,7 +144,10 @@ export default function SuppliersPage({
                             rupiah(s.total),
                             s.last_on ? dateId(s.last_on) : '-',
                             s.is_active ? (
-                                <span key="a" className="text-emerald-700">
+                                <span
+                                    key="a"
+                                    className="text-emerald-700 dark:text-emerald-400"
+                                >
                                     Aktif
                                 </span>
                             ) : (

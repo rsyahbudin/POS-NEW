@@ -108,7 +108,10 @@ export default function UsersPage({
                         u.has_pin ? (
                             'Sudah'
                         ) : u.pin_login ? (
-                            <span key="p" className="text-amber-700">
+                            <span
+                                key="p"
+                                className="text-amber-700 dark:text-amber-400"
+                            >
                                 Belum (belum bisa login)
                             </span>
                         ) : (
@@ -116,7 +119,10 @@ export default function UsersPage({
                         ),
                         u.has_2fa ? 'Aktif' : '-',
                         u.is_active ? (
-                            <span key="s" className="text-emerald-700">
+                            <span
+                                key="s"
+                                className="text-emerald-700 dark:text-emerald-400"
+                            >
                                 Aktif
                             </span>
                         ) : (

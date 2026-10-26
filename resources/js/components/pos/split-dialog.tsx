@@ -324,8 +324,8 @@ export function SplitDialog({
                                             className={cn(
                                                 'text-xs',
                                                 left(it) === 0
-                                                    ? 'text-emerald-700'
-                                                    : 'text-amber-700',
+                                                    ? 'text-emerald-700 dark:text-emerald-400'
+                                                    : 'text-amber-700 dark:text-amber-400',
                                             )}
                                         >
                                             {left(it) === 0
@@ -367,7 +367,7 @@ export function SplitDialog({
                     </ul>
                     {!allAssigned && (
                         <p
-                            className="text-sm text-amber-700"
+                            className="text-sm text-amber-700 dark:text-amber-400"
                             aria-live="polite"
                         >
                             {t(

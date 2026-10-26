@@ -477,8 +477,27 @@ export default function PosPage(props: Props) {
         }
     };
 
+    /** Payments are only taken inside an open shift; without one, offer to open it instead of failing later. */
+    const requireShift = (): boolean => {
+        if (props.shift) {
+            return true;
+        }
+
+        toast.error(t('Buka shift dulu sebelum menerima pembayaran.'));
+
+        if (can.open_shift) {
+            setOpeningShift(true);
+        }
+
+        return false;
+    };
+
     /** Walk-in at the counter: order goes to the kitchen and the payment screen opens at once. */
     const sendAndPay = async () => {
+        if (!requireShift()) {
+            return;
+        }
+
         const placed = await send();
         const bill = placed?.bills.find(
             (b) => b.status === 'unpaid' && !b.is_unallocated,
@@ -578,7 +597,11 @@ export default function PosPage(props: Props) {
                 apply(r.order);
             }
         },
-        pay: (bill) => setDialog({ kind: 'pay', bill }),
+        pay: (bill) => {
+            if (requireShift()) {
+                setDialog({ kind: 'pay', bill });
+            }
+        },
         closeZero: async () => {
             const r =
                 order &&
@@ -772,7 +795,7 @@ export default function PosPage(props: Props) {
                 setPickQty({});
                 setPickPreview(null);
 
-                if (bill) {
+                if (bill && requireShift()) {
                     setDialog({ kind: 'pay', bill });
                 }
             } catch (e) {

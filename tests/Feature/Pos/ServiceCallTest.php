@@ -118,3 +118,11 @@ it('tells the screens whether alarms keep ringing until handled, and offers no w
     $station = Station::query()->firstOrFail();
     $this->actingAs(userWithRole('kitchen'))->get("/kds/{$station->id}")->assertInertia(fn ($p) => $p->where('keepRinging', false));
 });
+
+it('tells the QR page whether a kitchen screen exists, so order progress is not promised without one', function () {
+    $table = callTable();
+    setting('kitchen.enabled', false);
+    $this->get("/m/{$table->qr_token}")->assertInertia(fn ($p) => $p->where('kds', false));
+    setting('kitchen.enabled', true);
+    $this->get("/m/{$table->qr_token}")->assertInertia(fn ($p) => $p->where('kds', true));
+});

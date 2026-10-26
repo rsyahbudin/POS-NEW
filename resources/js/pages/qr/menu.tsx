@@ -45,6 +45,7 @@ type Props = {
     qris: boolean;
     status: Status;
     call: { enabled: boolean; reasons: Record<string, string> };
+    kds: boolean;
 };
 
 const rp = (n: number) => `Rp${Math.trunc(n).toLocaleString('id-ID')}`;
@@ -64,6 +65,7 @@ export default function QrMenu({
     autoConfirm,
     qris,
     call,
+    kds,
 }: Props) {
     const [menu, setMenu] = useState(initialMenu);
     const [cart, setCart] = useState<Line[]>([]);
@@ -518,7 +520,7 @@ export default function QrMenu({
                             <span className="flex items-center gap-2">
                                 <span
                                     aria-hidden
-                                    className={`size-2.5 rounded-full ${lastStatus === 'Siap' ? 'bg-emerald-500' : lastStatus === 'Ditolak' ? 'bg-red-500' : 'animate-pulse bg-amber-500'}`}
+                                    className={`size-2.5 rounded-full ${lastStatus === 'Siap' || (!kds && lastStatus === 'Diterima') ? 'bg-emerald-500' : lastStatus === 'Ditolak' ? 'bg-red-500' : 'animate-pulse bg-amber-500'}`}
                                 />
                                 Lihat status pesanan
                             </span>
@@ -748,7 +750,7 @@ export default function QrMenu({
                                         </span>
                                     </div>
                                     {r.status !== 'Ditolak' && (
-                                        <Progress label={r.status} />
+                                        <Progress label={r.status} kds={kds} />
                                     )}
                                     {r.reject_reason && (
                                         <p className="mt-2 text-sm text-red-800">
@@ -802,7 +804,7 @@ export default function QrMenu({
 }
 
 /** Where an order stands: confirmed by the cashier, being made, ready. */
-function Progress({ label }: { label: string }) {
+function Progress({ label, kds }: { label: string; kds: boolean }) {
     const step =
         label === 'Siap'
             ? 3
@@ -811,14 +813,20 @@ function Progress({ label }: { label: string }) {
               : label === 'Diterima'
                 ? 1
                 : 0;
-    const names = ['Dikirim', 'Diterima', 'Dibuat', 'Siap'];
+    // Without a kitchen screen nobody marks items as made or ready, so the order ends at "Diterima".
+    const names = kds
+        ? ['Dikirim', 'Diterima', 'Dibuat', 'Siap']
+        : ['Dikirim', 'Diterima'];
 
     return (
-        <ol className="mt-3 grid grid-cols-4 gap-1.5" aria-hidden>
+        <ol
+            className={`mt-3 grid gap-1.5 ${kds ? 'grid-cols-4' : 'grid-cols-2'}`}
+            aria-hidden
+        >
             {names.map((n, i) => (
                 <li key={n}>
                     <span
-                        className={`block h-1.5 rounded-full ${i <= step ? (step === 3 ? 'bg-emerald-500' : 'bg-primary') : 'bg-muted'}`}
+                        className={`block h-1.5 rounded-full ${i <= step ? (step === 3 || (!kds && step >= 1) ? 'bg-emerald-500' : 'bg-primary') : 'bg-muted'}`}
                     />
                     <span
                         className={`mt-1 block text-[11px] ${i <= step ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
@@ -975,6 +983,21 @@ function CallWaiter({
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const waiting = state?.status === 'pending';
+    const [flash, setFlash] = useState(false);
+    const was = useRef<string | undefined>(state?.status);
+
+    // "Sudah ditangani" is a short thank-you, then the button is ready for the next call.
+    useEffect(() => {
+        if (was.current === 'pending' && state?.status === 'handled') {
+            setFlash(true);
+            const id = window.setTimeout(() => setFlash(false), 6000);
+
+            return () => window.clearTimeout(id);
+        }
+
+        was.current = state?.status;
+    }, [state?.status]);
+    const handled = flash && state?.status === 'handled';
 
     const send = async (reason: string) => {
         setBusy(true);
@@ -1016,15 +1039,15 @@ function CallWaiter({
         <>
             <button
                 onClick={() => setOpen(true)}
-                className={`flex h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold shadow-sm active:scale-95 ${waiting ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300' : state?.status === 'handled' ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200' : 'bg-muted text-foreground'}`}
+                className={`flex h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold shadow-sm active:scale-95 ${waiting ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300' : handled ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200' : 'bg-muted text-foreground'}`}
             >
                 <span aria-hidden className={waiting ? 'animate-pulse' : ''}>
                     🔔
                 </span>
                 {waiting
                     ? 'Menunggu waiter…'
-                    : state?.status === 'handled'
-                      ? 'Sudah ditangani'
+                    : handled
+                      ? '✓ Sudah ditangani'
                       : 'Panggil waiter'}
             </button>
             {open &&

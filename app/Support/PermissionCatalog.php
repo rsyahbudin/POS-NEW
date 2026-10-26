@@ -51,6 +51,7 @@ final class PermissionCatalog
                 'manage-suppliers' => ['label' => 'Kelola data pemasok', 'hint' => 'Tambah/ubah pemasok, lihat riwayat belanja dan perbandingan harga.'],
                 'view-today-summary' => ['label' => 'Lihat ringkasan penjualan hari ini', 'hint' => 'Halaman Hari Ini dari menu akun: omzet, jumlah transaksi, penjualan per jam, menu terlaris. Untuk staf tanpa akses dashboard.'],
                 'reopen-shift' => ['label' => 'Buka kembali shift yang tertutup', 'hint' => 'Membatalkan penutupan shift (salah pencet atau hitung ulang). Tanpa izin Kelola shift orang lain, hanya untuk shift yang ditutup sendiri dalam 30 menit.'],
+                'handle-calls' => ['label' => 'Tangani panggilan meja', 'hint' => 'Melihat dan menandai selesai panggilan "Panggil waiter" dari pelanggan, dengan bunyi di layar kasir atau dapur.'],
                 'mark-sold-out' => ['label' => 'Tandai menu habis', 'hint' => 'Menandai menu habis / tersedia lagi dari layar kasir. Menu habis ikut hilang dari QR pelanggan.'],
                 'record-waste' => ['label' => 'Catat bahan / menu terbuang', 'hint' => 'Mencatat waste dengan alasan. Stok berkurang dan nilainya masuk laporan waste.'],
                 'export-receipts' => ['label' => 'Unduh struk satu bulan (PDF)', 'hint' => 'Membuat satu PDF berisi semua struk di bulan dan tahun yang dipilih, termasuk bulan yang sudah lewat.'],

@@ -22,6 +22,12 @@ class CashMovement extends Model
 {
     protected $guarded = [];
 
+    /** @return BelongsTo<Shift, $this> */
+    public function shift(): BelongsTo
+    {
+        return $this->belongsTo(Shift::class);
+    }
+
     /** @return BelongsTo<User, $this> */
     public function creator(): BelongsTo
     {

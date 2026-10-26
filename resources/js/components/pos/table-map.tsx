@@ -1,4 +1,4 @@
-import { Clock, Users } from 'lucide-react';
+import { BellRing, Clock, Users } from 'lucide-react';
 import { useState } from 'react';
 import { t } from '@/lang';
 import { rupiah } from '@/lib/format';
@@ -159,6 +159,8 @@ export function TableMap({
                                         className={cn(
                                             'relative flex min-h-28 flex-col overflow-hidden rounded-xl border p-3 pl-4 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
                                             st.card,
+                                            tb.calling &&
+                                                'border-amber-500 ring-2 ring-amber-400/70',
                                             selectedId === tb.id &&
                                                 'ring-2 ring-primary',
                                         )}
@@ -174,6 +176,15 @@ export function TableMap({
                                             <span className="text-xl font-semibold tracking-tight">
                                                 {tb.name}
                                             </span>
+                                            {tb.calling && (
+                                                <span className="flex items-center gap-1 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                                    <BellRing
+                                                        className="size-3 animate-pulse"
+                                                        aria-hidden
+                                                    />
+                                                    {t('Memanggil')}
+                                                </span>
+                                            )}
                                             {!tb.qr_enabled && (
                                                 <span className="rounded bg-muted px-1 text-[10px] text-muted-foreground">
                                                     QR off

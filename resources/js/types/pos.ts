@@ -157,6 +157,7 @@ export type FloorTable = {
     capacity: number;
     status: 'empty' | 'occupied' | 'awaiting_payment';
     qr_enabled: boolean;
+    calling?: boolean;
     order: {
         id: number;
         number: string;
@@ -256,4 +257,15 @@ export type Receipt = {
     change: number;
     footer: string | null;
     public_url: string;
+};
+
+export type ServiceCall = {
+    id: number;
+    table: string;
+    table_id: number;
+    reason: string;
+    reason_label: string;
+    repeats: number;
+    at: string;
+    rang_at: string;
 };

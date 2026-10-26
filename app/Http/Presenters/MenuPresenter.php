@@ -4,6 +4,7 @@ namespace App\Http\Presenters;
 
 use App\Domain\Catalog\Models\Category;
 use App\Domain\Floor\Models\Area;
+use App\Domain\Floor\Models\ServiceCall;
 use App\Domain\Ordering\Models\Order;
 use App\Support\MediaUrl;
 
@@ -40,13 +41,14 @@ class MenuPresenter
     public static function floor(int $outletId): array
     {
         $open = Order::query()->where('outlet_id', $outletId)->whereIn('status', ['open', 'partially_paid'])->whereNotNull('table_id')->get()->keyBy('table_id');
+        $calling = ServiceCall::query()->where('outlet_id', $outletId)->where('status', 'pending')->pluck('table_id')->flip();
 
         return Area::query()->where('outlet_id', $outletId)->orderBy('sort')->with('tables')->get()->map(fn ($a) => [
             'id' => $a->id,
             'name' => $a->name,
             'tables' => $a->tables->map(fn ($t) => [
                 'id' => $t->id, 'public_id' => $t->public_id, 'name' => $t->name, 'capacity' => $t->capacity,
-                'status' => $t->status->value, 'qr_enabled' => $t->qr_enabled,
+                'status' => $t->status->value, 'qr_enabled' => $t->qr_enabled, 'calling' => $calling->has($t->id),
                 'order' => ($o = $open->get($t->id)) ? ['id' => $o->id, 'number' => $o->number, 'grand_total' => $o->grand_total, 'bill_requested' => $o->bill_requested_at !== null, 'opened_at' => $o->created_at?->toIso8601String()] : null,
             ])->all(),
         ])->all();

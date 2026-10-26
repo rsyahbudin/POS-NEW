@@ -5,6 +5,8 @@ use Illuminate\Support\Facades\Broadcast;
 
 Broadcast::channel('outlet.{outletId}.orders', fn (User $user, int $outletId) => $user->is_active && $user->can('create-order') || $user->can('receive-payment'));
 
+Broadcast::channel('outlet.{outletId}.calls', fn (User $user, int $outletId) => $user->is_active && $user->can('handle-calls'));
+
 Broadcast::channel('outlet.{outletId}.print', fn (User $user, int $outletId) => $user->is_active && $user->can('use-print-station'));
 
 Broadcast::channel('outlet.{outletId}.notify', fn (User $user, int $outletId) => $user->is_active && (int) $user->outlet_id === $outletId);

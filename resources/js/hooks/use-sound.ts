@@ -9,12 +9,13 @@ import {
 const STORE = 'pos.sound';
 
 type SoundPrefs = { muted: boolean; volume: number };
-type Kind = 'order' | 'ready' | 'alert';
+type Kind = 'order' | 'ready' | 'alert' | 'call';
 
 const NOTES: Record<Kind, number[]> = {
     order: [880, 1175],
     ready: [660, 880, 990],
     alert: [988, 784, 988, 784],
+    call: [1319, 1047, 1319, 1047, 1568],
 };
 
 function read(): SoundPrefs {

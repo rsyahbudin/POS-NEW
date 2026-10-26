@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Kds;
 
 use App\Domain\Catalog\Models\Station;
+use App\Domain\Floor\ServiceCalls;
 use App\Domain\Ordering\Actions\UpdateItemStatusAction;
 use App\Domain\Ordering\Models\OrderItem;
 use App\Domain\Settings\OutletContext;
@@ -16,7 +17,7 @@ use Inertia\Response;
 
 class KdsController extends Controller
 {
-    public function __construct(private OutletContext $outlet, private SettingsRepository $settings) {}
+    public function __construct(private OutletContext $outlet, private SettingsRepository $settings, private ServiceCalls $calls) {}
 
     public function index(): RedirectResponse
     {
@@ -25,13 +26,17 @@ class KdsController extends Controller
         return redirect()->route('kds.show', $station);
     }
 
-    public function show(Station $station): Response
+    public function show(Request $request, Station $station): Response
     {
+        $handle = (bool) $request->user()?->can('handle-calls');
+
         return Inertia::render('kds/show', [
             'station' => ['id' => $station->id, 'name' => $station->name],
             'stations' => Station::query()->where('outlet_id', $this->outlet->id())->where('is_active', true)->orderBy('sort')->get(['id', 'name']),
             'tickets' => $this->tickets($station),
             'outletId' => $this->outlet->id(),
+            'calls' => $handle ? $this->calls->pending('kitchen') : [],
+            'canHandleCalls' => $handle,
             'thresholds' => [
                 'warn' => (int) $this->settings->get('kitchen.warn_minutes', 10),
                 'danger' => (int) $this->settings->get('kitchen.danger_minutes', 20),

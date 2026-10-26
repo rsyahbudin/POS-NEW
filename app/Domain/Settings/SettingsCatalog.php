@@ -32,6 +32,13 @@ final class SettingsCatalog
                     ['key' => 'qr.confirm_alert_seconds', 'type' => 'int', 'label' => 'Alarm jika belum dikonfirmasi (detik)', 'hint' => 'Hanya berlaku bila konfirmasi kasir diwajibkan. Bunyi dan notifikasi diulang sampai ditangani.', 'default' => 180, 'min' => 30, 'max' => 3600],
                 ],
             ], [
+                'title' => 'Panggil waiter dari meja',
+                'fields' => [
+                    ['key' => 'call.enabled', 'type' => 'bool', 'label' => 'Tombol "Panggil waiter" di halaman QR', 'hint' => 'Aktif: pelanggan bisa memanggil staf dari HP-nya (butuh bantuan, minta bill, minta air). Meja yang memanggil ditandai di peta meja dan staf mendengar bunyi.', 'default' => false],
+                    ['key' => 'call.to_pos', 'type' => 'bool', 'label' => 'Tampilkan panggilan di layar kasir dan waiter', 'hint' => 'Panggilan muncul di atas layar Kasir (semua yang punya izin Tangani panggilan meja) dengan bunyi.', 'default' => true],
+                    ['key' => 'call.to_kitchen', 'type' => 'bool', 'label' => 'Tampilkan panggilan di layar dapur (KDS)', 'hint' => 'Berguna kalau dapur yang mengantar pesanan atau tidak ada waiter. Boleh aktif bersama layar kasir.', 'default' => false],
+                ],
+            ], [
                 'title' => 'Anti-spam',
                 'fields' => [
                     ['key' => 'qr.max_submits_per_window', 'type' => 'int', 'label' => 'Maksimal kiriman per meja', 'hint' => 'Jumlah pesanan yang boleh dikirim satu meja dalam rentang waktu di bawah.', 'default' => 5, 'min' => 1, 'max' => 50],

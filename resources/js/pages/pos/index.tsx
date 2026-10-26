@@ -13,6 +13,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AccountMenu } from '@/components/pos/account-menu';
+import { CallsBar } from '@/components/pos/calls-bar';
 import { SoldOutDialog } from '@/components/pos/sold-out-dialog';
 import { DiscountDialog } from '@/components/pos/discount-dialog';
 import { HistoryDialog } from '@/components/pos/history-dialog';
@@ -41,6 +42,7 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet';
 import { useRealtime } from '@/hooks/use-realtime';
+import { useServiceCalls } from '@/hooks/use-service-calls';
 import { useSound } from '@/hooks/use-sound';
 import { t } from '@/lang';
 import { api, ApiError } from '@/lib/api';
@@ -71,6 +73,7 @@ import type {
     PosState,
     Product,
     Receipt,
+    ServiceCall,
 } from '@/types/pos';
 
 type Props = {
@@ -92,6 +95,7 @@ type Props = {
         discount_custom: boolean;
         open_shift: boolean;
         mark_sold_out: boolean;
+        handle_calls: boolean;
         confirm_qr: boolean;
     };
     settings: {
@@ -103,6 +107,7 @@ type Props = {
         outlet_id: number;
     };
     state: PosState;
+    calls: ServiceCall[];
 };
 
 type Ctx = {
@@ -172,6 +177,13 @@ export default function PosPage(props: Props) {
         ticket: boolean;
     };
     const sound = useSound();
+    const serviceCalls = useServiceCalls(
+        settings.outlet_id,
+        'pos',
+        props.calls,
+        sound,
+        can.handle_calls,
+    );
     const alerted = useRef<Record<number, number>>({});
     const alertCount = useRef<Record<number, number>>({});
     const pendingCount = state.pending_qr.length;
@@ -881,6 +893,13 @@ export default function PosPage(props: Props) {
                         />
                     </div>
                 </header>
+
+                {can.handle_calls && (
+                    <CallsBar
+                        calls={serviceCalls.calls}
+                        onDone={(id) => void serviceCalls.done(id)}
+                    />
+                )}
 
                 {sound.hintVisible && (
                     <div

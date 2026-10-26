@@ -37,7 +37,7 @@ class DailyReportSender
 
         $label = CarbonImmutable::parse($date)->format('d M Y');
         $subject = 'Laporan harian '.$label.($before !== null ? ' (diperbarui)' : '');
-        $channels = $this->delivery->deliver($subject, $this->delivery->dailyTextFor($label, $summary, $date), null, $this->delivery->dailyHtml($date, $summary));
+        $channels = $this->delivery->deliver($subject, $this->delivery->dailyTextFor($label, $summary, $date), null, $this->delivery->dailyHtml($date, $summary), $this->delivery->dailyPdfFile($date, $summary));
         if ($channels !== []) {
             Cache::put($key, $signature, now()->addDays(7));
         }

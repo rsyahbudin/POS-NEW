@@ -42,6 +42,10 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(6)->by('qr-submit-ip:'.$r->ip()),
             Limit::perMinute(10)->by('qr-submit-table:'.$r->route('token')),
         ]);
+        RateLimiter::for('qr-call', fn (Request $r) => [
+            Limit::perMinute(4)->by('qr-call-ip:'.$r->ip()),
+            Limit::perMinute(6)->by('qr-call-table:'.$r->route('token')),
+        ]);
         // The owner may do everything, regardless of individually assigned permissions.
         Gate::before(fn ($user) => $user->hasRole('owner') ? true : null);
     }

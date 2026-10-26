@@ -27,6 +27,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Pos\OrderController;
 use App\Http\Controllers\Pos\PosController;
 use App\Http\Controllers\Pos\QzTrayController;
+use App\Http\Controllers\Pos\ServiceCallController;
 use App\Http\Controllers\Pos\SoldOutController;
 use App\Http\Controllers\Pos\TodayController;
 use App\Http\Controllers\Print\PrintStationController;
@@ -48,6 +49,7 @@ Route::prefix('m/{token}')->middleware('throttle:qr')->group(function () {
     Route::get('/', [QrMenuController::class, 'show'])->name('qr.show');
     Route::get('status', [QrMenuController::class, 'statusJson'])->name('qr.status');
     Route::post('order', [QrMenuController::class, 'store'])->middleware('throttle:qr-submit')->name('qr.order');
+    Route::post('call', [QrMenuController::class, 'call'])->middleware('throttle:qr-call')->name('qr.call');
     Route::post('pay', [QrPaymentController::class, 'start'])->middleware('throttle:qr-submit')->name('qr.pay');
     Route::get('pay/{publicId}', [QrPaymentController::class, 'status'])->name('qr.pay.status');
 });
@@ -112,6 +114,8 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::post('bills/{bill}/reprint', [ReceiptController::class, 'reprint'])->name('bills.reprint');
 
         Route::post('tables/{table}/qr', [FloorController::class, 'toggleQr'])->name('tables.qr');
+        Route::get('calls', [ServiceCallController::class, 'index'])->middleware('permission:handle-calls')->name('calls');
+        Route::post('calls/{call}/done', [ServiceCallController::class, 'done'])->middleware('permission:handle-calls')->name('calls.done');
         Route::post('products/{product}/stock', [SoldOutController::class, 'stock'])->name('products.stock');
         Route::post('modifiers/{modifier}/availability', [SoldOutController::class, 'modifier'])->name('modifiers.availability');
         Route::post('variants/{variant}/availability', [SoldOutController::class, 'variant'])->name('variants.availability');

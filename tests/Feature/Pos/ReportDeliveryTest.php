@@ -1,5 +1,8 @@
 <?php
 
+use App\Domain\Accounting\Models\Account;
+use App\Domain\Expense\Models\Expense;
+use App\Domain\Expense\Models\ExpenseCategory;
 use App\Domain\Notification\DailyReportSender;
 use App\Domain\Notification\Jobs\DeliverMessageJob;
 use App\Domain\Notification\Notifier;
@@ -7,6 +10,7 @@ use App\Domain\Notification\ReportDelivery;
 use App\Domain\Reporting\SalesReports;
 use App\Domain\Settings\Models\Outlet;
 use App\Domain\Settings\SettingsRepository;
+use App\Domain\Shift\Actions\AddCashMovementAction;
 use App\Domain\Shift\Actions\CloseShiftAction;
 use App\Domain\Shift\ZReport;
 use App\Domain\Shift\ZReportSummary;
@@ -14,6 +18,11 @@ use App\Support\BusinessDate;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+
+function telegramMessages(): int
+{
+    return Http::recorded(fn ($r) => str_contains($r->url(), 'sendMessage'))->count();
+}
 
 function setUpChannels(bool $telegram = true, bool $email = true, bool $wa = true): void
 {
@@ -124,7 +133,7 @@ it('can send a report for each closed shift, with sales per method and the cash 
     pay(placeOrder($cashier), $cashier);
 
     $this->actingAs($cashier)->post('/shift/close', ['counted_cash' => 140000, 'cash_left' => 0, 'close_key' => 'z3', 'difference_reason' => 'salah kembalian'])->assertSessionHasNoErrors();
-    Http::assertSent(fn ($r) => str_contains($r['text'], 'Laporan shift '.$cashier->name) && str_contains($r['text'], 'Tunai: Rp44.000') && str_contains($r['text'], 'Kas seharusnya: Rp144.000') && str_contains($r['text'], 'Selisih: -Rp4.000') && str_contains($r['text'], 'salah kembalian'));
+    Http::assertSent(fn ($r) => isset($r['text']) && str_contains($r['text'], 'Laporan shift '.$cashier->name) && str_contains($r['text'], 'Tunai: Rp44.000') && str_contains($r['text'], 'Kas seharusnya: Rp144.000') && str_contains($r['text'], 'Selisih: -Rp4.000') && str_contains($r['text'], 'salah kembalian'));
 });
 
 it('forwards only important alerts, and only when asked to', function () {
@@ -140,7 +149,7 @@ it('forwards only important alerts, and only when asked to', function () {
     $n->notify($outlet, 'stock.low', 'Susu hampir habis', 'Sisa 100 ml', '/stock', 'warning', ['manage-inventory']);
     $n->notify($outlet, 'count.approved', 'Hitungan disetujui', null, null, 'info', null, userWithRole('cashier')->id); // personal, info: stays in the bell
     $n->notify($outlet, 'order.x', 'Bukan peringatan', null, null, 'warning', ['manage-inventory']);
-    Http::assertSentCount(1);
+    expect(telegramMessages())->toBe(1);
     Http::assertSent(fn ($r) => str_contains($r['text'], 'Peringatan: Susu hampir habis') && str_contains($r['text'], 'Sisa 100 ml'));
 });
 
@@ -158,7 +167,7 @@ it('shows the report of any day, lists its shifts, and sends it on request', fun
     setUpChannels(true, false, false);
     Http::fake(['*' => Http::response(['ok' => true])]);
     $this->actingAs($manager)->post('/admin/day-close/send', ['date' => $d])->assertSessionHas('success');
-    Http::assertSent(fn ($r) => str_contains($r['text'], 'Omzet bersih: Rp44.000'));
+    Http::assertSent(fn ($r) => isset($r['text']) && str_contains($r['text'], 'Omzet bersih: Rp44.000'));
     $this->actingAs($cashier)->post('/admin/day-close/send', ['date' => $d])->assertForbidden();
 });
 
@@ -187,11 +196,11 @@ it('sends the daily report as soon as the last shift closes, once, and again onl
     $this->actingAs($cashier)->post('/shift/close', ['counted_cash' => 44000, 'cash_left' => 0, 'close_key' => 'l1'])->assertRedirect();
 
     Http::assertSent(fn ($r) => str_contains($r->url(), 'sendMessage') && str_contains($r['text'], 'Laporan harian') && str_contains($r['text'], 'Rp44.000'));
-    Http::assertSentCount(1);
+    expect(telegramMessages())->toBe(1);
 
     // sending the same day again adds nothing: same numbers
     app(DailyReportSender::class)->send(BusinessDate::for());
-    Http::assertSentCount(1);
+    expect(telegramMessages())->toBe(1);
 });
 
 it('sends an updated report when the shift is reopened and sells more', function () {
@@ -201,13 +210,13 @@ it('sends an updated report when the shift is reopened and sells more', function
     $shift = openShiftFor($cashier, 0);
     pay(placeOrder($cashier), $cashier);
     app(CloseShiftAction::class)->handle($shift, $cashier, 44000, 0, null, null, 'l2');
-    Http::assertSentCount(1);
+    expect(telegramMessages())->toBe(1);
 
     $this->actingAs($cashier)->post("/shift/{$shift->id}/reopen")->assertSessionHas('success');
     pay(placeOrder($cashier), $cashier);
     app(CloseShiftAction::class)->handle($shift->fresh(), $cashier, 88000, 0, null, null, 'l3');
 
-    Http::assertSentCount(2);
+    expect(telegramMessages())->toBe(2);
     Http::assertSent(fn ($r) => str_contains($r->url(), 'sendMessage') && str_contains($r['text'], '(diperbarui)') && str_contains($r['text'], 'Rp88.000'));
 });
 
@@ -226,4 +235,41 @@ it('shows two staff lists in the report only when more than one person worked', 
 
     expect($html)->toContain('Order dicatat oleh')->toContain('Pembayaran diterima oleh')->not->toContain('Dilayani oleh')
         ->and(app(SalesReports::class)->by('receiver', $date, $date)->first()->label)->toBe($cashier->name);
+});
+
+it('adds the cash that left the business to the report, from the drawer and from booked expenses', function () {
+    setUpChannels(false, true, false);
+    config(['mail.default' => 'array']);
+    $manager = userWithRole('manager');
+    $shift = openShiftFor($manager, 0);
+    pay(placeOrder($manager), $manager);
+    app(AddCashMovementAction::class)->handle($shift, $manager, 'out', 15000, 'beli es batu', Account::query()->where('code', '5-5000')->value('id'));
+    $category = ExpenseCategory::query()->firstOrFail();
+    Expense::query()->create([
+        'outlet_id' => $shift->outlet_id, 'date' => BusinessDate::for(), 'category_id' => $category->id, 'amount' => 30000, 'source_account_id' => Account::query()->where('type', 'asset')->value('id'),
+        'note' => 'gas', 'created_by' => $manager->id,
+    ]);
+    $date = BusinessDate::for();
+    $summary = ZReportSummary::fromArray(app(ZReport::class)->build($date));
+    $delivery = app(ReportDelivery::class);
+
+    expect($delivery->expenses($date)['total'])->toBe(45000);
+    $delivery->deliver('Laporan harian', $delivery->dailyTextFor($date, $summary, $date), null, $delivery->dailyHtml($date, $summary), $delivery->dailyPdfFile($date, $summary));
+    $message = app('mailer')->getSymfonyTransport()->messages()[0]->getOriginalMessage();
+
+    expect($message->getHtmlBody())->toContain('Pengeluaran kas')->toContain('beli es batu')->toContain('Rp45.000')->toContain('Order dihitung pada jam')
+        ->and($message->getTextBody())->toContain('Pengeluaran kas: Rp45.000')
+        ->and(collect($message->getAttachments())->map->getFilename()->all())->toBe(['laporan-harian-'.$date.'.pdf']);
+});
+
+it('sends the daily PDF to Telegram as a file', function () {
+    setUpChannels(true, false, false);
+    Http::fake(['*' => Http::response(['ok' => true])]);
+    $cashier = userWithRole('cashier');
+    $shift = openShiftFor($cashier, 0);
+    pay(placeOrder($cashier), $cashier);
+    app(CloseShiftAction::class)->handle($shift, $cashier, 44000, 0, null, null, 'tg1');
+
+    Http::assertSent(fn ($r) => str_contains($r->url(), 'sendMessage'));
+    Http::assertSent(fn ($r) => str_contains($r->url(), 'sendDocument'));
 });

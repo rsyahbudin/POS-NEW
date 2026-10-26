@@ -2,6 +2,7 @@
 
 namespace App\Domain\Expense\Models;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -27,6 +28,12 @@ class Expense extends Model
     protected function casts(): array
     {
         return ['date' => 'date:Y-m-d'];
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 
     /** @return BelongsTo<ExpenseCategory, $this> */

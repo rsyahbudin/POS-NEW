@@ -17,7 +17,7 @@ class DeliverMessageJob implements ShouldQueue
 
     public int $tries = 3;
 
-    public function __construct(public string $channel, public string $subject, public string $text, public ?string $html = null) {}
+    public function __construct(public string $channel, public string $subject, public string $text, public ?string $html = null, public ?string $pdfPath = null) {}
 
     /** @return array<int, int> */
     public function backoff(): array
@@ -43,6 +43,9 @@ class DeliverMessageJob implements ShouldQueue
             return;
         }
         Http::post("https://api.telegram.org/bot{$token}/sendMessage", ['chat_id' => $chat, 'text' => $this->subject === '' ? $this->text : "{$this->subject}\n\n{$this->text}"])->throw();
+        if ($this->pdfPath !== null && is_file($this->pdfPath)) {
+            Http::attach('document', (string) file_get_contents($this->pdfPath), basename($this->pdfPath))->post("https://api.telegram.org/bot{$token}/sendDocument", ['chat_id' => $chat, 'caption' => $this->subject])->throw();
+        }
     }
 
     private function email(ReportDelivery $delivery): void
@@ -51,13 +54,24 @@ class DeliverMessageJob implements ShouldQueue
         if ($to === []) {
             return;
         }
-        if ($this->html === null) {
-            Mail::raw($this->text, fn ($m) => $m->to($to)->subject($this->subject));
+        $html = $this->html;
+        $pdf = $this->pdfPath !== null && is_file($this->pdfPath) ? $this->pdfPath : null;
+        if ($html === null) {
+            Mail::raw($this->text, function ($m) use ($to, $pdf) {
+                $m->to($to)->subject($this->subject);
+                if ($pdf !== null) {
+                    $m->attach($pdf, ['as' => basename($pdf), 'mime' => 'application/pdf']);
+                }
+            });
 
             return;
         }
-        $html = $this->html;
-        Mail::send([], [], fn ($m) => $m->to($to)->subject($this->subject)->html($html)->text($this->text));
+        Mail::send([], [], function ($m) use ($to, $html, $pdf) {
+            $m->to($to)->subject($this->subject)->html($html)->text($this->text);
+            if ($pdf !== null) {
+                $m->attach($pdf, ['as' => basename($pdf), 'mime' => 'application/pdf']);
+            }
+        });
     }
 
     /** Fonnte (api.fonnte.com) style gateway: token in the Authorization header, numbers with country code 62. */

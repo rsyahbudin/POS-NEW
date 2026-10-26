@@ -1,5 +1,6 @@
 import { Head } from '@inertiajs/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ProductArt } from '@/components/pos/product-art';
 import type { Category, Modifier, Product } from '@/types/pos';
 
@@ -31,7 +32,8 @@ type StatusRound = {
         voided: boolean;
     }[];
 };
-type Status = { rounds: StatusRound[]; total: number };
+type CallState = { status: string; reason: string; at: string } | null;
+type Status = { rounds: StatusRound[]; total: number; call?: CallState };
 
 type Props = {
     token: string;
@@ -42,6 +44,7 @@ type Props = {
     autoConfirm: boolean;
     qris: boolean;
     status: Status;
+    call: { enabled: boolean; reasons: Record<string, string> };
 };
 
 const rp = (n: number) => `Rp${Math.trunc(n).toLocaleString('id-ID')}`;
@@ -60,6 +63,7 @@ export default function QrMenu({
     status: initialStatus,
     autoConfirm,
     qris,
+    call,
 }: Props) {
     const [menu, setMenu] = useState(initialMenu);
     const [cart, setCart] = useState<Line[]>([]);
@@ -296,9 +300,21 @@ export default function QrMenu({
                         <p className="text-xs font-medium text-muted-foreground">
                             {outlet}
                         </p>
-                        <h1 className="text-xl font-semibold tracking-tight">
-                            Meja {table.name}
-                        </h1>
+                        <div className="flex items-center justify-between gap-3">
+                            <h1 className="text-xl font-semibold tracking-tight">
+                                Meja {table.name}
+                            </h1>
+                            {call.enabled && (
+                                <CallWaiter
+                                    token={token}
+                                    reasons={call.reasons}
+                                    state={status.call ?? null}
+                                    onState={(c) =>
+                                        setStatus((s) => ({ ...s, call: c }))
+                                    }
+                                />
+                            )}
+                        </div>
                         {!qris && (
                             <p className="text-xs text-muted-foreground">
                                 Pembayaran di kasir.
@@ -847,6 +863,114 @@ function PayBox({ token }: { token: string }) {
                 Atau bayar di kasir
             </p>
         </div>
+    );
+}
+
+/** "Panggil waiter": the guest picks why, staff hear a bell at their screen, and the guest sees when it is handled. */
+function CallWaiter({
+    token,
+    reasons,
+    state,
+    onState,
+}: {
+    token: string;
+    reasons: Record<string, string>;
+    state: CallState;
+    onState: (c: CallState) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const waiting = state?.status === 'pending';
+
+    const send = async (reason: string) => {
+        setBusy(true);
+        setError(null);
+
+        try {
+            const res = await fetch(`/m/${token}/call`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-XSRF-TOKEN': xsrf(),
+                },
+                body: JSON.stringify({ reason }),
+            });
+
+            if (res.status === 429) {
+                setError('Terlalu sering. Tunggu sebentar ya.');
+
+                return;
+            }
+
+            if (!res.ok) {
+                setError('Belum bisa memanggil. Coba lagi.');
+
+                return;
+            }
+
+            onState((await res.json()).call);
+            setOpen(false);
+        } catch {
+            setError('Koneksi bermasalah. Coba lagi.');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <>
+            <button
+                onClick={() => setOpen(true)}
+                className={`flex h-10 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold active:scale-95 ${waiting ? 'border-amber-400 bg-amber-100 text-amber-900' : state?.status === 'handled' ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'bg-card'}`}
+            >
+                <span aria-hidden>🔔</span>
+                {waiting
+                    ? 'Menunggu waiter…'
+                    : state?.status === 'handled'
+                      ? 'Sudah ditangani'
+                      : 'Panggil waiter'}
+            </button>
+            {open &&
+                createPortal(
+                    <Sheet
+                        title="Panggil waiter"
+                        onClose={() => setOpen(false)}
+                    >
+                        {waiting && (
+                            <p className="mb-3 rounded-xl bg-amber-100 p-3 text-sm text-amber-900">
+                                Waiter sudah dipanggil ({state?.reason}). Tekan
+                                lagi kalau belum datang.
+                            </p>
+                        )}
+                        <p className="mb-3 text-sm text-muted-foreground">
+                            Pilih keperluan, staf akan datang ke meja kamu.
+                        </p>
+                        <div className="grid gap-2">
+                            {Object.entries(reasons).map(([key, label]) => (
+                                <button
+                                    key={key}
+                                    disabled={busy}
+                                    onClick={() => void send(key)}
+                                    className="h-14 rounded-xl border bg-card px-4 text-left text-base font-medium active:scale-[0.99] disabled:opacity-50"
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                        {error && (
+                            <p
+                                role="alert"
+                                className="mt-3 text-sm text-red-700"
+                            >
+                                {error}
+                            </p>
+                        )}
+                    </Sheet>,
+                    document.body,
+                )}
+        </>
     );
 }
 

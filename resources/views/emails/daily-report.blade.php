@@ -52,7 +52,7 @@
     @if ($hours !== [])
     <tr><td style="padding:4px 24px 16px;">
         <div style="font-size:14px;font-weight:700;margin-bottom:2px;">Penjualan per jam</div>
-        <div style="font-size:11px;color:#64748b;margin-bottom:8px;"><span style="color:#f59e0b;">■</span> jam teramai &nbsp; <span style="color:{{ $ac }};">■</span> jam lain</div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:8px;"><span style="color:#f59e0b;">■</span> jam teramai &nbsp; <span style="color:{{ $ac }};">■</span> jam lain &nbsp; <span style="color:{{ $ac }};font-weight:700;">3×</span> = jumlah order</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;">
             <tr>
             @foreach ($hours as $h)
@@ -65,10 +65,11 @@
             </tr>
             <tr>
             @foreach ($hours as $h)
-                <td align="center" style="font-size:10px;color:#64748b;padding-top:3px;border-top:1px solid #e2e8f0;">{{ $h['hour'] }}</td>
+                <td align="center" style="font-size:10px;color:#64748b;padding-top:3px;border-top:1px solid #e2e8f0;">{{ $h['hour'] }}<div style="font-size:9px;color:{{ $ac }};font-weight:700;">{{ $h['orders'] > 0 ? $h['orders'].'×' : '' }}</div></td>
             @endforeach
             </tr>
         </table>
+        <div style="font-size:11px;color:#64748b;margin-top:6px;">Order dihitung pada jam saat order selesai dibayar, bukan saat mulai dipesan.</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;margin-top:10px;">
             <tr><td style="padding:5px 8px;background:#f1f5f9;color:#475569;font-weight:600;border-radius:6px 0 0 6px;">Jam</td><td align="right" style="padding:5px 8px;background:#f1f5f9;color:#475569;font-weight:600;">Order</td><td align="right" style="padding:5px 8px;background:#f1f5f9;color:#475569;font-weight:600;border-radius:0 6px 6px 0;">Penjualan</td></tr>
             @foreach ($hours as $h)
@@ -163,6 +164,25 @@
         </table>
     </td></tr>
     @endif
+    <tr><td style="padding:4px 24px 16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Pengeluaran kas</div>
+        @if (count($expenses['items']) === 0)
+            <div style="font-size:13px;padding:8px 10px;background:#f1f5f9;border-radius:6px;color:#475569;">Tidak ada pengeluaran kas hari ini.</div>
+        @else
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
+            @foreach ($expenses['items'] as $e)
+                <tr>
+                    <td style="padding:6px 0;border-bottom:1px solid #f1f5f9;">
+                        <div style="font-weight:600;">{{ $e['label'] }}</div>
+                        <div style="font-size:12px;color:#64748b;"><span style="display:inline-block;padding:1px 7px;border-radius:999px;background:{{ $e['source'] === 'Kas laci' ? '#ffedd5' : '#e0e7ff' }};color:{{ $e['source'] === 'Kas laci' ? '#9a3412' : '#3730a3' }};font-size:11px;font-weight:600;">{{ $e['source'] }}</span>@if ($e['by']) · {{ $e['by'] }}@endif</div>
+                    </td>
+                    <td align="right" valign="top" style="padding:6px 0;border-bottom:1px solid #f1f5f9;font-weight:700;color:#be123c;">{{ $m($e['amount']) }}</td>
+                </tr>
+            @endforeach
+            <tr><td style="padding:8px 10px;background:#fff1f2;border-radius:6px 0 0 6px;font-weight:700;">Total pengeluaran</td><td align="right" style="padding:8px 10px;background:#fff1f2;border-radius:0 6px 6px 0;font-weight:800;color:#be123c;">{{ $m($expenses['total']) }}</td></tr>
+        </table>
+        @endif
+    </td></tr>
     <tr><td style="padding:4px 24px 16px;">
         <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Perlu dicek</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">

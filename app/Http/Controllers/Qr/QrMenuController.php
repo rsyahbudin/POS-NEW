@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Qr;
 
+use App\Domain\Floor\Models\ServiceCall;
 use App\Domain\Floor\Models\Table;
+use App\Domain\Floor\ServiceCalls;
 use App\Domain\Ordering\Actions\SubmitQrOrderAction;
 use App\Domain\Ordering\Models\Order;
 use App\Domain\Payment\Online\OnlinePaymentService;
@@ -35,6 +37,7 @@ class QrMenuController extends Controller
             'outletId' => $table->outlet_id,
             'status' => $this->status($table),
             'qris' => app(OnlinePaymentService::class)->enabled(),
+            'call' => ['enabled' => app(ServiceCalls::class)->enabled(), 'reasons' => ServiceCall::REASONS],
             'autoConfirm' => (bool) app(SettingsRepository::class)->get('qr.auto_confirm', false),
         ]);
     }
@@ -45,8 +48,9 @@ class QrMenuController extends Controller
         $table = $table instanceof Table ? $table : Table::query()->where('qr_token', $table)->firstOrFail();
         $order = Order::query()->where('table_id', $table->id)->whereIn('status', ['open', 'partially_paid'])->with('rounds.items')->latest('id')->first();
 
+        $call = $this->callState($table);
         if (! $order) {
-            return ['rounds' => [], 'total' => 0, 'sold_out' => []];
+            return ['rounds' => [], 'total' => 0, 'sold_out' => [], 'call' => $call];
         }
 
         $rounds = $order->rounds->sortBy('id')->map(function ($r) {
@@ -69,7 +73,25 @@ class QrMenuController extends Controller
         // Provisional total: confirmed live items plus pending rounds at menu price.
         $pendingTotal = (int) $order->rounds->where('status.value', 'pending')->flatMap->items->sum('line_total');
 
-        return ['rounds' => $rounds, 'total' => $order->grand_total + $pendingTotal, 'sold_out' => []];
+        return ['rounds' => $rounds, 'total' => $order->grand_total + $pendingTotal, 'sold_out' => [], 'call' => $call];
+    }
+
+    /** @return array{status: string, reason: string, at: string}|null the guest's latest call of the last 10 minutes */
+    private function callState(Table $table): ?array
+    {
+        $c = ServiceCall::query()->where('table_id', $table->id)->where('created_at', '>=', now()->subMinutes(10))->latest('id')->first();
+
+        return $c === null ? null : ['status' => $c->status, 'reason' => $c->reasonLabel(), 'at' => ($c->handled_at ?? $c->created_at)?->toIso8601String() ?? ''];
+    }
+
+    public function call(string $token, Request $request, ServiceCalls $calls): JsonResponse
+    {
+        $table = Table::query()->where('qr_token', $token)->first();
+        abort_unless($table && $table->qr_enabled, 404);
+        $data = $request->validate(['reason' => 'nullable|string|max:20']);
+        $calls->request($table, (string) ($data['reason'] ?? 'help'));
+
+        return response()->json(['call' => $this->callState($table)]);
     }
 
     public function statusJson(string $token): JsonResponse

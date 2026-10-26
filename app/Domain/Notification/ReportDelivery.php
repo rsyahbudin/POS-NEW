@@ -2,19 +2,24 @@
 
 namespace App\Domain\Notification;
 
+use App\Domain\Expense\Models\Expense;
 use App\Domain\Notification\Jobs\DeliverMessageJob;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Reporting\SalesReports;
 use App\Domain\Settings\Models\Outlet;
 use App\Domain\Settings\OutletContext;
 use App\Domain\Settings\SettingsRepository;
+use App\Domain\Shift\Models\CashMovement;
 use App\Domain\Shift\Models\Shift;
 use App\Domain\Shift\ShiftCash;
 use App\Domain\Shift\ZReportSummary;
+use App\Exports\ReportSheet;
 use App\Models\User;
 use App\Support\Money;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Sends reports and important alerts to the owner's phone or inbox: Telegram, email and WhatsApp (through a
@@ -68,25 +73,27 @@ class ReportDelivery
      *
      * @param  list<string>|null  $only
      * @param  string|null  $html  a designed version of the message, used by email (the plain text is its fallback)
+     * @param  string|null  $pdfPath  a PDF of the report, attached to email and sent as a file on Telegram
      * @return list<string> channels used
      */
-    public function deliver(string $subject, string $text, ?array $only = null, ?string $html = null): array
+    public function deliver(string $subject, string $text, ?array $only = null, ?string $html = null, ?string $pdfPath = null): array
     {
         $channels = array_values(array_filter($this->configured(), fn ($c) => $only === null || in_array($c, $only, true)));
         foreach ($channels as $channel) {
-            DeliverMessageJob::dispatch($channel, $subject, $text, $channel === 'email' ? $html : null);
+            DeliverMessageJob::dispatch($channel, $subject, $text, $channel === 'email' ? $html : null, in_array($channel, ['email', 'telegram'], true) ? $pdfPath : null);
         }
 
         return $channels;
     }
 
-    /** The daily report as a designed email: headline, comparison, payment methods, best sellers, things to check. */
-    public function dailyHtml(string $date, ZReportSummary $s): string
+    /** @return array<string, mixed> everything the daily report shows, shared by the email, the PDF and the text */
+    public function dailyData(string $date, ZReportSummary $s): array
     {
         $sales = app(SalesReports::class);
         $day = CarbonImmutable::parse($date);
+        $people = fn (string $dimension) => $sales->by($dimension, $date, $date)->map(fn ($r) => ['name' => $r->label, 'orders' => $r->orders, 'total' => $r->total])->values()->all();
 
-        return view('emails.daily-report', [
+        return [
             'outlet' => (string) Outlet::query()->find(app(OutletContext::class)->id())?->name,
             'dateLabel' => $day->translatedFormat('l, d F Y'),
             's' => $s,
@@ -96,11 +103,78 @@ class ReportDelivery
             'hours' => $this->hourly($sales->by('hour', $date, $date)),
             'week' => $this->week($sales, $day),
             'types' => $sales->by('type', $date, $date)->map(fn ($r) => ['name' => $r->display, 'orders' => $r->orders, 'total' => $r->total])->values()->all(),
-            'recorders' => $sales->by('cashier', $date, $date)->map(fn ($r) => ['name' => $r->label, 'orders' => $r->orders, 'total' => $r->total])->values()->all(),
-            'receivers' => $sales->by('receiver', $date, $date)->map(fn ($r) => ['name' => $r->label, 'orders' => $r->orders, 'total' => $r->total])->values()->all(),
+            'recorders' => $people('cashier'),
+            'receivers' => $people('receiver'),
+            'expenses' => $this->expenses($date),
             'weekLabel' => $day->translatedFormat('l, d M'),
             'url' => url("/admin/reports/sales?from={$date}&to={$date}"),
-        ])->render();
+        ];
+    }
+
+    /** The daily report as a designed email: headline, comparison, hours, payment methods, best sellers, expenses, things to check. */
+    public function dailyHtml(string $date, ZReportSummary $s): string
+    {
+        return view('emails.daily-report', $this->dailyData($date, $s))->render();
+    }
+
+    /**
+     * Cash that left the business that day: taken out of the drawer during a shift, and expenses booked for the date.
+     *
+     * @return array{items: list<array{source: string, label: string, by: string|null, amount: int}>, total: int}
+     */
+    public function expenses(string $date): array
+    {
+        $outletId = app(OutletContext::class)->id();
+        $items = [];
+        CashMovement::query()->where('direction', 'out')->whereHas('shift', fn ($q) => $q->where('outlet_id', $outletId)->where('business_date', $date))->with('creator:id,name')->oldest()->get()
+            ->each(function (CashMovement $m) use (&$items) {
+                $items[] = ['source' => 'Kas laci', 'label' => $m->reason, 'by' => $m->creator?->name, 'amount' => $m->amount];
+            });
+        Expense::query()->where('outlet_id', $outletId)->where('date', $date)->with(['category:id,name', 'creator:id,name'])->oldest('id')->get()
+            ->each(function (Expense $e) use (&$items) {
+                $items[] = ['source' => 'Pengeluaran', 'label' => trim($e->category->name.($e->note ? " · {$e->note}" : '')), 'by' => $e->creator?->name, 'amount' => $e->amount];
+            });
+
+        return ['items' => $items, 'total' => (int) array_sum(array_column($items, 'amount'))];
+    }
+
+    /** Writes the daily PDF to disk (the queued jobs read it from there) and returns its path. */
+    public function dailyPdfFile(string $date, ZReportSummary $s): string
+    {
+        $name = 'daily-reports/laporan-harian-'.$date.'.pdf';
+        Storage::disk('local')->put($name, $this->dailyPdf($date, $s));
+
+        return Storage::disk('local')->path($name);
+    }
+
+    /** The same report as a PDF (attached to the email and sent as a file on Telegram). */
+    public function dailyPdf(string $date, ZReportSummary $s): string
+    {
+        $d = $this->dailyData($date, $s);
+        $sub = $d['dateLabel'];
+        $m = fn (int $v) => $v;
+        $sheets = [
+            new ReportSheet('Ringkasan', $sub, ['Keterangan', 'Nilai (Rp)'], [
+                ['Jumlah order', $s->orders], ['Omzet kotor', $s->gross], ['Diskon', $s->discounts], ['Refund', $s->refunds], ['Penjualan bersih', $s->net],
+                ['Rata-rata per order', $d['average']], ['Void (item)', $s->voidItems], ['Nilai void', $s->voidValue], ['Komplimen / staff meal (item)', $s->compItems],
+                ['Nilai komplimen', $s->compValue], ['Selisih kas', $s->cashDifference],
+            ]),
+            new ReportSheet('Penjualan per jam', 'Dihitung saat order selesai dibayar', ['Jam', 'Order', 'Penjualan (Rp)'],
+                array_map(fn ($h) => ["{$h['hour']}:00–{$h['hour']}:59", $h['orders'], $h['total']], array_values(array_filter($d['hours'], fn ($h) => $h['orders'] > 0))),
+                ['Total', (int) array_sum(array_column($d['hours'], 'orders')), (int) array_sum(array_column($d['hours'], 'total'))]),
+            new ReportSheet('Per metode bayar', $sub, ['Metode', 'Nilai (Rp)'], array_map(fn ($n, $t) => [(string) $n, $m($t)], array_keys($s->byMethod), array_values($s->byMethod))),
+            new ReportSheet('Menu terlaris', $sub, ['Menu', 'Qty', 'Nilai (Rp)'], array_map(fn ($p) => [$p['name'], $p['qty'], $p['total']], $d['top'])),
+            new ReportSheet('Order dicatat oleh', $sub, ['Staf', 'Order', 'Nilai (Rp)'], array_map(fn ($p) => [$p['name'], $p['orders'], $p['total']], $d['recorders'])),
+            new ReportSheet('Pembayaran diterima oleh', $sub, ['Staf', 'Order', 'Nilai (Rp)'], array_map(fn ($p) => [$p['name'], $p['orders'], $p['total']], $d['receivers'])),
+            new ReportSheet('Pengeluaran kas', $sub, ['Sumber', 'Keterangan', 'Oleh', 'Nominal (Rp)'], array_map(fn ($e) => [$e['source'], $e['label'], $e['by'] ?? '-', $e['amount']], $d['expenses']['items']),
+                ['Total', '', '', $d['expenses']['total']]),
+            new ReportSheet('7 hari terakhir', $sub, ['Hari', 'Order', 'Penjualan (Rp)'], array_map(fn ($w) => [$w['name'].($w['tag'] ? " ({$w['tag']})" : ''), $w['orders'], $w['total']], $d['week'])),
+        ];
+
+        return Pdf::loadView('pdf.table', [
+            'outlet' => $d['outlet'], 'sections' => array_map(fn (ReportSheet $x) => $x->section(), $sheets), 'title' => 'Laporan harian', 'subtitle' => $sub,
+            'printedBy' => null, 'printedAt' => now()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i'),
+        ])->setPaper('a4', 'portrait')->output();
     }
 
     /**
@@ -152,6 +226,16 @@ class ReportDelivery
         $lines[] = "Void: {$s->voidItems} item ({$m($s->voidValue)})";
         $lines[] = "Komplimen/staff meal: {$s->compItems} item ({$m($s->compValue)})";
         $lines[] = "Selisih kas: {$m($s->cashDifference)}";
+        if ($date !== null) {
+            $out = $this->expenses($date);
+            if ($out['items'] !== []) {
+                $lines[] = '';
+                $lines[] = "Pengeluaran kas: {$m($out['total'])}";
+                foreach ($out['items'] as $e) {
+                    $lines[] = "  {$e['label']}: {$m($e['amount'])}".($e['by'] ? " ({$e['by']})" : '');
+                }
+            }
+        }
         $hours = $date === null ? [] : $this->hourly(app(SalesReports::class)->by('hour', $date, $date));
         if ($hours !== []) {
             $lines[] = '';

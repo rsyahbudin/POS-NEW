@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Pos;
 
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Floor\ServiceCalls;
 use App\Domain\Ordering\Enums\OrderStatus;
 use App\Domain\Ordering\Models\Order;
 use App\Domain\Ordering\Models\OrderItem;
@@ -24,7 +25,7 @@ use Inertia\Response;
 
 class PosController extends Controller
 {
-    public function __construct(private OutletContext $outlet, private SettingsRepository $settings) {}
+    public function __construct(private OutletContext $outlet, private SettingsRepository $settings, private ServiceCalls $calls) {}
 
     public function index(Request $request): Response
     {
@@ -44,6 +45,7 @@ class PosController extends Controller
                 'discount' => $user->can('discount-within-limit') || $user->can('discount-custom'),
                 'discount_custom' => $user->can('discount-custom'),
                 'mark_sold_out' => $user->can('mark-sold-out'),
+                'handle_calls' => $user->can('handle-calls'),
                 'open_shift' => $user->can('open-close-shift'),
                 'confirm_qr' => $user->can('receive-payment'),
             ],
@@ -57,6 +59,7 @@ class PosController extends Controller
             ],
             'discountPresets' => DiscountPreset::query()->where('outlet_id', $outletId)->where('is_active', true)->orderBy('sort')->orderBy('name')->get(['id', 'name', 'type', 'value', 'needs_pin']),
             'state' => $this->state(),
+            'calls' => $user->can('handle-calls') ? $this->calls->pending('pos') : [],
         ]);
     }
 

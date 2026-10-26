@@ -4,8 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AccountMenu } from '@/components/pos/account-menu';
 import { Button } from '@/components/ui/button';
+import { CallsBar } from '@/components/pos/calls-bar';
 import { useRealtime } from '@/hooks/use-realtime';
+import { useServiceCalls } from '@/hooks/use-service-calls';
 import { useSound } from '@/hooks/use-sound';
+import type { ServiceCall } from '@/types/pos';
 import { t } from '@/lang';
 import { api, ApiError } from '@/lib/api';
 import { ageMinutes, timeId } from '@/lib/format';
@@ -35,6 +38,8 @@ type Props = {
     stations: { id: number; name: string }[];
     tickets: Ticket[];
     outletId: number;
+    calls: ServiceCall[];
+    canHandleCalls: boolean;
     thresholds: { warn: number; danger: number };
 };
 
@@ -50,6 +55,8 @@ export default function KdsPage({
     stations,
     tickets: initial,
     outletId,
+    calls: initialCalls,
+    canHandleCalls,
     thresholds,
 }: Props) {
     const [tickets, setTickets] = useState(initial);
@@ -64,6 +71,13 @@ export default function KdsPage({
         }
     });
     const sound = useSound();
+    const serviceCalls = useServiceCalls(
+        outletId,
+        'kitchen',
+        initialCalls,
+        sound,
+        canHandleCalls,
+    );
     const seen = useRef(new Set(initial.map((x) => x.round_id)));
 
     // Kitchen screens are dark by default so they stay readable (PRD 6.1).
@@ -238,6 +252,12 @@ export default function KdsPage({
                         <AccountMenu />
                     </div>
                 </header>
+                {canHandleCalls && (
+                    <CallsBar
+                        calls={serviceCalls.calls}
+                        onDone={(id) => void serviceCalls.done(id)}
+                    />
+                )}
 
                 {sound.hintVisible && (
                     <div

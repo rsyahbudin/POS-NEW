@@ -80,7 +80,7 @@
     @endif
     @if (count($week) > 1)
     <tr><td style="padding:4px 24px 16px;">
-        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">7 hari sampai {{ $weekLabel }}</div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">7 hari terakhir</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
             @foreach ($week as $d)
                 <tr>
@@ -121,28 +121,46 @@
     @endif
     @php
         $one = count($recorders) === 1 && count($receivers) === 1 && $recorders[0]['name'] === $receivers[0]['name'];
-        $groups = [['Per tipe order', $types, '#f59e0b', 'Order'], ['Order dicatat oleh', $recorders, '#ec4899', 'order'], ['Pembayaran diterima oleh', $receivers, '#8b5cf6', 'order']];
-        $groups = array_values(array_filter($groups, fn ($g) => count($g[1]) > 0 && ! ($one && $g[0] !== 'Per tipe order')));
+        $groups = [['Per tipe order', $types, '#f59e0b', false], ['Order dicatat oleh', $recorders, '#ec4899', true], ['Pembayaran diterima oleh', $receivers, '#8b5cf6', true]];
+        $groups = array_values(array_filter($groups, fn ($g) => count($g[1]) > 0 && ! ($one && $g[3])));
     @endphp
-    @if (count($groups) > 0 || $one)
+    @foreach ($groups as [$title, $rows, $color, $people])
+    @php $max = max(1, collect($rows)->max('total') ?? 1); @endphp
     <tr><td style="padding:4px 24px 16px;">
-        @if (count($groups) > 0)
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;"><tr>
-        @foreach ($groups as [$title, $rows, $dot])
-            <td valign="top" style="padding-right:8px;">
-                <div style="font-size:14px;font-weight:700;margin-bottom:6px;">{{ $title }}</div>
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
-                    @foreach ($rows as $r)
-                        <tr><td style="padding:4px 0;border-bottom:1px solid #f1f5f9;"><span style="color:{{ $dot }};">●</span> {{ $r['name'] }} <span style="color:#64748b;">({{ $r['orders'] }})</span></td><td align="right" style="padding:4px 0;border-bottom:1px solid #f1f5f9;font-weight:600;">{{ $m($r['total']) }}</td></tr>
-                    @endforeach
-                </table>
-            </td>
-        @endforeach
-        </tr></table>
-        @endif
-        @if ($one)
-        <div style="margin-top:{{ count($groups) > 0 ? '10' : '0' }}px;font-size:13px;padding:8px 10px;background:#fdf2f8;border-radius:6px;"><span style="color:#ec4899;">●</span> Dilayani oleh <strong>{{ $recorders[0]['name'] }}</strong> · {{ $recorders[0]['orders'] }} order · {{ $m($recorders[0]['total']) }}</div>
-        @endif
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">{{ $title }}</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
+            @foreach ($rows as $r)
+                <tr>
+                    <td width="34" valign="middle" style="padding:6px 0;">
+                        @if ($people)
+                            <div style="width:28px;height:28px;line-height:28px;text-align:center;border-radius:14px;background:{{ $color }};color:#ffffff;font-size:12px;font-weight:700;">{{ mb_strtoupper(mb_substr($r['name'], 0, 1)) }}</div>
+                        @else
+                            <div style="width:28px;height:28px;line-height:28px;text-align:center;border-radius:14px;background:{{ $color }};color:#ffffff;font-size:13px;">●</div>
+                        @endif
+                    </td>
+                    <td valign="middle" style="padding:6px 8px 6px 0;">
+                        <div style="font-weight:600;">{{ $r['name'] }}</div>
+                        <div style="font-size:12px;color:#64748b;">{{ $r['orders'] }} order</div>
+                    </td>
+                    <td valign="middle" width="150" style="padding:6px 0;">
+                        <div style="text-align:right;font-weight:700;">{{ $m($r['total']) }}</div>
+                        <div style="height:5px;background:#f1f5f9;border-radius:3px;margin-top:4px;font-size:0;line-height:0;"><div style="height:5px;width:{{ max(2, (int) round($r['total'] / $max * 100)) }}%;background:{{ $color }};border-radius:3px;font-size:0;line-height:0;">&nbsp;</div></div>
+                    </td>
+                </tr>
+                @if (! $loop->last)<tr><td colspan="3" style="border-bottom:1px solid #f1f5f9;font-size:0;line-height:0;height:1px;">&nbsp;</td></tr>@endif
+            @endforeach
+        </table>
+    </td></tr>
+    @endforeach
+    @if ($one)
+    <tr><td style="padding:4px 24px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fdf2f8;border-radius:8px;">
+            <tr>
+                <td width="46" style="padding:10px 0 10px 12px;"><div style="width:30px;height:30px;line-height:30px;text-align:center;border-radius:15px;background:#ec4899;color:#ffffff;font-size:13px;font-weight:700;">{{ mb_strtoupper(mb_substr($recorders[0]['name'], 0, 1)) }}</div></td>
+                <td style="padding:10px 8px;font-size:13px;"><div style="font-size:12px;color:#9d174d;">Dilayani oleh</div><div style="font-weight:700;">{{ $recorders[0]['name'] }}</div></td>
+                <td align="right" style="padding:10px 12px;font-size:13px;"><div style="font-weight:700;">{{ $m($recorders[0]['total']) }}</div><div style="font-size:12px;color:#64748b;">{{ $recorders[0]['orders'] }} order</div></td>
+            </tr>
+        </table>
     </td></tr>
     @endif
     <tr><td style="padding:4px 24px 16px;">

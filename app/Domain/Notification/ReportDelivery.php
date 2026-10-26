@@ -96,7 +96,9 @@ class ReportDelivery
             'hours' => $this->hourly($sales->by('hour', $date, $date)),
             'week' => $this->week($sales, $day),
             'types' => $sales->by('type', $date, $date)->map(fn ($r) => ['name' => $r->display, 'orders' => $r->orders, 'total' => $r->total])->values()->all(),
-            'cashiers' => $sales->by('cashier', $date, $date)->map(fn ($r) => ['name' => $r->label, 'orders' => $r->orders, 'total' => $r->total])->values()->all(),
+            'recorders' => $sales->by('cashier', $date, $date)->map(fn ($r) => ['name' => $r->label, 'orders' => $r->orders, 'total' => $r->total])->values()->all(),
+            'receivers' => $sales->by('receiver', $date, $date)->map(fn ($r) => ['name' => $r->label, 'orders' => $r->orders, 'total' => $r->total])->values()->all(),
+            'weekLabel' => $day->translatedFormat('l, d M'),
             'url' => url("/admin/reports/sales?from={$date}&to={$date}"),
         ])->render();
     }

@@ -22,7 +22,8 @@ const LABELS: Record<string, string> = {
     product: 'Per produk',
     category: 'Per kategori',
     method: 'Per metode bayar',
-    cashier: 'Per kasir',
+    cashier: 'Per pencatat order',
+    receiver: 'Per penerima pembayaran',
     type: 'Per tipe order',
 };
 

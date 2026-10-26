@@ -80,7 +80,7 @@
     @endif
     @if (count($week) > 1)
     <tr><td style="padding:4px 24px 16px;">
-        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">7 hari terakhir</div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">7 hari sampai {{ $weekLabel }}</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
             @foreach ($week as $d)
                 <tr>
@@ -119,12 +119,17 @@
         </table>
     </td></tr>
     @endif
-    @if (count($types) > 0 || count($cashiers) > 0)
+    @php
+        $one = count($recorders) === 1 && count($receivers) === 1 && $recorders[0]['name'] === $receivers[0]['name'];
+        $groups = [['Per tipe order', $types, '#f59e0b', 'Order'], ['Order dicatat oleh', $recorders, '#ec4899', 'order'], ['Pembayaran diterima oleh', $receivers, '#8b5cf6', 'order']];
+        $groups = array_values(array_filter($groups, fn ($g) => count($g[1]) > 0 && ! ($one && $g[0] !== 'Per tipe order')));
+    @endphp
+    @if (count($groups) > 0 || $one)
     <tr><td style="padding:4px 24px 16px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-        @foreach ([['Per tipe order', $types, '#f59e0b'], ['Per kasir', $cashiers, '#ec4899']] as [$title, $rows, $dot])
-            @if (count($rows) > 0)
-            <td valign="top" width="50%" style="padding-right:8px;">
+        @if (count($groups) > 0)
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;"><tr>
+        @foreach ($groups as [$title, $rows, $dot])
+            <td valign="top" style="padding-right:8px;">
                 <div style="font-size:14px;font-weight:700;margin-bottom:6px;">{{ $title }}</div>
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
                     @foreach ($rows as $r)
@@ -132,9 +137,12 @@
                     @endforeach
                 </table>
             </td>
-            @endif
         @endforeach
         </tr></table>
+        @endif
+        @if ($one)
+        <div style="margin-top:{{ count($groups) > 0 ? '10' : '0' }}px;font-size:13px;padding:8px 10px;background:#fdf2f8;border-radius:6px;"><span style="color:#ec4899;">●</span> Dilayani oleh <strong>{{ $recorders[0]['name'] }}</strong> · {{ $recorders[0]['orders'] }} order · {{ $m($recorders[0]['total']) }}</div>
+        @endif
     </td></tr>
     @endif
     <tr><td style="padding:4px 24px 16px;">

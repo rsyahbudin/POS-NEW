@@ -4,6 +4,7 @@ use App\Domain\Notification\DailyReportSender;
 use App\Domain\Notification\Jobs\DeliverMessageJob;
 use App\Domain\Notification\Notifier;
 use App\Domain\Notification\ReportDelivery;
+use App\Domain\Reporting\SalesReports;
 use App\Domain\Settings\Models\Outlet;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Shift\Actions\CloseShiftAction;
@@ -173,7 +174,7 @@ it('emails the daily report as a designed message with a plain-text fallback', f
     $delivery->deliver('Laporan harian', $delivery->dailyTextFor($date, $summary, $date), null, $delivery->dailyHtml($date, $summary));
     $message = app('mailer')->getSymfonyTransport()->messages()[0]->getOriginalMessage();
 
-    expect($message->getHtmlBody())->toContain('Penjualan bersih')->toContain('Rp44.000')->toContain('Menu terlaris')->toContain('Penjualan per jam')->toContain('7 hari terakhir')->toContain('Per kasir')->toContain('/admin/reports/sales?from='.$date)
+    expect($message->getHtmlBody())->toContain('Penjualan bersih')->toContain('Rp44.000')->toContain('Menu terlaris')->toContain('Penjualan per jam')->toContain('7 hari sampai')->toContain('Dilayani oleh')->toContain('/admin/reports/sales?from='.$date)
         ->and($message->getTextBody())->toContain('Omzet bersih')->toContain('Penjualan per jam:')->toContain('1 order');
 });
 
@@ -208,4 +209,21 @@ it('sends an updated report when the shift is reopened and sells more', function
 
     Http::assertSentCount(2);
     Http::assertSent(fn ($r) => str_contains($r->url(), 'sendMessage') && str_contains($r['text'], '(diperbarui)') && str_contains($r['text'], 'Rp88.000'));
+});
+
+it('shows two staff lists in the report only when more than one person worked', function () {
+    setUpChannels(false, true, false);
+    config(['mail.default' => 'array']);
+    $cashier = userWithRole('cashier');
+    openShiftFor($cashier, 0);
+    pay(placeOrder(userWithRole('waiter')), $cashier);                // the waiter wrote it, the cashier took the money
+    $date = BusinessDate::for();
+    $summary = ZReportSummary::fromArray(app(ZReport::class)->build($date));
+    $delivery = app(ReportDelivery::class);
+
+    $delivery->deliver('Laporan harian', 'x', null, $delivery->dailyHtml($date, $summary));
+    $html = app('mailer')->getSymfonyTransport()->messages()[0]->getOriginalMessage()->getHtmlBody();
+
+    expect($html)->toContain('Order dicatat oleh')->toContain('Pembayaran diterima oleh')->not->toContain('Dilayani oleh')
+        ->and(app(SalesReports::class)->by('receiver', $date, $date)->first()->label)->toBe($cashier->name);
 });

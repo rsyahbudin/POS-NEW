@@ -18,7 +18,7 @@ use Inertia\Response;
 
 class ReportController extends Controller
 {
-    public const DIMENSION_LABELS = ['day' => 'Hari', 'hour' => 'Jam', 'product' => 'Produk', 'category' => 'Kategori', 'method' => 'Metode bayar', 'cashier' => 'Kasir', 'type' => 'Tipe order'];
+    public const DIMENSION_LABELS = ['day' => 'Hari', 'hour' => 'Jam', 'product' => 'Produk', 'category' => 'Kategori', 'method' => 'Metode bayar', 'cashier' => 'Pencatat order', 'receiver' => 'Penerima pembayaran', 'type' => 'Tipe order'];
 
     public function __construct(private SalesReports $reports) {}
 

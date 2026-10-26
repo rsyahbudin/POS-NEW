@@ -15,7 +15,7 @@ use stdClass;
  */
 class SalesReports
 {
-    public const DIMENSIONS = ['day', 'hour', 'product', 'category', 'method', 'cashier', 'type'];
+    public const DIMENSIONS = ['day', 'hour', 'product', 'category', 'method', 'cashier', 'receiver', 'type'];
 
     /** Dimensions counted per order, which can show the full money breakdown (menu, discount, tax, refund). */
     public const ORDER_DIMENSIONS = ['day', 'hour', 'cashier', 'type'];
@@ -68,6 +68,9 @@ class SalesReports
             'method' => DB::table('payments')->join('orders', 'orders.id', '=', 'payments.order_id')->join('payment_methods', 'payment_methods.id', '=', 'payments.payment_method_id')
                 ->where('orders.outlet_id', $this->outlet->id())->whereBetween('orders.business_date', [$from, $to])
                 ->selectRaw('payment_methods.name label, COUNT(*) orders, SUM(payments.amount - payments.refunded_total) total')->groupByRaw('1')->orderByRaw('3 desc'),
+            'receiver' => DB::table('payments')->join('orders', 'orders.id', '=', 'payments.order_id')->join('users', 'users.id', '=', 'payments.received_by')
+                ->where('orders.outlet_id', $this->outlet->id())->whereBetween('orders.business_date', [$from, $to])
+                ->selectRaw('users.name label, COUNT(DISTINCT payments.order_id) orders, SUM(payments.amount - payments.refunded_total) total')->groupByRaw('1')->orderByRaw('3 desc'),
             default => throw new \InvalidArgumentException('Dimensi laporan tidak dikenal.'),
         };
 

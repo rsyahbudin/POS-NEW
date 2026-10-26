@@ -183,14 +183,14 @@ class ReportController extends Controller
 
         if ($request->input('report') === 'adjustments') {
             $a = $this->reports->adjustments($from, $to);
-            $title = 'Diskon, Void, Refund';
+            $title = 'Diskon, Pembatalan, Refund';
             $sub = "Periode {$range}";
             $sum = fn ($rows) => (int) $rows->sum(fn ($r) => (int) $r->amount);
             $sheets = [
                 new ReportSheet('Diskon', $sub, ['Tanggal', 'Order', 'Jenis', 'Nilai', 'Potongan (Rp)', 'Alasan', 'Dilakukan oleh', 'Disetujui oleh'],
                     $a['discounts']->map(fn ($r) => [$this->when($r), $r->number, self::discountKind($r->type), self::discountValue($r->type, (int) $r->value), (int) $r->amount, $r->reason, $r->actor ?? '-', $r->approver ?? '-'])->all(),
                     ['Total', '', '', '', $sum($a['discounts']), '', '', '']),
-                new ReportSheet('Void', $sub, ['Tanggal', 'Order', 'Item', 'Qty', 'Nilai (Rp)', 'Alasan', 'Dilakukan oleh', 'Disetujui oleh'],
+                new ReportSheet('Pembatalan', $sub, ['Tanggal', 'Order', 'Item', 'Qty', 'Nilai (Rp)', 'Alasan', 'Dilakukan oleh', 'Disetujui oleh'],
                     $a['voids']->map(fn ($r) => [$this->when($r), $r->number, $r->item, (int) $r->qty, (int) $r->amount, $r->reason, $r->actor ?? '-', $r->approver ?? '-'])->all(),
                     ['Total', '', '', '', $sum($a['voids']), '', '', '']),
                 new ReportSheet('Refund', $sub, ['Tanggal', 'Order', 'Nominal (Rp)', 'Alasan', 'Disetujui oleh'],

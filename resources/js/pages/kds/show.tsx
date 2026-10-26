@@ -402,7 +402,7 @@ export default function KdsPage({
                                                 </span>
                                                 {it.status === 'voided' && (
                                                     <span className="ml-2 rounded bg-red-600 px-1.5 text-xs font-bold text-white">
-                                                        VOID
+                                                        DIBATALKAN
                                                     </span>
                                                 )}
                                                 {it.modifiers.length > 0 && (

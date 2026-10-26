@@ -74,7 +74,7 @@ final class SettingsCatalog
                 'title' => 'Berapa lama tiket tetap terlihat',
                 'fields' => [
                     ['key' => 'kitchen.ready_visible_minutes', 'type' => 'int', 'label' => 'Item "Siap" tetap tampil (menit)', 'hint' => 'Setelah itu hilang dari layar dapur.', 'default' => 5, 'min' => 1, 'max' => 120],
-                    ['key' => 'kitchen.void_visible_minutes', 'type' => 'int', 'label' => 'Item void tetap tampil dengan coretan (menit)', 'hint' => 'Agar dapur sempat tahu item dibatalkan.', 'default' => 10, 'min' => 1, 'max' => 120],
+                    ['key' => 'kitchen.void_visible_minutes', 'type' => 'int', 'label' => 'Item dibatalkan tetap tampil dengan coretan (menit)', 'hint' => 'Agar dapur sempat tahu item dibatalkan.', 'default' => 10, 'min' => 1, 'max' => 120],
                 ],
             ]]],
             ['key' => 'pos', 'label' => 'Kasir & struk', 'groups' => [[
@@ -104,7 +104,7 @@ final class SettingsCatalog
             ], [
                 'title' => 'Pembatalan',
                 'fields' => [
-                    ['key' => 'security.cancel_needs_pin', 'type' => 'bool', 'label' => 'Pembatalan pesanan/item (belum dibayar) butuh PIN manager', 'hint' => 'Nonaktif (disarankan untuk kafe kecil): staf boleh membatalkan sendiri dengan alasan wajib; tercatat di laporan Diskon/Void/Refund beserta siapa pembatalnya. Refund setelah bayar tetap butuh PIN.', 'default' => false],
+                    ['key' => 'security.cancel_needs_pin', 'type' => 'bool', 'label' => 'Pembatalan pesanan/item (belum dibayar) butuh PIN manager', 'hint' => 'Nonaktif (disarankan untuk kafe kecil): staf boleh membatalkan sendiri dengan alasan wajib; tercatat di laporan Diskon/Pembatalan/Refund beserta siapa pembatalnya. Refund setelah bayar tetap butuh PIN.', 'default' => false],
                 ],
             ], [
                 'title' => 'PIN manager',
@@ -126,7 +126,7 @@ final class SettingsCatalog
             ['key' => 'notif', 'label' => 'Notifikasi', 'groups' => [[
                 'title' => 'Apa yang dikirim ke HP / email',
                 'fields' => [
-                    ['key' => 'report.send_daily', 'type' => 'bool', 'label' => 'Laporan harian', 'hint' => 'Ringkasan omzet per jam, metode bayar, diskon, void, dan selisih kas, dikirim otomatis begitu shift terakhir ditutup. Kalau toko buka lagi dan angkanya berubah, laporan diperbarui dikirim lagi.', 'default' => true],
+                    ['key' => 'report.send_daily', 'type' => 'bool', 'label' => 'Laporan harian', 'hint' => 'Ringkasan omzet per jam, metode bayar, diskon, pembatalan, dan selisih kas, dikirim otomatis begitu shift terakhir ditutup. Kalau toko buka lagi dan angkanya berubah, laporan diperbarui dikirim lagi.', 'default' => true],
                     ['key' => 'report.send_shift', 'type' => 'bool', 'label' => 'Laporan tiap shift ditutup', 'hint' => 'Rincian penjualan dan selisih kas dikirim begitu kasir menutup shift.', 'default' => false],
                     ['key' => 'notify.forward_alerts', 'type' => 'bool', 'label' => 'Teruskan peringatan penting', 'hint' => 'Stok menipis, selisih kas, shift yang lupa ditutup, dan aset rusak ikut dikirim ke saluran di bawah (selain muncul di lonceng).', 'default' => false],
                 ],

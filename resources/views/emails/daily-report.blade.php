@@ -186,7 +186,7 @@
     <tr><td style="padding:4px 24px 16px;">
         <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Perlu dicek</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
-            <tr><td style="padding:6px 10px;background:#fffbeb;border-radius:6px;">Void</td><td align="right" style="padding:6px 10px;background:#fffbeb;border-radius:6px;font-weight:600;color:#b45309;">{{ $s->voidItems }} item · {{ $m($s->voidValue) }}</td></tr>
+            <tr><td style="padding:6px 10px;background:#fffbeb;border-radius:6px;">Pembatalan</td><td align="right" style="padding:6px 10px;background:#fffbeb;border-radius:6px;font-weight:600;color:#b45309;">{{ $s->voidItems }} item · {{ $m($s->voidValue) }}</td></tr>
             <tr><td height="6" colspan="2"></td></tr>
             <tr><td style="padding:6px 10px;background:#f5f3ff;border-radius:6px;">Komplimen / staff meal</td><td align="right" style="padding:6px 10px;background:#f5f3ff;border-radius:6px;font-weight:600;color:#6d28d9;">{{ $s->compItems }} item · {{ $m($s->compValue) }}</td></tr>
             <tr><td height="6" colspan="2"></td></tr>

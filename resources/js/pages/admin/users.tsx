@@ -251,7 +251,7 @@ export default function UsersPage({
                             </Field>
                             <Field
                                 label="PIN 6 digit"
-                                hint="Untuk staf (kasir, waiter, dapur): PIN ini dipakai login. Untuk manager/owner: dipakai menyetujui void & diskon. Harus unik per orang."
+                                hint="Untuk staf (kasir, waiter, dapur): PIN ini dipakai login. Untuk manager/owner: dipakai menyetujui pembatalan & diskon. Harus unik per orang."
                             >
                                 <Input
                                     className="h-11"

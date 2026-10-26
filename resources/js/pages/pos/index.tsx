@@ -1253,9 +1253,9 @@ export default function PosPage(props: Props) {
 
             {dialog?.kind === 'void-item' && (
                 <ReasonDialog
-                    title={`Void ${dialog.item.name}`}
+                    title={`Batalkan ${dialog.item.name}`}
                     description={t('Item dibatalkan dan tercatat di laporan.')}
-                    confirmLabel="Void"
+                    confirmLabel="Batalkan"
                     destructive
                     quick={[
                         'Salah input',
@@ -1276,7 +1276,7 @@ export default function PosPage(props: Props) {
                         );
 
                         if (r) {
-                            apply(r.order, t('Item di-void.'));
+                            apply(r.order, t('Item dibatalkan.'));
                             setDialog(null);
                         }
                     }}
@@ -1306,11 +1306,11 @@ export default function PosPage(props: Props) {
             )}
             {order && dialog?.kind === 'void-order' && (
                 <ReasonDialog
-                    title={`Void ${order.number}`}
+                    title={`Batalkan ${order.number}`}
                     description={t(
                         'Order belum dibayar akan dibatalkan (tetap tercatat).',
                     )}
-                    confirmLabel={t('Void order')}
+                    confirmLabel={t('Batalkan order')}
                     destructive
                     quick={[
                         'Salah input',

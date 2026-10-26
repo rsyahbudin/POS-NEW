@@ -156,7 +156,7 @@ class ReportDelivery
         $sheets = [
             new ReportSheet('Ringkasan', $sub, ['Keterangan', 'Nilai (Rp)'], [
                 ['Jumlah order', $s->orders], ['Omzet kotor', $s->gross], ['Diskon', $s->discounts], ['Refund', $s->refunds], ['Penjualan bersih', $s->net],
-                ['Rata-rata per order', $d['average']], ['Void (item)', $s->voidItems], ['Nilai void', $s->voidValue], ['Komplimen / staff meal (item)', $s->compItems],
+                ['Rata-rata per order', $d['average']], ['Item dibatalkan', $s->voidItems], ['Nilai pembatalan', $s->voidValue], ['Komplimen / staff meal (item)', $s->compItems],
                 ['Nilai komplimen', $s->compValue], ['Selisih kas', $s->cashDifference],
             ]),
             new ReportSheet('Penjualan per jam', 'Dihitung saat order selesai dibayar', ['Jam', 'Order', 'Penjualan (Rp)'],
@@ -223,7 +223,7 @@ class ReportDelivery
         foreach ($s->byMethod as $name => $total) {
             $lines[] = "  {$name}: {$m($total)}";
         }
-        $lines[] = "Void: {$s->voidItems} item ({$m($s->voidValue)})";
+        $lines[] = "Pembatalan: {$s->voidItems} item ({$m($s->voidValue)})";
         $lines[] = "Komplimen/staff meal: {$s->compItems} item ({$m($s->compValue)})";
         $lines[] = "Selisih kas: {$m($s->cashDifference)}";
         if ($date !== null) {

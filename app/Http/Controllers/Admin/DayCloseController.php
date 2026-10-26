@@ -76,7 +76,7 @@ class DayCloseController extends Controller
         }
 
         return ReportFile::download((string) $request->input('format', 'xlsx'), 'Rekap harian', [
-            new ReportSheet('Rekap harian', '90 hari terakhir yang ada penjualan', ['Tanggal', 'Order', 'Omzet kotor (Rp)', 'Diskon (Rp)', 'Refund (Rp)', 'Omzet bersih (Rp)', 'Void (item)', 'Komplimen (item)', 'Selisih kas (Rp)'], $rows,
+            new ReportSheet('Rekap harian', '90 hari terakhir yang ada penjualan', ['Tanggal', 'Order', 'Omzet kotor (Rp)', 'Diskon (Rp)', 'Refund (Rp)', 'Omzet bersih (Rp)', 'Dibatalkan (item)', 'Komplimen (item)', 'Selisih kas (Rp)'], $rows,
                 ['Total', array_sum(array_column($rows, 1)), array_sum(array_column($rows, 2)), array_sum(array_column($rows, 3)), array_sum(array_column($rows, 4)), array_sum(array_column($rows, 5)), array_sum(array_column($rows, 6)), array_sum(array_column($rows, 7)), array_sum(array_column($rows, 8))]),
         ]);
     }

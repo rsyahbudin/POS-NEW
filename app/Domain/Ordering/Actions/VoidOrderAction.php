@@ -27,14 +27,14 @@ class VoidOrderAction
     public function handle(Order $order, User $actor, string $reason, ?string $pin = null): Order
     {
         if (trim($reason) === '') {
-            throw new OrderException('Alasan void wajib diisi.');
+            throw new OrderException('Alasan pembatalan wajib diisi.');
         }
         $approver = $this->gate->resolveCancel($actor, $pin);
 
         return DB::transaction(function () use ($order, $actor, $approver, $reason) {
             $order = Order::query()->lockForUpdate()->findOrFail($order->id);
             if ($order->status !== OrderStatus::Open || $order->paid_total > 0) {
-                throw new OrderException('Order yang sudah dibayar tidak bisa di-void. Gunakan refund.');
+                throw new OrderException('Order yang sudah dibayar tidak bisa dibatalkan. Gunakan refund.');
             }
 
             foreach ($order->items()->whereIn('status', ['pending', 'new', 'preparing', 'ready'])->get() as $item) {

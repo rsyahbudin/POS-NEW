@@ -29,7 +29,7 @@ class VoidItemAction
     public function handle(OrderItem $item, User $actor, string $reason, ?string $pin = null): OrderItem
     {
         if (trim($reason) === '') {
-            throw new OrderException('Alasan void wajib diisi.');
+            throw new OrderException('Alasan pembatalan wajib diisi.');
         }
         $approver = $this->gate->resolveCancel($actor, $pin);
 

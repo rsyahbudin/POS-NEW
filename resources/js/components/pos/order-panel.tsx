@@ -30,7 +30,7 @@ const ITEM_STATUS: Record<string, { label: string; cls: string }> = {
         cls: 'bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-200 text-emerald-900',
     },
     voided: {
-        label: 'VOID',
+        label: 'DIBATALKAN',
         cls: 'bg-red-100 dark:bg-red-950/50 dark:text-red-200 text-red-800',
     },
     rejected: { label: 'Dihapus', cls: 'bg-muted text-muted-foreground' },
@@ -286,7 +286,7 @@ export function OrderPanel({
                                                             actions.voidItem(i)
                                                         }
                                                     >
-                                                        {t('Void')}
+                                                        {t('Batalkan')}
                                                     </Button>
                                                     <Button
                                                         type="button"
@@ -653,7 +653,7 @@ export function OrderPanel({
                                     className="h-10 shrink-0 px-3 text-destructive md:h-11"
                                     onClick={actions.voidOrder}
                                 >
-                                    {t('Void order')}
+                                    {t('Batalkan order')}
                                 </Button>
                             </div>
                         </div>
@@ -719,7 +719,7 @@ function ItemMenu({
                     className="h-11 text-base text-destructive focus:text-destructive"
                     onSelect={() => actions.voidItem(i)}
                 >
-                    {t('Void')}
+                    {t('Batalkan')}
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

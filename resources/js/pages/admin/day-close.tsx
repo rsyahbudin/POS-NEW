@@ -135,7 +135,7 @@ export default function DailyReport({
                     />
                     <Stat label="Diskon" value={rupiah(preview.discounts)} />
                     <Stat
-                        label="Void / komplimen"
+                        label="Dibatalkan / komplimen"
                         value={`${preview.voids.items} / ${preview.comps.items}`}
                     />
                     <Stat

@@ -40,10 +40,10 @@ export default function Adjustments({
 
     return (
         <>
-            <Head title="Diskon, Void, Refund" />
+            <Head title="Diskon, Pembatalan, Refund" />
             <div className="grid gap-5 p-4">
                 <PageHeader
-                    title="Diskon, void & refund"
+                    title="Diskon, pembatalan & refund"
                     subtitle="Siapa yang melakukan dan siapa yang menyetujui."
                     actions={
                         <>
@@ -101,10 +101,10 @@ export default function Adjustments({
                     hint="Total nominal per jenis pada periode terpilih"
                 >
                     <BarList
-                        title="Total diskon, void, refund, komplimen"
+                        title="Total diskon, pembatalan, refund, komplimen"
                         data={[
                             { label: 'Diskon', value: sum(discounts) },
-                            { label: 'Void', value: sum(voids) },
+                            { label: 'Pembatalan', value: sum(voids) },
                             { label: 'Refund', value: sum(refunds) },
                             { label: 'Komplimen', value: sum(comps) },
                         ]}
@@ -135,7 +135,7 @@ export default function Adjustments({
                     total={sum(discounts)}
                 />
                 <Section
-                    title="Void item"
+                    title="Item dibatalkan"
                     headers={[
                         'Waktu',
                         'Order',

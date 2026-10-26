@@ -13,7 +13,6 @@ use App\Domain\Shift\Models\CashMovement;
 use App\Domain\Shift\Models\Shift;
 use App\Domain\Shift\ShiftCash;
 use App\Domain\Shift\ZReportSummary;
-use App\Exports\ReportSheet;
 use App\Models\User;
 use App\Support\Money;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -107,6 +106,7 @@ class ReportDelivery
             'receivers' => $people('receiver'),
             'expenses' => $this->expenses($date),
             'weekLabel' => $day->translatedFormat('l, d M'),
+            'pdf' => false,
             'url' => url("/admin/reports/sales?from={$date}&to={$date}"),
         ];
     }
@@ -147,34 +147,33 @@ class ReportDelivery
         return Storage::disk('local')->path($name);
     }
 
-    /** The same report as a PDF (attached to the email and sent as a file on Telegram). */
+    /**
+     * The PDF library cannot keep a table row together on one page, so a heading could be left alone at the foot of a
+     * page. For the PDF every section is lifted out of the table into a block, and the detail sections start on page 2
+     * (the first page is the overview: headline, hours, week, payment methods).
+     */
+    private function sectionsAsBlocks(string $html): string
+    {
+        $open = '<tr><td style="padding:4px 24px 16px;page-break-inside:avoid;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="page-break-inside:avoid;"><tr><td>';
+        $close = "</td></tr></table>\n    </td></tr>";
+        $table = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">';
+        $html = str_replace($close, '</div>'.$table, $html);
+        $first = true;
+
+        return (string) preg_replace_callback('/'.preg_quote($open, '/').'(?=(.{0,400}))/s', function (array $m) use (&$first) {
+            $details = str_contains($m[1], 'Menu terlaris') && $first;
+            $first = $first && ! $details;
+
+            return '</table><div style="padding:4px 24px 16px;text-align:left;'.($details ? 'page-break-before:always;' : 'page-break-inside:avoid;').'">';
+        }, $html);
+    }
+
+    /** The same designed report as a PDF (attached to the email and sent as a file on Telegram). */
     public function dailyPdf(string $date, ZReportSummary $s): string
     {
-        $d = $this->dailyData($date, $s);
-        $sub = $d['dateLabel'];
-        $m = fn (int $v) => $v;
-        $sheets = [
-            new ReportSheet('Ringkasan', $sub, ['Keterangan', 'Nilai (Rp)'], [
-                ['Jumlah order', $s->orders], ['Omzet kotor', $s->gross], ['Diskon', $s->discounts], ['Refund', $s->refunds], ['Penjualan bersih', $s->net],
-                ['Rata-rata per order', $d['average']], ['Item dibatalkan', $s->voidItems], ['Nilai pembatalan', $s->voidValue], ['Komplimen / staff meal (item)', $s->compItems],
-                ['Nilai komplimen', $s->compValue], ['Selisih kas', $s->cashDifference],
-            ]),
-            new ReportSheet('Penjualan per jam', 'Dihitung saat order selesai dibayar', ['Jam', 'Order', 'Penjualan (Rp)'],
-                array_map(fn ($h) => ["{$h['hour']}:00–{$h['hour']}:59", $h['orders'], $h['total']], array_values(array_filter($d['hours'], fn ($h) => $h['orders'] > 0))),
-                ['Total', (int) array_sum(array_column($d['hours'], 'orders')), (int) array_sum(array_column($d['hours'], 'total'))]),
-            new ReportSheet('Per metode bayar', $sub, ['Metode', 'Nilai (Rp)'], array_map(fn ($n, $t) => [(string) $n, $m($t)], array_keys($s->byMethod), array_values($s->byMethod))),
-            new ReportSheet('Menu terlaris', $sub, ['Menu', 'Qty', 'Nilai (Rp)'], array_map(fn ($p) => [$p['name'], $p['qty'], $p['total']], $d['top'])),
-            new ReportSheet('Order dicatat oleh', $sub, ['Staf', 'Order', 'Nilai (Rp)'], array_map(fn ($p) => [$p['name'], $p['orders'], $p['total']], $d['recorders'])),
-            new ReportSheet('Pembayaran diterima oleh', $sub, ['Staf', 'Order', 'Nilai (Rp)'], array_map(fn ($p) => [$p['name'], $p['orders'], $p['total']], $d['receivers'])),
-            new ReportSheet('Pengeluaran kas', $sub, ['Sumber', 'Keterangan', 'Oleh', 'Nominal (Rp)'], array_map(fn ($e) => [$e['source'], $e['label'], $e['by'] ?? '-', $e['amount']], $d['expenses']['items']),
-                ['Total', '', '', $d['expenses']['total']]),
-            new ReportSheet('7 hari terakhir', $sub, ['Hari', 'Order', 'Penjualan (Rp)'], array_map(fn ($w) => [$w['name'].($w['tag'] ? " ({$w['tag']})" : ''), $w['orders'], $w['total']], $d['week'])),
-        ];
+        $html = $this->sectionsAsBlocks(view('emails.daily-report', ['pdf' => true] + $this->dailyData($date, $s))->render());
 
-        return Pdf::loadView('pdf.table', [
-            'outlet' => $d['outlet'], 'sections' => array_map(fn (ReportSheet $x) => $x->section(), $sheets), 'title' => 'Laporan harian', 'subtitle' => $sub,
-            'printedBy' => null, 'printedAt' => now()->setTimezone('Asia/Jakarta')->translatedFormat('d M Y H:i'),
-        ])->setPaper('a4', 'portrait')->output();
+        return Pdf::loadHTML($html)->setPaper('a4', 'portrait')->setOption(['isRemoteEnabled' => false, 'defaultFont' => 'DejaVu Sans'])->output();
     }
 
     /**

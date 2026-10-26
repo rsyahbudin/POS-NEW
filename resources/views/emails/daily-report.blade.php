@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="id">
-<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#0f172a;">
+<body style="margin:0;padding:0;background:{{ $pdf ? '#ffffff' : '#f1f5f9' }};font-family:{{ $pdf ? "'DejaVu Sans',sans-serif" : "-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" }};color:#0f172a;">
 @php
     $m = fn (int $v) => 'Rp'.number_format($v, 0, ',', '.');
     $change = $compare['change_percent'];
@@ -19,9 +19,9 @@
     $methodMax = max(1, collect($s->byMethod)->max() ?? 1);
     $cards = [['Order', (string) $s->orders, '#eff6ff', '#2563eb'], ['Rata-rata/order', $m($average), '#ecfdf5', '#059669'], ['Diskon', $m($s->discounts), '#fffbeb', '#d97706'], ['Refund', $m($s->refunds), '#fff1f2', '#e11d48']];
 @endphp
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:{{ $pdf ? '#ffffff' : '#f1f5f9' }};padding:{{ $pdf ? '0' : '24px 12px' }};">
 <tr><td align="center">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;">
+<table role="presentation" width="{{ $pdf ? '100%' : '560' }}" cellpadding="0" cellspacing="0" style="{{ $pdf ? 'width:100%;' : 'max-width:560px;width:100%;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;' }}background:#ffffff;">
     <tr><td style="background:{{ $ac }};padding:22px 24px;">
         <div style="font-size:13px;color:#ffffff;opacity:.85;">{{ $outlet }}</div>
         <div style="font-size:20px;font-weight:700;color:#ffffff;margin-top:2px;">Laporan harian · {{ $dateLabel }}</div>
@@ -50,7 +50,7 @@
         </tr></table>
     </td></tr>
     @if ($hours !== [])
-    <tr><td style="padding:4px 24px 16px;">
+    <tr><td style="padding:4px 24px 16px;page-break-inside:avoid;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="page-break-inside:avoid;"><tr><td>
         <div style="font-size:14px;font-weight:700;margin-bottom:2px;">Penjualan per jam</div>
         <div style="font-size:11px;color:#64748b;margin-bottom:8px;"><span style="color:#f59e0b;">■</span> jam teramai &nbsp; <span style="color:{{ $ac }};">■</span> jam lain &nbsp; <span style="color:{{ $ac }};font-weight:700;">3×</span> = jumlah order</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;">
@@ -77,10 +77,11 @@
                 <tr><td style="padding:5px 8px;border-bottom:1px solid #f1f5f9;">{{ $h['hour'] }}:00–{{ $h['hour'] }}:59</td><td align="right" style="padding:5px 8px;border-bottom:1px solid #f1f5f9;">{{ $h['orders'] }}</td><td align="right" style="padding:5px 8px;border-bottom:1px solid #f1f5f9;font-weight:{{ $h['total'] === $hourMax ? '700' : '400' }};color:{{ $h['total'] === $hourMax ? '#b45309' : '#0f172a' }};">{{ $m($h['total']) }}</td></tr>
             @endforeach
         </table>
+    </td></tr></table>
     </td></tr>
     @endif
     @if (count($week) > 1)
-    <tr><td style="padding:4px 24px 16px;">
+    <tr><td style="padding:4px 24px 16px;page-break-inside:avoid;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="page-break-inside:avoid;"><tr><td>
         <div style="font-size:14px;font-weight:700;margin-bottom:8px;">7 hari terakhir</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
             @foreach ($week as $d)
@@ -91,10 +92,11 @@
                 </tr>
             @endforeach
         </table>
+    </td></tr></table>
     </td></tr>
     @endif
     @if ($s->byMethod !== [])
-    <tr><td style="padding:4px 24px 16px;">
+    <tr><td style="padding:4px 24px 16px;page-break-inside:avoid;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="page-break-inside:avoid;"><tr><td>
         <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Per metode bayar</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
             @foreach ($s->byMethod as $name => $total)
@@ -103,21 +105,23 @@
                 <tr><td colspan="2" style="padding:0 0 4px;"><div style="height:6px;width:{{ max(1, (int) round($total / $methodMax * 100)) }}%;background:{{ $c }};border-radius:3px;font-size:0;line-height:0;opacity:.85;">&nbsp;</div></td></tr>
             @endforeach
         </table>
+    </td></tr></table>
     </td></tr>
     @endif
     @if ($top !== [])
-    <tr><td style="padding:4px 24px 16px;">
+    <tr><td style="padding:4px 24px 16px;page-break-inside:avoid;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="page-break-inside:avoid;"><tr><td>
         <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Menu terlaris</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
             @foreach ($top as $p)
                 @php $c = $palette[$loop->index % count($palette)]; @endphp
                 <tr>
-                    <td style="padding:5px 0 1px;"><span style="display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;border-radius:9px;background:{{ $c }};color:#fff;font-size:11px;font-weight:700;">{{ $loop->iteration }}</span> {{ $p['name'] }} <span style="color:#64748b;">× {{ $p['qty'] }}</span></td>
+                    <td style="padding:5px 0 1px;"><span style="font-weight:700;color:{{ $c }};">{{ $loop->iteration }}.</span> {{ $p['name'] }} <span style="color:#64748b;">× {{ $p['qty'] }}</span></td>
                     <td align="right" style="padding:5px 0 1px;font-weight:600;">{{ $m($p['total']) }}</td>
                 </tr>
                 <tr><td colspan="2" style="padding:0 0 4px;"><div style="height:6px;width:{{ max(1, (int) round($p['total'] / $topMax * 100)) }}%;background:{{ $c }};border-radius:3px;font-size:0;line-height:0;opacity:.85;">&nbsp;</div></td></tr>
             @endforeach
         </table>
+    </td></tr></table>
     </td></tr>
     @endif
     @php
@@ -127,16 +131,16 @@
     @endphp
     @foreach ($groups as [$title, $rows, $color, $people])
     @php $max = max(1, collect($rows)->max('total') ?? 1); @endphp
-    <tr><td style="padding:4px 24px 16px;">
+    <tr><td style="padding:4px 24px 16px;page-break-inside:avoid;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="page-break-inside:avoid;"><tr><td>
         <div style="font-size:14px;font-weight:700;margin-bottom:8px;">{{ $title }}</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
             @foreach ($rows as $r)
                 <tr>
                     <td width="34" valign="middle" style="padding:6px 0;">
                         @if ($people)
-                            <div style="width:28px;height:28px;line-height:28px;text-align:center;border-radius:14px;background:{{ $color }};color:#ffffff;font-size:12px;font-weight:700;">{{ mb_strtoupper(mb_substr($r['name'], 0, 1)) }}</div>
+                            <table role="presentation" cellpadding="0" cellspacing="0" width="28" height="28" style="width:28px;height:28px;border-radius:14px;background:{{ $color }};"><tr><td align="center" valign="middle" style="color:#ffffff;font-size:12px;font-weight:700;line-height:14px;">{{ mb_strtoupper(mb_substr($r['name'], 0, 1)) }}</td></tr></table>
                         @else
-                            <div style="width:28px;height:28px;line-height:28px;text-align:center;border-radius:14px;background:{{ $color }};color:#ffffff;font-size:13px;">●</div>
+                            <table role="presentation" cellpadding="0" cellspacing="0" width="28" height="28" style="width:28px;height:28px;border-radius:14px;background:{{ $color }};"><tr><td align="center" valign="middle" style="color:#ffffff;font-size:10px;font-weight:400;line-height:12px;">&nbsp;</td></tr></table>
                         @endif
                     </td>
                     <td valign="middle" style="padding:6px 8px 6px 0;">
@@ -151,20 +155,22 @@
                 @if (! $loop->last)<tr><td colspan="3" style="border-bottom:1px solid #f1f5f9;font-size:0;line-height:0;height:1px;">&nbsp;</td></tr>@endif
             @endforeach
         </table>
+    </td></tr></table>
     </td></tr>
     @endforeach
     @if ($one)
-    <tr><td style="padding:4px 24px 16px;">
+    <tr><td style="padding:4px 24px 16px;page-break-inside:avoid;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="page-break-inside:avoid;"><tr><td>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fdf2f8;border-radius:8px;">
             <tr>
-                <td width="46" style="padding:10px 0 10px 12px;"><div style="width:30px;height:30px;line-height:30px;text-align:center;border-radius:15px;background:#ec4899;color:#ffffff;font-size:13px;font-weight:700;">{{ mb_strtoupper(mb_substr($recorders[0]['name'], 0, 1)) }}</div></td>
+                <td width="46" style="padding:10px 0 10px 12px;"><table role="presentation" cellpadding="0" cellspacing="0" width="30" height="30" style="width:30px;height:30px;border-radius:15px;background:#ec4899;"><tr><td align="center" valign="middle" style="color:#ffffff;font-size:13px;font-weight:700;line-height:15px;">{{ mb_strtoupper(mb_substr($recorders[0]['name'], 0, 1)) }}</td></tr></table></td>
                 <td style="padding:10px 8px;font-size:13px;"><div style="font-size:12px;color:#9d174d;">Dilayani oleh</div><div style="font-weight:700;">{{ $recorders[0]['name'] }}</div></td>
                 <td align="right" style="padding:10px 12px;font-size:13px;"><div style="font-weight:700;">{{ $m($recorders[0]['total']) }}</div><div style="font-size:12px;color:#64748b;">{{ $recorders[0]['orders'] }} order</div></td>
             </tr>
         </table>
+    </td></tr></table>
     </td></tr>
     @endif
-    <tr><td style="padding:4px 24px 16px;">
+    <tr><td style="padding:4px 24px 16px;page-break-inside:avoid;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="page-break-inside:avoid;"><tr><td>
         <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Pengeluaran kas</div>
         @if (count($expenses['items']) === 0)
             <div style="font-size:13px;padding:8px 10px;background:#f1f5f9;border-radius:6px;color:#475569;">Tidak ada pengeluaran kas hari ini.</div>
@@ -182,8 +188,9 @@
             <tr><td style="padding:8px 10px;background:#fff1f2;border-radius:6px 0 0 6px;font-weight:700;">Total pengeluaran</td><td align="right" style="padding:8px 10px;background:#fff1f2;border-radius:0 6px 6px 0;font-weight:800;color:#be123c;">{{ $m($expenses['total']) }}</td></tr>
         </table>
         @endif
+    </td></tr></table>
     </td></tr>
-    <tr><td style="padding:4px 24px 16px;">
+    <tr><td style="padding:4px 24px 16px;page-break-inside:avoid;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="page-break-inside:avoid;"><tr><td>
         <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Perlu dicek</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
             <tr><td style="padding:6px 10px;background:#fffbeb;border-radius:6px;">Pembatalan</td><td align="right" style="padding:6px 10px;background:#fffbeb;border-radius:6px;font-weight:600;color:#b45309;">{{ $s->voidItems }} item · {{ $m($s->voidValue) }}</td></tr>
@@ -192,12 +199,15 @@
             <tr><td height="6" colspan="2"></td></tr>
             <tr><td style="padding:6px 10px;background:{{ $s->cashDifference === 0 ? '#ecfdf5' : '#fff1f2' }};border-radius:6px;">Selisih kas</td><td align="right" style="padding:6px 10px;background:{{ $s->cashDifference === 0 ? '#ecfdf5' : '#fff1f2' }};border-radius:6px;font-weight:700;color:{{ $s->cashDifference === 0 ? '#047857' : '#be123c' }};">{{ $s->cashDifference === 0 ? '✓ Cocok' : $m($s->cashDifference) }}</td></tr>
         </table>
+    </td></tr></table>
     </td></tr>
+@unless ($pdf)
     <tr><td style="padding:8px 24px 24px;">
         <a href="{{ $url }}" style="display:inline-block;background:{{ $ac }};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 20px;border-radius:8px;">Buka laporan lengkap</a>
     </td></tr>
+@endunless
 </table>
-<div style="font-size:11px;color:#94a3b8;margin-top:12px;">Dikirim otomatis oleh POS. Atur penerima di Pengaturan › Notifikasi.</div>
+@unless ($pdf)<div style="font-size:11px;color:#94a3b8;margin-top:12px;">Dikirim otomatis oleh POS. Atur penerima di Pengaturan › Notifikasi.</div>@endunless
 </td></tr>
 </table>
 </body>

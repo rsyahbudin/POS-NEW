@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="id">
-<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#111827;">
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#0f172a;">
 @php
     $m = fn (int $v) => 'Rp'.number_format($v, 0, ',', '.');
     $change = $compare['change_percent'];
@@ -9,115 +9,126 @@
         if ($v >= 1000) { return round($v / 1000).' rb'; }
         return (string) $v;
     };
+    // the app accent colour, plus a fixed set of friendly colours for the rest
+    $accents = ['blue' => ['#2563eb', '#dbeafe', '#1e3a8a'], 'green' => ['#059669', '#d1fae5', '#064e3b'], 'orange' => ['#ea580c', '#ffedd5', '#7c2d12'], 'violet' => ['#7c3aed', '#ede9fe', '#4c1d95']];
+    [$ac, $tint, $ink] = $accents[\App\Support\Accent::key()];
+    $palette = [$ac, '#14b8a6', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4'];
     $hourMax = max(1, collect($hours)->max('total') ?? 1);
     $weekMax = max(1, collect($week)->max('total') ?? 1);
     $topMax = max(1, collect($top)->max('total') ?? 1);
+    $methodMax = max(1, collect($s->byMethod)->max() ?? 1);
+    $cards = [['Order', (string) $s->orders, '#eff6ff', '#2563eb'], ['Rata-rata/order', $m($average), '#ecfdf5', '#059669'], ['Diskon', $m($s->discounts), '#fffbeb', '#d97706'], ['Refund', $m($s->refunds), '#fff1f2', '#e11d48']];
 @endphp
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 12px;">
 <tr><td align="center">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
-    <tr><td style="padding:24px 24px 8px;">
-        <div style="font-size:13px;color:#6b7280;">{{ $outlet }}</div>
-        <div style="font-size:20px;font-weight:700;margin-top:2px;">Laporan harian · {{ $dateLabel }}</div>
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;">
+    <tr><td style="background:{{ $ac }};padding:22px 24px;">
+        <div style="font-size:13px;color:#ffffff;opacity:.85;">{{ $outlet }}</div>
+        <div style="font-size:20px;font-weight:700;color:#ffffff;margin-top:2px;">Laporan harian · {{ $dateLabel }}</div>
     </td></tr>
-    <tr><td style="padding:8px 24px 16px;">
-        <div style="font-size:13px;color:#6b7280;">Penjualan bersih</div>
-        <div style="font-size:32px;font-weight:700;letter-spacing:-0.5px;">{{ $m($s->net) }}</div>
-        <div style="font-size:13px;margin-top:2px;color:{{ $change === null ? '#6b7280' : ($change >= 0 ? '#047857' : '#be123c') }};">
-            @if ($change === null)
-                Belum ada pembanding minggu lalu
-            @else
-                {{ $change >= 0 ? '▲' : '▼' }} {{ abs($change) }}% dibanding hari yang sama minggu lalu ({{ $m($compare['last_week_revenue']) }})
-            @endif
+    <tr><td style="background:{{ $tint }};padding:18px 24px;">
+        <div style="font-size:13px;color:{{ $ink }};">Penjualan bersih</div>
+        <div style="font-size:34px;font-weight:800;letter-spacing:-0.5px;color:{{ $ink }};">{{ $m($s->net) }}</div>
+        <div style="margin-top:6px;">
+        @if ($change === null)
+            <span style="font-size:12px;color:#475569;">Belum ada pembanding minggu lalu</span>
+        @else
+            <span style="display:inline-block;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:{{ $change >= 0 ? '#d1fae5' : '#ffe4e6' }};color:{{ $change >= 0 ? '#047857' : '#be123c' }};">{{ $change >= 0 ? '▲' : '▼' }} {{ abs($change) }}% dari minggu lalu</span>
+            <span style="font-size:12px;color:#475569;margin-left:4px;">({{ $m($compare['last_week_revenue']) }})</span>
+        @endif
         </div>
     </td></tr>
-    <tr><td style="padding:0 24px 16px;">
+    <tr><td style="padding:16px 24px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-            @foreach ([['Order', (string) $s->orders], ['Rata-rata/order', $m($average)], ['Diskon', $m($s->discounts)], ['Refund', $m($s->refunds)]] as [$k, $v])
-                <td width="25%" style="padding:10px 8px;background:#f9fafb;border-radius:8px;">
-                    <div style="font-size:11px;color:#6b7280;">{{ $k }}</div>
-                    <div style="font-size:15px;font-weight:600;margin-top:2px;">{{ $v }}</div>
+            @foreach ($cards as [$k, $v, $bg, $fg])
+                <td width="25%" style="padding:10px 8px;background:{{ $bg }};border-radius:8px;border-top:3px solid {{ $fg }};">
+                    <div style="font-size:11px;color:#475569;">{{ $k }}</div>
+                    <div style="font-size:15px;font-weight:700;margin-top:2px;color:{{ $fg }};">{{ $v }}</div>
                 </td>
                 @if (! $loop->last)<td width="8"></td>@endif
             @endforeach
         </tr></table>
     </td></tr>
     @if ($hours !== [])
-    <tr><td style="padding:0 24px 16px;">
-        <div style="font-size:13px;font-weight:600;margin-bottom:8px;">Penjualan per jam</div>
+    <tr><td style="padding:4px 24px 16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:2px;">Penjualan per jam</div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:8px;"><span style="color:#f59e0b;">■</span> jam teramai &nbsp; <span style="color:{{ $ac }};">■</span> jam lain</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;">
             <tr>
             @foreach ($hours as $h)
-                @php $bar = $h['total'] > 0 ? max(3, (int) round($h['total'] / $hourMax * 90)) : 1; @endphp
+                @php $bar = $h['total'] > 0 ? max(3, (int) round($h['total'] / $hourMax * 90)) : 1; $peak = $h['total'] === $hourMax && $h['total'] > 0; @endphp
                 <td valign="bottom" align="center" style="padding:0 1px;height:112px;">
-                    <div style="font-size:9px;color:#6b7280;line-height:12px;">{{ $h['total'] > 0 ? $short($h['total']) : '' }}</div>
-                    <div style="height:{{ $bar }}px;background:{{ $h['total'] === $hourMax ? '#111827' : '#9ca3af' }};border-radius:3px 3px 0 0;font-size:0;line-height:0;">&nbsp;</div>
+                    <div style="font-size:9px;color:#64748b;line-height:12px;">{{ $h['total'] > 0 ? $short($h['total']) : '' }}</div>
+                    <div style="height:{{ $bar }}px;background:{{ $peak ? '#f59e0b' : $ac }};border-radius:3px 3px 0 0;font-size:0;line-height:0;">&nbsp;</div>
                 </td>
             @endforeach
             </tr>
             <tr>
             @foreach ($hours as $h)
-                <td align="center" style="font-size:10px;color:#6b7280;padding-top:3px;border-top:1px solid #e5e7eb;">{{ $h['hour'] }}</td>
+                <td align="center" style="font-size:10px;color:#64748b;padding-top:3px;border-top:1px solid #e2e8f0;">{{ $h['hour'] }}</td>
             @endforeach
             </tr>
         </table>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;margin-top:10px;">
-            <tr><td style="padding:4px 0;color:#6b7280;">Jam</td><td align="right" style="padding:4px 0;color:#6b7280;">Order</td><td align="right" style="padding:4px 0;color:#6b7280;">Penjualan</td></tr>
+            <tr><td style="padding:5px 8px;background:#f1f5f9;color:#475569;font-weight:600;border-radius:6px 0 0 6px;">Jam</td><td align="right" style="padding:5px 8px;background:#f1f5f9;color:#475569;font-weight:600;">Order</td><td align="right" style="padding:5px 8px;background:#f1f5f9;color:#475569;font-weight:600;border-radius:0 6px 6px 0;">Penjualan</td></tr>
             @foreach ($hours as $h)
                 @continue($h['orders'] === 0)
-                <tr><td style="padding:4px 0;border-top:1px solid #f3f4f6;">{{ $h['hour'] }}:00–{{ $h['hour'] }}:59</td><td align="right" style="padding:4px 0;border-top:1px solid #f3f4f6;">{{ $h['orders'] }}</td><td align="right" style="padding:4px 0;border-top:1px solid #f3f4f6;">{{ $m($h['total']) }}</td></tr>
+                <tr><td style="padding:5px 8px;border-bottom:1px solid #f1f5f9;">{{ $h['hour'] }}:00–{{ $h['hour'] }}:59</td><td align="right" style="padding:5px 8px;border-bottom:1px solid #f1f5f9;">{{ $h['orders'] }}</td><td align="right" style="padding:5px 8px;border-bottom:1px solid #f1f5f9;font-weight:{{ $h['total'] === $hourMax ? '700' : '400' }};color:{{ $h['total'] === $hourMax ? '#b45309' : '#0f172a' }};">{{ $m($h['total']) }}</td></tr>
             @endforeach
         </table>
     </td></tr>
     @endif
     @if (count($week) > 1)
-    <tr><td style="padding:0 24px 16px;">
-        <div style="font-size:13px;font-weight:600;margin-bottom:8px;">7 hari terakhir</div>
+    <tr><td style="padding:4px 24px 16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">7 hari terakhir</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
             @foreach ($week as $d)
                 <tr>
-                    <td width="96" style="padding:4px 0;color:{{ $d['today'] ? '#111827' : '#6b7280' }};{{ $d['today'] ? 'font-weight:600;' : '' }}">{{ $d['name'] }}</td>
-                    <td style="padding:4px 8px;"><div style="height:10px;width:{{ max(1, (int) round($d['total'] / $weekMax * 100)) }}%;background:{{ $d['today'] ? '#111827' : '#d1d5db' }};border-radius:3px;font-size:0;line-height:0;">&nbsp;</div></td>
-                    <td width="84" align="right" style="padding:4px 0;{{ $d['today'] ? 'font-weight:600;' : '' }}">{{ $m($d['total']) }}</td>
+                    <td width="86" style="padding:4px 0;color:{{ $d['today'] ? $ac : '#475569' }};{{ $d['today'] ? 'font-weight:700;' : '' }}">{{ $d['name'] }}</td>
+                    <td style="padding:4px 8px;"><div style="height:11px;width:{{ max(1, (int) round($d['total'] / $weekMax * 100)) }}%;background:{{ $d['today'] ? $ac : '#5eead4' }};border-radius:4px;font-size:0;line-height:0;">&nbsp;</div></td>
+                    <td width="84" align="right" style="padding:4px 0;{{ $d['today'] ? 'font-weight:700;' : '' }}">{{ $m($d['total']) }}</td>
                 </tr>
             @endforeach
         </table>
     </td></tr>
     @endif
     @if ($s->byMethod !== [])
-    <tr><td style="padding:0 24px 16px;">
-        <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Per metode bayar</div>
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
+    <tr><td style="padding:4px 24px 16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Per metode bayar</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
             @foreach ($s->byMethod as $name => $total)
-                <tr><td style="padding:5px 0;border-top:1px solid #f3f4f6;">{{ $name }}</td><td align="right" style="padding:5px 0;border-top:1px solid #f3f4f6;">{{ $m($total) }}</td></tr>
+                @php $c = $palette[$loop->index % count($palette)]; @endphp
+                <tr><td style="padding:5px 0 1px;"><span style="color:{{ $c }};">●</span> {{ $name }}</td><td align="right" style="padding:5px 0 1px;font-weight:600;">{{ $m($total) }}</td></tr>
+                <tr><td colspan="2" style="padding:0 0 4px;"><div style="height:6px;width:{{ max(1, (int) round($total / $methodMax * 100)) }}%;background:{{ $c }};border-radius:3px;font-size:0;line-height:0;opacity:.85;">&nbsp;</div></td></tr>
             @endforeach
         </table>
     </td></tr>
     @endif
     @if ($top !== [])
-    <tr><td style="padding:0 24px 16px;">
-        <div style="font-size:13px;font-weight:600;margin-bottom:8px;">Menu terlaris</div>
+    <tr><td style="padding:4px 24px 16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Menu terlaris</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
             @foreach ($top as $p)
+                @php $c = $palette[$loop->index % count($palette)]; @endphp
                 <tr>
-                    <td colspan="2" style="padding:5px 0 2px;border-top:1px solid #f3f4f6;">{{ $p['name'] }} <span style="color:#6b7280;">× {{ $p['qty'] }}</span></td>
-                    <td align="right" style="padding:5px 0 2px;border-top:1px solid #f3f4f6;">{{ $m($p['total']) }}</td>
+                    <td style="padding:5px 0 1px;"><span style="display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;border-radius:9px;background:{{ $c }};color:#fff;font-size:11px;font-weight:700;">{{ $loop->iteration }}</span> {{ $p['name'] }} <span style="color:#64748b;">× {{ $p['qty'] }}</span></td>
+                    <td align="right" style="padding:5px 0 1px;font-weight:600;">{{ $m($p['total']) }}</td>
                 </tr>
-                <tr><td colspan="3" style="padding:0 0 4px;"><div style="height:6px;width:{{ max(1, (int) round($p['total'] / $topMax * 100)) }}%;background:#6b7280;border-radius:3px;font-size:0;line-height:0;">&nbsp;</div></td></tr>
+                <tr><td colspan="2" style="padding:0 0 4px;"><div style="height:6px;width:{{ max(1, (int) round($p['total'] / $topMax * 100)) }}%;background:{{ $c }};border-radius:3px;font-size:0;line-height:0;opacity:.85;">&nbsp;</div></td></tr>
             @endforeach
         </table>
     </td></tr>
     @endif
     @if (count($types) > 0 || count($cashiers) > 0)
-    <tr><td style="padding:0 24px 16px;">
+    <tr><td style="padding:4px 24px 16px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-        @foreach ([['Per tipe order', $types], ['Per kasir', $cashiers]] as [$title, $rows])
+        @foreach ([['Per tipe order', $types, '#f59e0b'], ['Per kasir', $cashiers, '#ec4899']] as [$title, $rows, $dot])
             @if (count($rows) > 0)
             <td valign="top" width="50%" style="padding-right:8px;">
-                <div style="font-size:13px;font-weight:600;margin-bottom:6px;">{{ $title }}</div>
+                <div style="font-size:14px;font-weight:700;margin-bottom:6px;">{{ $title }}</div>
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
                     @foreach ($rows as $r)
-                        <tr><td style="padding:4px 0;border-top:1px solid #f3f4f6;">{{ $r['name'] }} <span style="color:#6b7280;">({{ $r['orders'] }})</span></td><td align="right" style="padding:4px 0;border-top:1px solid #f3f4f6;">{{ $m($r['total']) }}</td></tr>
+                        <tr><td style="padding:4px 0;border-bottom:1px solid #f1f5f9;"><span style="color:{{ $dot }};">●</span> {{ $r['name'] }} <span style="color:#64748b;">({{ $r['orders'] }})</span></td><td align="right" style="padding:4px 0;border-bottom:1px solid #f1f5f9;font-weight:600;">{{ $m($r['total']) }}</td></tr>
                     @endforeach
                 </table>
             </td>
@@ -126,19 +137,21 @@
         </tr></table>
     </td></tr>
     @endif
-    <tr><td style="padding:0 24px 16px;">
-        <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Perlu dicek</div>
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
-            <tr><td style="padding:5px 0;border-top:1px solid #f3f4f6;">Void</td><td align="right" style="padding:5px 0;border-top:1px solid #f3f4f6;">{{ $s->voidItems }} item · {{ $m($s->voidValue) }}</td></tr>
-            <tr><td style="padding:5px 0;border-top:1px solid #f3f4f6;">Komplimen / staff meal</td><td align="right" style="padding:5px 0;border-top:1px solid #f3f4f6;">{{ $s->compItems }} item · {{ $m($s->compValue) }}</td></tr>
-            <tr><td style="padding:5px 0;border-top:1px solid #f3f4f6;">Selisih kas</td><td align="right" style="padding:5px 0;border-top:1px solid #f3f4f6;font-weight:600;color:{{ $s->cashDifference === 0 ? '#047857' : '#be123c' }};">{{ $s->cashDifference === 0 ? 'Cocok' : $m($s->cashDifference) }}</td></tr>
+    <tr><td style="padding:4px 24px 16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Perlu dicek</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
+            <tr><td style="padding:6px 10px;background:#fffbeb;border-radius:6px;">Void</td><td align="right" style="padding:6px 10px;background:#fffbeb;border-radius:6px;font-weight:600;color:#b45309;">{{ $s->voidItems }} item · {{ $m($s->voidValue) }}</td></tr>
+            <tr><td height="6" colspan="2"></td></tr>
+            <tr><td style="padding:6px 10px;background:#f5f3ff;border-radius:6px;">Komplimen / staff meal</td><td align="right" style="padding:6px 10px;background:#f5f3ff;border-radius:6px;font-weight:600;color:#6d28d9;">{{ $s->compItems }} item · {{ $m($s->compValue) }}</td></tr>
+            <tr><td height="6" colspan="2"></td></tr>
+            <tr><td style="padding:6px 10px;background:{{ $s->cashDifference === 0 ? '#ecfdf5' : '#fff1f2' }};border-radius:6px;">Selisih kas</td><td align="right" style="padding:6px 10px;background:{{ $s->cashDifference === 0 ? '#ecfdf5' : '#fff1f2' }};border-radius:6px;font-weight:700;color:{{ $s->cashDifference === 0 ? '#047857' : '#be123c' }};">{{ $s->cashDifference === 0 ? '✓ Cocok' : $m($s->cashDifference) }}</td></tr>
         </table>
     </td></tr>
     <tr><td style="padding:8px 24px 24px;">
-        <a href="{{ $url }}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 18px;border-radius:8px;">Buka laporan lengkap</a>
+        <a href="{{ $url }}" style="display:inline-block;background:{{ $ac }};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 20px;border-radius:8px;">Buka laporan lengkap</a>
     </td></tr>
 </table>
-<div style="font-size:11px;color:#9ca3af;margin-top:12px;">Dikirim otomatis oleh POS. Atur penerima di Pengaturan › Notifikasi.</div>
+<div style="font-size:11px;color:#94a3b8;margin-top:12px;">Dikirim otomatis oleh POS. Atur penerima di Pengaturan › Notifikasi.</div>
 </td></tr>
 </table>
 </body>

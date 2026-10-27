@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AccountMenu } from '@/components/pos/account-menu';
 import { CallsBar } from '@/components/pos/calls-bar';
+import { IncomingBar, type Incoming } from '@/components/pos/incoming-bar';
 import { SoldOutDialog } from '@/components/pos/sold-out-dialog';
 import { DiscountDialog } from '@/components/pos/discount-dialog';
 import { HistoryDialog } from '@/components/pos/history-dialog';
@@ -199,6 +200,32 @@ export default function PosPage(props: Props) {
             ...props.state.recent_qr.map((r) => r.id),
         ]),
     );
+    const [incoming, setIncoming] = useState<Incoming[]>([]);
+    const addIncoming = useCallback((item: Incoming) => {
+        setIncoming((list) =>
+            list.some((i) => i.id === item.id) ? list : [...list, item],
+        );
+    }, []);
+
+    // Keep ringing until every incoming order / QRIS payment is acknowledged.
+    useEffect(() => {
+        if (incoming.length === 0 || !settings.keep_ringing) {
+            return;
+        }
+
+        const id = window.setInterval(
+            () => sound.beep('order'),
+            Math.max(2, settings.repeat_seconds) * 1000,
+        );
+
+        return () => window.clearInterval(id);
+    }, [
+        incoming.length,
+        settings.keep_ringing,
+        settings.repeat_seconds,
+        sound,
+    ]);
+
     const notifyQr = useCallback(
         (
             roundId: number,
@@ -217,12 +244,18 @@ export default function PosPage(props: Props) {
                 { duration: 10000 },
             );
 
-            // Auto-confirmed orders need no action, so the inbox stays closed.
+            // Auto-confirmed orders need no action, so the inbox stays closed; they stay on the bar until acknowledged.
             if (!auto) {
                 setInbox(true);
+            } else {
+                addIncoming({
+                    id: `qr-${roundId}`,
+                    kind: 'order',
+                    text: `${t('Pesanan masuk dapur')}: ${table ?? ''} · ${who ?? ''}`,
+                });
             }
         },
-        [sound],
+        [sound, addIncoming],
     );
 
     const refresh = useCallback(async () => {
@@ -295,10 +328,11 @@ export default function PosPage(props: Props) {
 
             if (event === 'OnlinePaymentReceived') {
                 sound.beep('order');
-                toast.success(
-                    `${t('Pembayaran QRIS masuk')}: ${p.tableName ?? ''} · ${rupiah(p.amount ?? 0)}`,
-                    { duration: 15000 },
-                );
+                addIncoming({
+                    id: `pay-${p.orderId}-${p.amount}-${Date.now()}`,
+                    kind: 'payment',
+                    text: `${t('Pembayaran QRIS masuk')}: ${p.tableName ?? ''} · ${rupiah(p.amount ?? 0)}`,
+                });
             }
 
             if (event === 'OrderItemStatusChanged' && p.status === 'ready') {
@@ -951,6 +985,13 @@ export default function PosPage(props: Props) {
                         onDone={(id) => void serviceCalls.done(id)}
                     />
                 )}
+
+                <IncomingBar
+                    items={incoming}
+                    onAck={(id) =>
+                        setIncoming((list) => list.filter((i) => i.id !== id))
+                    }
+                />
 
                 {sound.hintVisible && (
                     <div

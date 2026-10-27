@@ -39,6 +39,21 @@ class QrPaymentController extends Controller
         return response()->json($this->present($this->service->refresh($op)));
     }
 
+    /** Test mode only: lets whoever is trying the QR flow finish the payment themselves. Never available in production. */
+    public function simulate(string $token, string $publicId): JsonResponse
+    {
+        $op = $this->find($token, $publicId);
+        abort_unless($this->canSimulate($op), 404);
+        $this->service->simulatePaid($op);
+
+        return response()->json($this->present($this->service->refresh($op)));
+    }
+
+    private function canSimulate(OnlinePayment $op): bool
+    {
+        return $op->provider === 'fake' && ! app()->isProduction();
+    }
+
     private function find(string $token, string $publicId): OnlinePayment
     {
         $table = Table::query()->where('qr_token', $token)->firstOrFail();
@@ -57,7 +72,7 @@ class QrPaymentController extends Controller
 
         return [
             'public_id' => $op->public_id, 'status' => $op->status, 'amount' => $op->amount,
-            'expires_at' => $op->expires_at?->toIso8601String(), 'qr' => $svg, 'simulated' => $op->provider === 'fake',
+            'expires_at' => $op->expires_at?->toIso8601String(), 'qr' => $svg, 'simulated' => $op->provider === 'fake', 'can_simulate' => $op->status === 'pending' && $this->canSimulate($op),
         ];
     }
 }

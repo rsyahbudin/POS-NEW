@@ -1121,9 +1121,47 @@ type Pay = {
     expires_at: string | null;
     qr: string | null;
     simulated: boolean;
+    can_simulate?: boolean;
 };
 
 /** Pay the table's bill with a dynamic QRIS code; polls until the gateway reports it paid. */
+/** Saves the QRIS code as a PNG, so the guest can open it from their banking app's gallery picker. */
+function saveQr(src: string, name: string) {
+    const img = new Image();
+
+    img.onload = () => {
+        const size = 720;
+        const pad = 40;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+            return;
+        }
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, size, size);
+        ctx.drawImage(img, pad, pad, size - pad * 2, size - pad * 2);
+        canvas.toBlob((blob) => {
+            if (!blob) {
+                return;
+            }
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${name}.png`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }, 'image/png');
+    };
+    img.src = src;
+}
+
 function PayBox({ token }: { token: string }) {
     const [pay, setPay] = useState<Pay | null>(null);
     const [busy, setBusy] = useState(false);
@@ -1152,6 +1190,26 @@ function PayBox({ token }: { token: string }) {
             }
         } catch {
             setError('Koneksi terputus. Coba lagi.');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const simulate = async (publicId: string) => {
+        setBusy(true);
+
+        try {
+            const res = await fetch(`/m/${token}/pay/${publicId}/simulate`, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'X-XSRF-TOKEN': xsrf(),
+                },
+            });
+
+            if (res.ok) {
+                setPay(await res.json());
+            }
         } finally {
             setBusy(false);
         }
@@ -1201,6 +1259,18 @@ function PayBox({ token }: { token: string }) {
                     alt="Kode QRIS"
                     className="size-64 rounded-lg bg-white p-2"
                 />
+                <button
+                    type="button"
+                    onClick={() => saveQr(pay.qr!, `qris-${pay.amount}`)}
+                    className="h-11 rounded-xl border px-4 text-sm font-semibold"
+                >
+                    Unduh kode QRIS
+                </button>
+                <p className="text-center text-sm text-muted-foreground">
+                    Satu HP tidak bisa memindai layarnya sendiri: unduh kode
+                    ini, lalu di aplikasi bank pilih Scan QRIS dan ambil dari
+                    galeri.
+                </p>
                 <p className="text-center text-sm text-muted-foreground">
                     Buka aplikasi bank atau e-wallet (BCA, GoPay, OVO, Dana,
                     dll), pilih Scan QRIS. Halaman ini otomatis berubah setelah
@@ -1210,6 +1280,16 @@ function PayBox({ token }: { token: string }) {
                     <p className="text-xs text-amber-800 dark:text-amber-200">
                         Mode simulasi: tidak ada uang yang bergerak.
                     </p>
+                )}
+                {pay.can_simulate && (
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void simulate(pay.public_id)}
+                        className="h-11 rounded-xl border border-amber-500 px-4 text-sm font-semibold text-amber-900 dark:text-amber-100"
+                    >
+                        Simulasikan bayar
+                    </button>
                 )}
             </div>
         );

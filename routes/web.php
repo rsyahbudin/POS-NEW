@@ -52,6 +52,7 @@ Route::prefix('m/{token}')->middleware('throttle:qr')->group(function () {
     Route::post('call', [QrMenuController::class, 'call'])->middleware('throttle:qr-call')->name('qr.call');
     Route::post('pay', [QrPaymentController::class, 'start'])->middleware('throttle:qr-submit')->name('qr.pay');
     Route::get('pay/{publicId}', [QrPaymentController::class, 'status'])->name('qr.pay.status');
+    Route::post('pay/{publicId}/simulate', [QrPaymentController::class, 'simulate'])->middleware('throttle:qr-submit')->name('qr.pay.simulate');
 });
 Route::post('webhooks/qris/{provider}', QrisWebhookController::class)->middleware('throttle:120,1')->name('webhooks.qris');
 Route::get('r/{publicId}', [ReceiptController::class, 'show'])->middleware('throttle:60,1')->name('receipt.show');

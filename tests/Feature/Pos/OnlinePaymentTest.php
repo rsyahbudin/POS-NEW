@@ -9,6 +9,7 @@ use App\Domain\Payment\Models\Payment;
 use App\Domain\Payment\Online\FakeGateway;
 use App\Domain\Payment\Online\OnlineActor;
 use App\Domain\Payment\Online\OnlinePaymentService;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Http;
 
 function qrisOn(string $provider = 'fake'): void
@@ -133,4 +134,22 @@ it('lets a QR order straight into the kitchen when guests can pay by QRIS, and k
     $this->getJson("/m/{$token}")->assertOk();
     $auto = app(SubmitQrOrderAction::class)->handle($token, $items());
     expect($auto->status->value)->toBe('confirmed');
+});
+
+it('lets a guest finish a test payment from the QR page in test mode, never in production', function () {
+    qrisOn();
+    openShiftFor(userWithRole('cashier'), 0);
+    $table = Table::query()->first();
+    placeOrder(tableId: $table->id);
+
+    $res = $this->postJson("/m/{$table->qr_token}/pay")->assertCreated()->assertJsonPath('can_simulate', true);
+    $url = "/m/{$table->qr_token}/pay/{$res->json('public_id')}/simulate";
+
+    $this->withoutMiddleware(PreventRequestForgery::class);
+    $this->app['env'] = 'production';
+    $this->postJson($url)->assertNotFound();
+    $this->app['env'] = 'testing';
+
+    $this->postJson($url)->assertOk()->assertJsonPath('status', 'paid');
+    expect(Payment::query()->count())->toBe(1);
 });

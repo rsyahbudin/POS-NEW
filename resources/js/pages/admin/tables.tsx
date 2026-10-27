@@ -84,6 +84,13 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                     </Button>
                 </div>
 
+                {areas.length === 0 && (
+                    <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                        Belum ada area. Tulis nama area di atas (mis. Indoor),
+                        klik Tambah area, lalu tambah meja.
+                    </p>
+                )}
+
                 {areas.map((a) => (
                     <section key={a.id} aria-label={a.name}>
                         <div className="mb-2 flex items-center justify-between">

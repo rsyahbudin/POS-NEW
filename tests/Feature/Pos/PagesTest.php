@@ -1,6 +1,8 @@
 <?php
 
 use App\Domain\Catalog\Models\Station;
+use App\Domain\Floor\Models\Area;
+use App\Domain\Floor\Models\Table;
 use App\Domain\Payment\Actions\RefundPaymentAction;
 use App\Domain\Reporting\SalesReports;
 use App\Support\BusinessDate;
@@ -79,4 +81,18 @@ it('reports sales per order not per bill and nets out refunds', function () {
     foreach (SalesReports::DIMENSIONS as $dim) {
         expect($s->by($dim, $d, $d))->not->toBeEmpty();
     }
+});
+
+it('opens the tables page and the QR print on a fresh outlet with no areas or tables', function () {
+    $manager = userWithRole('manager');
+    Table::query()->withoutGlobalScopes()->forceDelete();
+    Area::query()->delete();
+
+    $this->actingAs($manager)->get('/admin/tables')->assertOk()->assertInertia(fn ($p) => $p->component('admin/tables')->has('areas', 0));
+    $this->actingAs($manager)->get('/admin/tables-qr.pdf')->assertOk();
+
+    $this->actingAs($manager)->post('/admin/areas', ['name' => 'Indoor'])->assertSessionHas('success');
+    $area = Area::query()->firstOrFail();
+    $this->actingAs($manager)->post('/admin/tables', ['name' => 'A1', 'capacity' => 4, 'area_id' => $area->id])->assertSessionHas('success');
+    $this->actingAs($manager)->get('/admin/tables')->assertInertia(fn ($p) => $p->has('areas', 1)->has('areas.0.tables', 1));
 });

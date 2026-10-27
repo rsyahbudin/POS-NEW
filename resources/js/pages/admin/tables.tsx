@@ -1,10 +1,10 @@
-import { Head, router } from '@inertiajs/react';
-import { Plus, Printer, RefreshCw } from 'lucide-react';
-import { useState } from 'react';
-import { Modal } from '@/components/pos/modal';
-import { Field, PageHeader, Select } from '@/components/pos/ui';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Head, router } from "@inertiajs/react";
+import { Plus, Printer, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { Modal } from "@/components/pos/modal";
+import { Field, PageHeader, Select } from "@/components/pos/ui";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 type Table = {
     id: number;
@@ -17,7 +17,7 @@ type Table = {
 type Area = { id: number; name: string; tables: Table[] };
 
 export default function TablesPage({ areas }: { areas: Area[] }) {
-    const [area, setArea] = useState('');
+    const [area, setArea] = useState("");
     const [form, setForm] = useState<{
         id?: number;
         name: string;
@@ -47,9 +47,9 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                                 disabled={!areas.length}
                                 onClick={() =>
                                     setForm({
-                                        name: '',
+                                        name: "",
                                         capacity: 4,
-                                        area_id: areas[0].id,
+                                        area_id: areas[0]?.id ?? 0,
                                     })
                                 }
                             >
@@ -71,11 +71,11 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                         disabled={!area.trim()}
                         onClick={() =>
                             router.post(
-                                '/admin/areas',
+                                "/admin/areas",
                                 { name: area },
                                 {
                                     preserveScroll: true,
-                                    onSuccess: () => setArea(''),
+                                    onSuccess: () => setArea(""),
                                 },
                             )
                         }
@@ -110,7 +110,7 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                                     className="rounded-xl border bg-card p-3"
                                 >
                                     <p className="font-medium">
-                                        {t.name}{' '}
+                                        {t.name}{" "}
                                         <span className="text-xs text-muted-foreground">
                                             · {t.capacity} kursi · {t.status}
                                         </span>
@@ -138,8 +138,8 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                                             size="sm"
                                             variant={
                                                 t.qr_enabled
-                                                    ? 'outline'
-                                                    : 'destructive'
+                                                    ? "outline"
+                                                    : "destructive"
                                             }
                                             className="h-10"
                                             aria-pressed={!t.qr_enabled}
@@ -147,17 +147,17 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                                                 fetch(
                                                     `/pos/tables/${t.id}/qr`,
                                                     {
-                                                        method: 'POST',
+                                                        method: "POST",
                                                         headers: {
-                                                            'Content-Type':
-                                                                'application/json',
-                                                            Accept: 'application/json',
-                                                            'X-XSRF-TOKEN':
+                                                            "Content-Type":
+                                                                "application/json",
+                                                            Accept: "application/json",
+                                                            "X-XSRF-TOKEN":
                                                                 decodeURIComponent(
                                                                     document.cookie.match(
                                                                         /XSRF-TOKEN=([^;]+)/,
                                                                     )?.[1] ??
-                                                                        '',
+                                                                        "",
                                                                 ),
                                                         },
                                                         body: JSON.stringify({
@@ -169,8 +169,8 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                                             }
                                         >
                                             {t.qr_enabled
-                                                ? 'QR aktif'
-                                                : 'QR nonaktif'}
+                                                ? "QR aktif"
+                                                : "QR nonaktif"}
                                         </Button>
                                         <Button
                                             size="sm"
@@ -229,7 +229,7 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                 <Modal
                     open
                     onClose={() => setForm(null)}
-                    title={form.id ? 'Ubah meja' : 'Meja baru'}
+                    title={form.id ? "Ubah meja" : "Meja baru"}
                 >
                     <Field label="Nama meja">
                         <Input
@@ -282,7 +282,7 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                             if (form.id) {
                                 router.put(`/admin/tables/${form.id}`, form, o);
                             } else {
-                                router.post('/admin/tables', form, o);
+                                router.post("/admin/tables", form, o);
                             }
                         }}
                     >

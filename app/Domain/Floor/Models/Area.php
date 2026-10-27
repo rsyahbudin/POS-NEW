@@ -4,6 +4,7 @@ namespace App\Domain\Floor\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
 /**
@@ -16,6 +17,8 @@ use Illuminate\Support\Carbon;
  */
 class Area extends Model
 {
+    use SoftDeletes;
+
     protected $guarded = [];
 
     /** @return HasMany<Table, $this> */

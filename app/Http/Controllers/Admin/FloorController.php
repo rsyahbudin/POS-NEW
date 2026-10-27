@@ -42,6 +42,16 @@ class FloorController extends Controller
         return back()->with('success', 'Area disimpan.');
     }
 
+    public function deleteArea(Area $area): RedirectResponse
+    {
+        if ($area->tables()->exists()) {
+            return back()->with('error', 'Area masih punya meja. Hapus atau pindahkan mejanya dulu.');
+        }
+        $area->delete();
+
+        return back()->with('success', 'Area dihapus.');
+    }
+
     public function saveTable(Request $request, ?Table $table = null): RedirectResponse
     {
         $data = $request->validate(['name' => 'required|string|max:40', 'capacity' => 'required|integer|min:1|max:50', 'area_id' => 'required|exists:areas,id']);

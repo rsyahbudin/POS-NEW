@@ -96,3 +96,18 @@ it('opens the tables page and the QR print on a fresh outlet with no areas or ta
     $this->actingAs($manager)->post('/admin/tables', ['name' => 'A1', 'capacity' => 4, 'area_id' => $area->id])->assertSessionHas('success');
     $this->actingAs($manager)->get('/admin/tables')->assertInertia(fn ($p) => $p->has('areas', 1)->has('areas.0.tables', 1));
 });
+
+it('renames an area, and deletes it only once it has no tables', function () {
+    $manager = userWithRole('manager');
+    $area = Area::query()->firstOrFail();
+    $this->actingAs($manager)->put("/admin/areas/{$area->id}", ['name' => 'Taman'])->assertSessionHas('success');
+    expect($area->fresh()->name)->toBe('Taman');
+
+    $this->actingAs($manager)->delete("/admin/areas/{$area->id}")->assertSessionHas('error');
+    expect(Area::query()->whereKey($area->id)->exists())->toBeTrue();
+
+    $area->tables()->each(fn ($t) => $t->delete());
+    $this->actingAs($manager)->delete("/admin/areas/{$area->id}")->assertSessionHas('success');
+    expect(Area::query()->whereKey($area->id)->exists())->toBeFalse();
+    $this->actingAs(userWithRole('waiter'))->delete('/admin/areas/'.Area::query()->firstOrFail()->id)->assertForbidden();
+});

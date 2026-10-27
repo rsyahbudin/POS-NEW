@@ -18,6 +18,10 @@ type Area = { id: number; name: string; tables: Table[] };
 
 export default function TablesPage({ areas }: { areas: Area[] }) {
     const [area, setArea] = useState('');
+    const [areaForm, setAreaForm] = useState<{
+        id: number;
+        name: string;
+    } | null>(null);
     const [form, setForm] = useState<{
         id?: number;
         name: string;
@@ -95,20 +99,45 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                     <section key={a.id} aria-label={a.name}>
                         <div className="mb-2 flex items-center justify-between">
                             <h2 className="font-semibold">{a.name}</h2>
-                            <Button
-                                asChild
-                                variant="ghost"
-                                size="sm"
-                                className="h-10"
-                            >
-                                <a
-                                    href={`/admin/tables-qr.pdf?area_id=${a.id}`}
-                                    target="_blank"
-                                    rel="noreferrer"
+                            <div className="flex flex-wrap justify-end gap-1">
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-10"
+                                    onClick={() =>
+                                        setAreaForm({ id: a.id, name: a.name })
+                                    }
                                 >
-                                    <Printer /> QR area
-                                </a>
-                            </Button>
+                                    Ubah nama
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-10"
+                                    onClick={() =>
+                                        confirm(`Hapus area ${a.name}?`) &&
+                                        router.delete(`/admin/areas/${a.id}`, {
+                                            preserveScroll: true,
+                                        })
+                                    }
+                                >
+                                    Hapus
+                                </Button>
+                                <Button
+                                    asChild
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-10"
+                                >
+                                    <a
+                                        href={`/admin/tables-qr.pdf?area_id=${a.id}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                    >
+                                        <Printer /> QR area
+                                    </a>
+                                </Button>
+                            </div>
                         </div>
                         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                             {a.tables.map((t) => (
@@ -231,6 +260,43 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                     </section>
                 ))}
             </div>
+
+            {areaForm && (
+                <Modal
+                    open
+                    onClose={() => setAreaForm(null)}
+                    title="Ubah nama area"
+                >
+                    <Field label="Nama area">
+                        <Input
+                            className="h-11"
+                            value={areaForm.name}
+                            onChange={(e) =>
+                                setAreaForm({
+                                    ...areaForm,
+                                    name: e.target.value,
+                                })
+                            }
+                        />
+                    </Field>
+                    <Button
+                        className="h-12"
+                        disabled={!areaForm.name.trim()}
+                        onClick={() =>
+                            router.put(
+                                `/admin/areas/${areaForm.id}`,
+                                { name: areaForm.name },
+                                {
+                                    preserveScroll: true,
+                                    onSuccess: () => setAreaForm(null),
+                                },
+                            )
+                        }
+                    >
+                        Simpan
+                    </Button>
+                </Modal>
+            )}
 
             {form && (
                 <Modal

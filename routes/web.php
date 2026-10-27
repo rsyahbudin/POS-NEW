@@ -265,6 +265,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::get('tables', [FloorController::class, 'index'])->name('tables');
             Route::post('areas', [FloorController::class, 'saveArea'])->name('areas.store');
             Route::put('areas/{area}', [FloorController::class, 'saveArea'])->name('areas.update');
+            Route::delete('areas/{area}', [FloorController::class, 'deleteArea'])->name('areas.destroy');
             Route::post('tables', [FloorController::class, 'saveTable'])->name('tables.store');
             Route::put('tables/{table}', [FloorController::class, 'saveTable'])->name('tables.update');
             Route::delete('tables/{table}', [FloorController::class, 'deleteTable'])->name('tables.destroy');

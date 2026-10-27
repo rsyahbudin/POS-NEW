@@ -120,20 +120,22 @@ class ReportDelivery
     /**
      * Cash that left the business that day: taken out of the drawer during a shift, and expenses booked for the date.
      *
-     * @return array{items: list<array{source: string, label: string, by: string|null, amount: int}>, total: int}
+     * @return array{items: list<array{date: string, source: string, label: string, by: string|null, amount: int}>, total: int}
      */
-    public function expenses(string $date): array
+    public function expenses(string $date, ?string $to = null): array
     {
+        $to ??= $date;
         $outletId = app(OutletContext::class)->id();
         $items = [];
-        CashMovement::query()->where('direction', 'out')->whereHas('shift', fn ($q) => $q->where('outlet_id', $outletId)->where('business_date', $date))->with('creator:id,name')->oldest()->get()
-            ->each(function (CashMovement $m) use (&$items) {
-                $items[] = ['source' => 'Kas laci', 'label' => $m->reason, 'by' => $m->creator?->name, 'amount' => $m->amount];
+        CashMovement::query()->where('direction', 'out')->whereHas('shift', fn ($q) => $q->where('outlet_id', $outletId)->whereBetween('business_date', [$date, $to]))->with(['creator:id,name', 'shift:id,business_date'])->oldest()->get()
+            ->each(function (CashMovement $m) use (&$items, $date) {
+                $items[] = ['date' => $m->shift?->business_date?->toDateString() ?? $date, 'source' => 'Kas laci', 'label' => $m->reason, 'by' => $m->creator?->name, 'amount' => $m->amount];
             });
-        Expense::query()->where('outlet_id', $outletId)->where('date', $date)->with(['category:id,name', 'creator:id,name'])->oldest('id')->get()
+        Expense::query()->where('outlet_id', $outletId)->whereBetween('date', [$date, $to])->with(['category:id,name', 'creator:id,name'])->oldest('date')->oldest('id')->get()
             ->each(function (Expense $e) use (&$items) {
-                $items[] = ['source' => 'Pengeluaran', 'label' => trim($e->category->name.($e->note ? " · {$e->note}" : '')), 'by' => $e->creator?->name, 'amount' => $e->amount];
+                $items[] = ['date' => CarbonImmutable::parse($e->date)->toDateString(), 'source' => 'Pengeluaran', 'label' => trim($e->category->name.($e->note ? " · {$e->note}" : '')), 'by' => $e->creator?->name, 'amount' => $e->amount];
             });
+        usort($items, fn ($x, $y) => $x['date'] <=> $y['date']);
 
         return ['items' => $items, 'total' => (int) array_sum(array_column($items, 'amount'))];
     }

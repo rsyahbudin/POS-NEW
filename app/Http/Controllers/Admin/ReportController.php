@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Notification\ReportDelivery;
 use App\Domain\Reporting\KitchenReports;
 use App\Domain\Reporting\MarginReports;
 use App\Domain\Reporting\SalesReports;
@@ -182,50 +183,141 @@ class ReportController extends Controller
         $range = $this->rangeLabel($from, $to);
 
         if ($request->input('report') === 'adjustments') {
-            $a = $this->reports->adjustments($from, $to);
             $title = 'Diskon, Pembatalan, Refund';
-            $sub = "Periode {$range}";
-            $sum = fn ($rows) => (int) $rows->sum(fn ($r) => (int) $r->amount);
-            $sheets = [
-                new ReportSheet('Diskon', $sub, ['Tanggal', 'Order', 'Jenis', 'Nilai', 'Potongan (Rp)', 'Alasan', 'Dilakukan oleh', 'Disetujui oleh'],
-                    $a['discounts']->map(fn ($r) => [$this->when($r), $r->number, self::discountKind($r->type), self::discountValue($r->type, (int) $r->value), (int) $r->amount, $r->reason, $r->actor ?? '-', $r->approver ?? '-'])->all(),
-                    ['Total', '', '', '', $sum($a['discounts']), '', '', '']),
-                new ReportSheet('Pembatalan', $sub, ['Tanggal', 'Order', 'Item', 'Qty', 'Nilai (Rp)', 'Alasan', 'Dilakukan oleh', 'Disetujui oleh'],
-                    $a['voids']->map(fn ($r) => [$this->when($r), $r->number, $r->item, (int) $r->qty, (int) $r->amount, $r->reason, $r->actor ?? '-', $r->approver ?? '-'])->all(),
-                    ['Total', '', '', '', $sum($a['voids']), '', '', '']),
-                new ReportSheet('Refund', $sub, ['Tanggal', 'Order', 'Nominal (Rp)', 'Alasan', 'Disetujui oleh'],
-                    $a['refunds']->map(fn ($r) => [$this->when($r), $r->number, (int) $r->amount, $r->reason, $r->approver ?? '-'])->all(),
-                    ['Total', '', $sum($a['refunds']), '', '']),
-                new ReportSheet('Komplimen', $sub, ['Tanggal', 'Order', 'Item', 'Qty', 'Harga jual (Rp)', 'Jenis', 'Alasan', 'Disetujui oleh'],
-                    $a['comps']->map(fn ($r) => [$this->when($r), $r->number, $r->item, (int) $r->qty, (int) $r->amount, $r->type === 'staff_meal' ? 'Staff meal' : 'Komplimen', $r->reason, $r->approver ?? '-'])->all(),
-                    ['Total', '', '', '', $sum($a['comps']), '', '', '']),
-            ];
+            $sheets = $this->adjustmentSheets($from, $to, "Periode {$range}");
 
             return ReportFile::download($format, "{$title} {$from} {$to}", $sheets, $title);
         }
 
         $label = self::DIMENSION_LABELS[$dimension];
+        $title = "Laporan penjualan per {$label}";
+
+        // The PDF follows the screen (one grouping); Excel is the whole pack so nothing needs a second download.
+        if ($format === 'pdf') {
+            return ReportFile::download($format, "Laporan penjualan {$label} {$from} {$to}", [$this->salesSheet($dimension, $from, $to, $range), $this->summarySheet($from, $to, $range)], $title);
+        }
+
+        $sheets = [$this->summarySheet($from, $to, $range)];
+        foreach (array_keys(self::DIMENSION_LABELS) as $dim) {
+            $sheets[] = $this->salesSheet($dim, $from, $to, $range);
+        }
+        $sheets[] = $this->transactionSheet($from, $to, $range);
+        array_push($sheets, ...$this->adjustmentSheets($from, $to, "Periode {$range}"));
+        $sheets[] = $this->expenseSheet($from, $to, $range);
+
+        return ReportFile::download($format, "Laporan penjualan lengkap {$from} {$to}", $sheets, 'Laporan penjualan lengkap');
+    }
+
+    private function salesSheet(string $dimension, string $from, string $to, string $range): ReportSheet
+    {
+        $label = self::DIMENSION_LABELS[$dimension];
         $rows = $this->reports->by($dimension, $from, $to);
         $qtyDim = in_array($dimension, ['product', 'category'], true);
-        $summary = $this->reports->summary($from, $to);
-        $detailed = in_array($dimension, SalesReports::ORDER_DIMENSIONS, true);
-        $sheets = [
-            $detailed
-                ? new ReportSheet("Penjualan {$label}", "Periode {$range}", [$label, 'Order', 'Subtotal menu', 'Diskon', 'Pajak & biaya', 'Pembulatan', 'Refund', 'Penjualan bersih', 'Rata-rata/order'],
-                    $rows->map(fn ($r) => [$r->display, $r->orders, $r->subtotal, $r->discount, $r->charges, $r->rounding, $r->refunds, $r->total, $r->average])->all(),
-                    ['Total', (int) $rows->sum('orders'), (int) $rows->sum('subtotal'), (int) $rows->sum('discount'), (int) $rows->sum('charges'), (int) $rows->sum('rounding'), (int) $rows->sum('refunds'), (int) $rows->sum('total'),
-                        (int) $rows->sum('orders') > 0 ? intdiv((int) $rows->sum('total'), (int) $rows->sum('orders')) : 0])
-                : new ReportSheet("Penjualan {$label}", "Periode {$range}", [$label, $qtyDim ? 'Qty' : 'Jumlah transaksi', 'Total (Rp)'],
-                    $rows->map(fn ($r) => [$r->display, $r->orders, $r->total])->all(),
-                    ['Total', (int) $rows->sum('orders'), (int) $rows->sum('total')]),
-            new ReportSheet('Ringkasan', "Periode {$range}", ['Keterangan', 'Nilai'], [
-                ['Jumlah order', $summary['orders']], ['Subtotal menu (Rp)', $summary['subtotal']], ['Diskon (Rp)', $summary['discounts']],
-                ['Pajak & biaya layanan (Rp)', $summary['charges']], ['Pembulatan (Rp)', $summary['rounding']], ['Total ditagih (Rp)', $summary['gross']],
-                ['Refund (Rp)', $summary['refunds']], ['Penjualan bersih (Rp)', $summary['net']], ['Rata-rata per order (Rp)', $summary['average']],
-            ]),
-        ];
+        $orders = (int) $rows->sum('orders');
 
-        return ReportFile::download($format, "Laporan penjualan {$label} {$from} {$to}", $sheets, "Laporan penjualan per {$label}");
+        if (in_array($dimension, SalesReports::ORDER_DIMENSIONS, true)) {
+            return new ReportSheet("Per {$label}", "Periode {$range}", [$label, 'Order', 'Subtotal menu', 'Diskon', 'Pajak & biaya', 'Pembulatan', 'Refund', 'Penjualan bersih', 'Rata-rata/order'],
+                $rows->map(fn ($r) => [$r->display, $r->orders, $r->subtotal, $r->discount, $r->charges, $r->rounding, $r->refunds, $r->total, $r->average])->all(),
+                ['Total', $orders, (int) $rows->sum('subtotal'), (int) $rows->sum('discount'), (int) $rows->sum('charges'), (int) $rows->sum('rounding'), (int) $rows->sum('refunds'), (int) $rows->sum('total'),
+                    $orders > 0 ? intdiv((int) $rows->sum('total'), $orders) : 0]);
+        }
+
+        $net = (int) $rows->sum('total');
+
+        return new ReportSheet("Per {$label}", "Periode {$range}", [$label, $qtyDim ? 'Qty' : 'Jumlah transaksi', 'Total (Rp)', '% dari total'],
+            $rows->map(fn ($r) => [$r->display, $r->orders, $r->total, $net > 0 ? round($r->total / $net * 100, 1) : 0])->all(),
+            ['Total', $orders, $net, $net > 0 ? 100 : 0]);
+    }
+
+    private function transactionSheet(string $from, string $to, string $range): ReportSheet
+    {
+        $rows = $this->reports->transactions($from, $to);
+        $types = ['dine_in' => 'Dine-in', 'takeaway' => 'Takeaway', 'online' => 'Online / Ojol'];
+        $net = fn ($r) => (int) $r->grand_total - (int) $r->refunded_total;
+
+        return new ReportSheet('Transaksi', "Periode {$range}", ['Tanggal', 'Jam', 'No. order', 'Tipe', 'Meja', 'Atas nama', 'Menu', 'Dicatat oleh', 'Diterima oleh', 'Metode bayar', 'Subtotal menu', 'Diskon', 'Pajak & biaya', 'Pembulatan', 'Total ditagih', 'Refund', 'Penjualan bersih', 'Status'],
+            $rows->map(fn ($r) => [
+                CarbonImmutable::parse($r->business_date)->translatedFormat('d M Y'),
+                $r->closed_at ? CarbonImmutable::parse($r->closed_at)->setTimezone('Asia/Jakarta')->format('H:i') : '-',
+                $r->number, $types[$r->type] ?? $r->type, $r->table_name ?? '-', $r->customer_name ?? '-', $r->items ?? '-', $r->recorder ?? '-', $r->receiver ?? '-', $r->methods ?? '-',
+                (int) $r->subtotal, (int) $r->discount_total, (int) $r->charge_total, (int) $r->rounding, (int) $r->grand_total, (int) $r->refunded_total, $net($r),
+                $r->status === 'refunded' ? 'Dikembalikan' : 'Lunas',
+            ])->all(),
+            ['Total', '', '', '', '', '', '', '', '', '', (int) $rows->sum('subtotal'), (int) $rows->sum('discount_total'), (int) $rows->sum('charge_total'), (int) $rows->sum('rounding'), (int) $rows->sum('grand_total'), (int) $rows->sum('refunded_total'), (int) $rows->sum($net), '']);
+    }
+
+    private function summarySheet(string $from, string $to, string $range): ReportSheet
+    {
+        $summary = $this->reports->summary($from, $to);
+        $days = CarbonImmutable::parse($from)->diffInDays(CarbonImmutable::parse($to)) + 1;
+        $prevTo = CarbonImmutable::parse($from)->subDay();
+        $prev = $this->reports->summary($prevTo->subDays($days - 1)->toDateString(), $prevTo->toDateString());
+        $change = fn (int $now, int $then) => $then > 0 ? round(($now - $then) / $then * 100, 1) : '-';
+        $expenses = app(ReportDelivery::class)->expenses($from, $to);
+        $methods = $this->reports->by('method', $from, $to);
+        $hours = $this->reports->by('hour', $from, $to)->sortByDesc('orders')->first();
+        $best = $this->reports->by('day', $from, $to)->sortByDesc('total')->first();
+        $top = $this->reports->by('product', $from, $to)->take(5);
+
+        $rows = [
+            ['RINGKASAN', ''], ['Periode', $range], ['Jumlah hari', $days],
+            ['Jumlah order', $summary['orders']], ['Penjualan bersih (Rp)', $summary['net']], ['Rata-rata per order (Rp)', $summary['average']],
+            ['Rata-rata penjualan per hari (Rp)', intdiv($summary['net'], max(1, (int) $days))],
+            ['', ''], ['DARI SUBTOTAL KE PENJUALAN BERSIH', ''],
+            ['Subtotal menu (Rp)', $summary['subtotal']], ['Diskon (Rp)', -$summary['discounts']], ['Pajak & biaya layanan (Rp)', $summary['charges']],
+            ['Pembulatan (Rp)', $summary['rounding']], ['Total ditagih (Rp)', $summary['gross']], ['Refund (Rp)', -$summary['refunds']], ['Penjualan bersih (Rp)', $summary['net']],
+            ['', ''], ['DIBANDINGKAN '.$days.' HARI SEBELUMNYA', ''],
+            ['Penjualan bersih periode sebelumnya (Rp)', $prev['net']], ['Perubahan penjualan (%)', $change($summary['net'], $prev['net'])],
+            ['Order periode sebelumnya', $prev['orders']], ['Perubahan order (%)', $change($summary['orders'], $prev['orders'])],
+            ['', ''], ['SOROTAN', ''],
+            ['Hari terbaik', $best ? "{$best->display} · Rp ".number_format($best->total, 0, ',', '.') : '-'],
+            ['Jam tersibuk', $hours ? "{$hours->label} · {$hours->orders} order" : '-'],
+        ];
+        foreach ($top->values() as $i => $p) {
+            $rows[] = ['Menu terlaris #'.($i + 1), "{$p->label} · {$p->orders} terjual · Rp ".number_format($p->total, 0, ',', '.')];
+        }
+        $rows[] = ['', ''];
+        $rows[] = ['METODE BAYAR', ''];
+        foreach ($methods as $m) {
+            $rows[] = [$m->label.' (Rp)', $m->total];
+        }
+        $rows[] = ['', ''];
+        $rows[] = ['PENGELUARAN KAS', ''];
+        $rows[] = ['Total pengeluaran kas (Rp)', $expenses['total']];
+        $rows[] = ['Jumlah catatan', count($expenses['items'])];
+
+        return new ReportSheet('Ringkasan', "Periode {$range}", ['Keterangan', 'Nilai'], $rows);
+    }
+
+    /** @return list<ReportSheet> */
+    private function adjustmentSheets(string $from, string $to, string $sub): array
+    {
+        $a = $this->reports->adjustments($from, $to);
+        $sum = fn ($rows) => (int) $rows->sum(fn ($r) => (int) $r->amount);
+
+        return [
+            new ReportSheet('Diskon', $sub, ['Tanggal', 'Order', 'Jenis', 'Nilai', 'Potongan (Rp)', 'Alasan', 'Dilakukan oleh', 'Disetujui oleh'],
+                $a['discounts']->map(fn ($r) => [$this->when($r), $r->number, self::discountKind($r->type), self::discountValue($r->type, (int) $r->value), (int) $r->amount, $r->reason, $r->actor ?? '-', $r->approver ?? '-'])->all(),
+                ['Total', '', '', '', $sum($a['discounts']), '', '', '']),
+            new ReportSheet('Pembatalan', $sub, ['Tanggal', 'Order', 'Item', 'Qty', 'Nilai (Rp)', 'Alasan', 'Dilakukan oleh', 'Disetujui oleh'],
+                $a['voids']->map(fn ($r) => [$this->when($r), $r->number, $r->item, (int) $r->qty, (int) $r->amount, $r->reason, $r->actor ?? '-', $r->approver ?? '-'])->all(),
+                ['Total', '', '', '', $sum($a['voids']), '', '', '']),
+            new ReportSheet('Refund', $sub, ['Tanggal', 'Order', 'Nominal (Rp)', 'Alasan', 'Disetujui oleh'],
+                $a['refunds']->map(fn ($r) => [$this->when($r), $r->number, (int) $r->amount, $r->reason, $r->approver ?? '-'])->all(),
+                ['Total', '', $sum($a['refunds']), '', '']),
+            new ReportSheet('Komplimen', $sub, ['Tanggal', 'Order', 'Item', 'Qty', 'Harga jual (Rp)', 'Jenis', 'Alasan', 'Disetujui oleh'],
+                $a['comps']->map(fn ($r) => [$this->when($r), $r->number, $r->item, (int) $r->qty, (int) $r->amount, $r->type === 'staff_meal' ? 'Staff meal' : 'Komplimen', $r->reason, $r->approver ?? '-'])->all(),
+                ['Total', '', '', '', $sum($a['comps']), '', '', '']),
+        ];
+    }
+
+    private function expenseSheet(string $from, string $to, string $range): ReportSheet
+    {
+        $e = app(ReportDelivery::class)->expenses($from, $to);
+
+        return new ReportSheet('Pengeluaran kas', "Periode {$range}", ['Tanggal', 'Sumber', 'Keterangan', 'Dicatat oleh', 'Nominal (Rp)'],
+            array_map(fn ($i) => [CarbonImmutable::parse($i['date'])->translatedFormat('d M Y'), $i['source'], $i['label'], $i['by'] ?? '-', $i['amount']], $e['items']),
+            ['Total', '', '', '', $e['total']]);
     }
 
     /** Group names for the file: a date reads as "Jum, 23 Okt 2026". */

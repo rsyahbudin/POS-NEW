@@ -101,6 +101,23 @@ class SalesReports
         };
     }
 
+    /**
+     * One row per paid or refunded order: when, who, how it was paid and the full money breakdown.
+     *
+     * @return Collection<int, stdClass>
+     */
+    public function transactions(string $from, string $to): Collection
+    {
+        $methods = "(SELECT string_agg(DISTINCT pm.name, ', ') FROM payments p JOIN payment_methods pm ON pm.id = p.payment_method_id WHERE p.order_id = orders.id)";
+        $items = "(SELECT string_agg(oi.qty || 'x ' || oi.name_snapshot, '; ' ORDER BY oi.id) FROM order_items oi WHERE oi.order_id = orders.id AND oi.status IN ('new','preparing','ready'))";
+        $receivers = "(SELECT string_agg(DISTINCT ru.name, ', ') FROM payments p JOIN users ru ON ru.id = p.received_by WHERE p.order_id = orders.id)";
+
+        return $this->paidOrders($from, $to)
+            ->leftJoin('users as opener', 'opener.id', '=', 'orders.opened_by')->leftJoin('tables', 'tables.id', '=', 'orders.table_id')
+            ->selectRaw("orders.number, orders.business_date, orders.closed_at, orders.type, orders.status, tables.name as table_name, orders.customer_name, opener.name as recorder, {$receivers} as receiver, {$methods} as methods, {$items} as items, orders.subtotal, orders.discount_total, orders.charge_total, orders.rounding, orders.grand_total, orders.refunded_total")
+            ->orderBy('orders.business_date')->orderBy('orders.closed_at')->orderBy('orders.id')->get();
+    }
+
     private function itemQuery(string $from, string $to): Builder
     {
         return DB::table('order_items')->join('orders', 'orders.id', '=', 'order_items.order_id')

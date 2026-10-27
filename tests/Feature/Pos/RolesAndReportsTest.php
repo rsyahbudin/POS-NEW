@@ -90,10 +90,10 @@ it('builds styled Excel files with real numbers, totals and a frozen header', fu
     $path = tempnam(sys_get_temp_dir(), 'xl').'.xlsx';
     file_put_contents($path, $res->baseResponse->getFile()->getContent());
     $book = IOFactory::load($path);
-    $sheet = $book->getSheetByName('Penjualan Produk');
+    $sheet = $book->getSheetByName('Per Produk');
 
-    expect($book->getSheetNames())->toBe(['Ringkasan', 'Penjualan Produk'])   // the summary opens first
-        ->and($sheet->getCell('A1')->getValue())->toBe('Penjualan Produk')
+    expect($book->getSheetNames())->toBe(['Ringkasan', 'Per Hari', 'Per Jam', 'Per Produk', 'Per Kategori', 'Per Metode bayar', 'Per Pencatat order', 'Per Penerima pembayaran', 'Per Tipe order', 'Transaksi', 'Diskon', 'Pembatalan', 'Refund', 'Komplimen', 'Pengeluaran kas'])   // one workbook with everything, the summary first
+        ->and($sheet->getCell('A1')->getValue())->toBe('Per Produk')
         ->and($sheet->getCell('A2')->getValue())->toContain('Periode')
         ->and($sheet->getCell('A3')->getValue())->toStartWith('Dicetak')
         ->and($sheet->getCell('A5')->getValue())->toBe('Produk')
@@ -101,8 +101,13 @@ it('builds styled Excel files with real numbers, totals and a frozen header', fu
         ->and($sheet->getStyle('C6')->getNumberFormat()->getFormatCode())->toBe('#,##0')
         ->and($sheet->getCell('A7')->getValue())->toBe('Total')
         ->and($sheet->getFreezePane())->toBe('A6');
+    $trx = $book->getSheetByName('Transaksi');
+    expect($trx->getCell('C5')->getValue())->toBe('No. order')
+        ->and($trx->getCell('C6')->getValue())->toStartWith('ORD')
+        ->and($trx->getCell('O6')->getValue())->toBe(44000)
+        ->and($trx->getCell('A7')->getValue())->toBe('Total');
     $summary = $book->getSheetByName('Ringkasan');
-    expect($summary->getStyle('B6')->getNumberFormat()->getFormatCode())->toBe('#,##0');
+    expect($summary->getStyle('B10')->getNumberFormat()->getFormatCode())->toBe('#,##0');
     @unlink($path);
 
     foreach (['/admin/expenses/export', '/admin/day-close/export', '/admin/accounting/export?report=accounts', '/admin/accounting/export?report=cash_flow'] as $url) {

@@ -13,6 +13,7 @@ use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Ordering\ItemBuilder;
 use App\Domain\Ordering\Models\Order;
 use App\Domain\Ordering\Models\OrderRound;
+use App\Domain\Payment\Online\OnlinePaymentService;
 use App\Domain\Settings\SettingsRepository;
 use App\Support\Audit;
 use App\Support\BusinessDate;
@@ -31,7 +32,13 @@ class SubmitQrOrderAction
         private DailyCounter $counter,
         private SettingsRepository $settings,
         private ConfirmRoundAction $confirm,
+        private OnlinePaymentService $online,
     ) {}
+
+    public static function autoConfirms(SettingsRepository $settings, OnlinePaymentService $online): bool
+    {
+        return (bool) $settings->get('qr.auto_confirm', false) || $online->enabled();
+    }
 
     /** @param  array<string, mixed>  $data */
     public function handle(string $token, array $data): OrderRound
@@ -94,10 +101,11 @@ class SubmitQrOrderAction
             return $round;
         });
 
-        // Optional: skip the cashier. If anything blocks it (e.g. portion stock ran out),
-        // the round simply stays pending for the cashier to handle.
+        // Skip the cashier when the setting says so, and always when guests pay by QRIS from their phone (they pay
+        // first, so there is nothing to vet). If anything blocks it (e.g. portion stock ran out), the round simply
+        // stays pending for the cashier to handle.
         $auto = false;
-        if ((bool) $this->settings->get('qr.auto_confirm', false)) {
+        if (self::autoConfirms($this->settings, $this->online)) {
             try {
                 $this->confirm->handle($round, null);
                 $auto = true;

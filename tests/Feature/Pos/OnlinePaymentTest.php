@@ -2,6 +2,7 @@
 
 use App\Domain\Floor\Models\Table;
 use App\Domain\Notification\Models\AppNotification;
+use App\Domain\Ordering\Actions\SubmitQrOrderAction;
 use App\Domain\Ordering\Enums\OrderStatus;
 use App\Domain\Payment\Models\OnlinePayment;
 use App\Domain\Payment\Models\Payment;
@@ -88,10 +89,11 @@ it('holds a paid code until a shift is open, warns managers, then books it', fun
 });
 
 it('refuses a code while the cashier has not confirmed the guest order', function () {
-    qrisOn();
     openShiftFor(userWithRole('cashier'), 0);
     $table = Table::query()->first();
+    // sent before QRIS was switched on, so it still waits for the cashier
     $this->postJson("/m/{$table->qr_token}/order", ['customer_name' => 'Rani', 'items' => [['product_id' => product('Americano')->id, 'qty' => 1]]])->assertCreated();
+    qrisOn();
     $this->postJson("/m/{$table->qr_token}/pay")->assertUnprocessable();
 });
 
@@ -118,4 +120,17 @@ it('shows the online payments page to permitted roles only and lets a manager re
     qrisOn();
     $this->actingAs(userWithRole('cashier'))->get('/admin/online-payments')->assertForbidden();
     $this->actingAs(userWithRole('manager'))->get('/admin/online-payments')->assertOk()->assertInertia(fn ($p) => $p->component('admin/online-payments')->where('enabled', true));
+});
+
+it('lets a QR order straight into the kitchen when guests can pay by QRIS, and keeps the old flow when they cannot', function () {
+    $token = Table::query()->first()->qr_token;
+    $items = fn () => ['customer_name' => 'Rani', 'items' => [['product_id' => product('Americano')->id, 'qty' => 1]]];
+
+    $manual = app(SubmitQrOrderAction::class)->handle($token, $items());
+    expect($manual->status->value)->toBe('pending');
+
+    qrisOn();
+    $this->getJson("/m/{$token}")->assertOk();
+    $auto = app(SubmitQrOrderAction::class)->handle($token, $items());
+    expect($auto->status->value)->toBe('confirmed');
 });

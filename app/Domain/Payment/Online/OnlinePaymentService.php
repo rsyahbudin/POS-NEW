@@ -8,12 +8,14 @@ use App\Domain\Ordering\Models\Order;
 use App\Domain\Payment\Actions\RecordPaymentAction;
 use App\Domain\Payment\Enums\BillStatus;
 use App\Domain\Payment\Enums\PaymentMethodType;
+use App\Domain\Payment\Events\OnlinePaymentReceived;
 use App\Domain\Payment\Models\Bill;
 use App\Domain\Payment\Models\OnlinePayment;
 use App\Domain\Payment\Models\PaymentMethod;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Shift\Models\Shift;
 use App\Support\Audit;
+use App\Support\Realtime;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -177,8 +179,9 @@ class OnlinePaymentService
         if ($op->status !== 'paid' || $op->applied_at !== null) {
             return;
         }
+        $booked = false;
         try {
-            DB::transaction(function () use ($op) {
+            DB::transaction(function () use ($op, &$booked) {
                 $op = OnlinePayment::query()->lockForUpdate()->findOrFail($op->id);
                 if ($op->applied_at !== null) {
                     return;
@@ -194,9 +197,14 @@ class OnlinePaymentService
 
                 $payment = $this->record->handle($bill, OnlineActor::user(), $method->id, $op->amount, "online-{$op->id}", $op->provider_ref, $shift);
                 $op->update(['payment_id' => $payment->id, 'applied_at' => now(), 'error' => null]);
+                $booked = true;
                 Audit::log('payment.online', $op, ['order' => $op->order->number, 'amount' => $op->amount, 'provider' => $op->provider], OnlineActor::user());
             });
             Notifier::later(fn (Notifier $n) => $n->resolve($op->outlet_id, "online:{$op->id}"));
+            if ($booked) {
+                $order = $op->order()->with('table:id,name')->first();
+                Realtime::dispatch(new OnlinePaymentReceived($op->outlet_id, $op->order_id, $order?->table?->name, $op->amount));
+            }
         } catch (OrderException $e) {
             $op->update(['error' => mb_substr($e->getMessage(), 0, 240)]);
             $this->alert($op, 'QRIS sudah dibayar tetapi belum tercatat');

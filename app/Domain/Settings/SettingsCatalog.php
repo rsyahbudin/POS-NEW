@@ -28,7 +28,7 @@ final class SettingsCatalog
             ['key' => 'qr', 'label' => 'Pesanan QR', 'groups' => [[
                 'title' => 'Alur pesanan dari meja',
                 'fields' => [
-                    ['key' => 'qr.auto_confirm', 'type' => 'bool', 'label' => 'Langsung masuk dapur tanpa konfirmasi kasir', 'hint' => 'Aktif: pesanan QR otomatis diterima dan tiket dapur langsung muncul. Kasir tetap mendapat notifikasi. Jika stok tidak cukup, pesanan tetap menunggu konfirmasi kasir. Nonaktif: kasir harus menekan Konfirmasi dulu (lebih aman dari pesanan iseng).', 'default' => false],
+                    ['key' => 'qr.auto_confirm', 'type' => 'bool', 'label' => 'Langsung masuk dapur tanpa konfirmasi kasir', 'hint' => 'Aktif: pesanan QR otomatis diterima dan tiket dapur langsung muncul. Kasir tetap mendapat notifikasi. Jika stok tidak cukup, pesanan tetap menunggu konfirmasi kasir. Nonaktif: kasir harus menekan Konfirmasi dulu (lebih aman dari pesanan iseng). Bila Bayar QRIS dari HP pelanggan aktif, pesanan selalu langsung masuk karena pelanggan membayar sendiri.', 'default' => false],
                     ['key' => 'qr.confirm_alert_seconds', 'type' => 'int', 'label' => 'Alarm jika belum dikonfirmasi (detik)', 'hint' => 'Hanya berlaku bila konfirmasi kasir diwajibkan. Bunyi dan notifikasi diulang sampai ditangani.', 'default' => 180, 'min' => 30, 'max' => 3600],
                 ],
             ], [

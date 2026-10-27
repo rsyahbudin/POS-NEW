@@ -257,6 +257,7 @@ export default function PosPage(props: Props) {
                     'OrderRoundConfirmed',
                     'OrderItemStatusChanged',
                     'OrderPaid',
+                    'OnlinePaymentReceived',
                     'ProductAvailabilityChanged',
                 ],
             },
@@ -275,6 +276,7 @@ export default function PosPage(props: Props) {
                 status?: string;
                 autoConfirmed?: boolean;
                 roundId?: number;
+                amount?: number;
             };
             void refresh();
 
@@ -288,6 +290,14 @@ export default function PosPage(props: Props) {
                     p.tableName ?? null,
                     p.customerName ?? null,
                     !!p.autoConfirmed,
+                );
+            }
+
+            if (event === 'OnlinePaymentReceived') {
+                sound.beep('order');
+                toast.success(
+                    `${t('Pembayaran QRIS masuk')}: ${p.tableName ?? ''} · ${rupiah(p.amount ?? 0)}`,
+                    { duration: 15000 },
                 );
             }
 

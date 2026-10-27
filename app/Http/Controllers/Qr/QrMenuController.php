@@ -41,7 +41,7 @@ class QrMenuController extends Controller
             'qris' => app(OnlinePaymentService::class)->enabled(),
             'call' => ['enabled' => app(ServiceCalls::class)->enabled(), 'reasons' => ServiceCall::REASONS],
             'kds' => (bool) app(SettingsRepository::class)->get('kitchen.enabled', false),
-            'autoConfirm' => (bool) app(SettingsRepository::class)->get('qr.auto_confirm', false),
+            'autoConfirm' => SubmitQrOrderAction::autoConfirms(app(SettingsRepository::class), app(OnlinePaymentService::class)),
         ]);
     }
 

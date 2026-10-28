@@ -7,8 +7,8 @@ use App\Domain\Inventory\Models\IngredientUnit;
 use App\Domain\Ordering\Exceptions\OrderException;
 
 /**
- * Units are not free text. Every ingredient has one base unit (g, ml or pcs) used by stock and recipes.
- * Quantities may be entered in the base unit, in kg / liter, or in a packaging defined for that ingredient
+ * Every ingredient has one base unit used by stock and recipes. g, ml and pcs are the common ones (with kg / liter
+ * conversions); any other short name (ikat, lembar, porsi ...) may be used too. Quantities may be entered in the base unit, in kg / liter, or in a packaging defined for that ingredient
  * (botol, dus ...) and are converted to the base unit.
  */
 final class Units
@@ -23,6 +23,38 @@ final class Units
     public static function base(?string $value): ?string
     {
         return $value === null ? null : (self::SYNONYMS[mb_strtolower(trim($value))] ?? null);
+    }
+
+    /** A base unit as it is stored: the usual spelling for g / ml / pcs, otherwise the typed name in lower case. */
+    public static function normalize(string $value): string
+    {
+        return self::base($value) ?? mb_strtolower(trim($value));
+    }
+
+    /** A usable base unit name: starts with a letter, at most 12 characters. kg / liter stay conversions of g / ml. */
+    public static function isValidName(string $value): bool
+    {
+        if (in_array(mb_strtolower(trim($value)), ['kg', 'kilo', 'kilogram', 'l', 'lt', 'liter', 'litre'], true)) {
+            return false;
+        }
+
+        return preg_match('/^\p{L}[\p{L}\p{N} .\/-]{0,11}$/u', trim($value)) === 1;
+    }
+
+    /**
+     * Base units to suggest: the usual three plus every unit already used by this outlet's ingredients.
+     *
+     * @return list<array{key: string, label: string}>
+     */
+    public static function suggestions(int $outletId): array
+    {
+        $used = Ingredient::query()->where('outlet_id', $outletId)->distinct()->pluck('unit')->all();
+        $out = [];
+        foreach ([...array_keys(self::BASE), ...$used] as $key) {
+            $out[$key] = ['key' => $key, 'label' => self::BASE[$key] ?? $key];
+        }
+
+        return array_values($out);
     }
 
     /**

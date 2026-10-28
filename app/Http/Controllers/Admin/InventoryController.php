@@ -40,7 +40,7 @@ class InventoryController extends Controller
             'enabled' => $this->inventory->enabled(),
             'suppliers' => Supplier::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('name')->get(['id', 'name'])->all(),
             'wasteReasons' => WasteReason::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('sort')->orderBy('id')->get(['id', 'name'])->all(),
-            'baseUnits' => collect(Units::BASE)->map(fn (string $label, string $key) => ['key' => $key, 'label' => $label])->values()->all(),
+            'baseUnits' => Units::suggestions($id),
             'ingredients' => Ingredient::query()->where('outlet_id', $id)->with('packs')->orderBy('name')->get()->map(fn (Ingredient $i) => [
                 'id' => $i->id, 'name' => $i->name, 'unit' => $i->unit, 'stock' => $i->stock, 'avg_cost' => round($i->avg_cost, 2),
                 'min_stock' => $i->min_stock, 'value' => (int) round(max(0, $i->stock) * $i->avg_cost), 'is_active' => $i->is_active,
@@ -80,10 +80,11 @@ class InventoryController extends Controller
         $outletId = $this->outlet->id();
         $data = $request->validate([
             'name' => ['required', 'string', 'max:80', Rule::unique('ingredients', 'name')->where('outlet_id', $outletId)],
-            'unit' => ['required', Rule::in(array_keys(Units::BASE))], 'min_stock' => 'nullable|numeric|min:0',
+            'unit' => ['required', 'string', 'max:12', fn ($a, $v, $fail) => Units::isValidName((string) $v) ?: $fail('Satuan dasar harus diawali huruf, maksimal 12 karakter, dan bukan kg / liter (pakai g / ml).')], 'min_stock' => 'nullable|numeric|min:0',
             'stock' => 'nullable|numeric|min:0', 'unit_cost' => 'nullable|numeric|min:0',
             'packs' => 'nullable|array|max:6', 'packs.*.name' => 'required|string|max:20', 'packs.*.factor' => 'required|numeric|gt:0',
         ]);
+        $data['unit'] = Units::normalize($data['unit']);
         $ingredient = Ingredient::create([
             'outlet_id' => $outletId, 'name' => $data['name'], 'unit' => $data['unit'], 'min_stock' => $data['min_stock'] ?? 0,
             'avg_cost' => $data['unit_cost'] ?? 0,
@@ -102,9 +103,10 @@ class InventoryController extends Controller
         abort_unless($ingredient->outlet_id === $this->outlet->id(), 404);
         $data = $request->validate([
             'name' => ['required', 'string', 'max:80', Rule::unique('ingredients', 'name')->where('outlet_id', $ingredient->outlet_id)->ignore($ingredient->id)],
-            'unit' => ['required', Rule::in([...array_keys(Units::BASE), $ingredient->unit])], 'min_stock' => 'nullable|numeric|min:0', 'is_active' => 'boolean',
+            'unit' => ['required', 'string', 'max:12', fn ($a, $v, $fail) => Units::isValidName((string) $v) ?: $fail('Satuan dasar harus diawali huruf, maksimal 12 karakter, dan bukan kg / liter (pakai g / ml).')], 'min_stock' => 'nullable|numeric|min:0', 'is_active' => 'boolean',
             'packs' => 'nullable|array|max:6', 'packs.*.name' => 'required|string|max:20', 'packs.*.factor' => 'required|numeric|gt:0',
         ]);
+        $data['unit'] = Units::normalize($data['unit']);
         if ($data['unit'] !== $ingredient->unit && ($ingredient->stock != 0 || $ingredient->movements()->exists() || RecipeLine::query()->where('ingredient_id', $ingredient->id)->exists())) {
             return back()->with('error', 'Satuan dasar tidak bisa diubah setelah bahan punya stok, riwayat, atau resep. Buat bahan baru dengan satuan yang benar.');
         }
@@ -121,7 +123,7 @@ class InventoryController extends Controller
      */
     private function syncPacks(Ingredient $ingredient, array $packs): void
     {
-        $reserved = [...array_keys(Units::BASE), 'kg', 'l', 'liter', 'gram', 'mililiter', 'buah'];
+        $reserved = [...array_keys(Units::BASE), mb_strtolower($ingredient->unit), 'kg', 'l', 'liter', 'gram', 'mililiter', 'buah'];
         $seen = [];
         $rows = [];
         foreach ($packs as $pack) {

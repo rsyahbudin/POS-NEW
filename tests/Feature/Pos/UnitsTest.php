@@ -79,7 +79,10 @@ it('lets staff count in packaging: 3 botol is saved as 2.250 ml', function () {
 
 it('only allows g, ml or pcs as the base unit and guards changing it', function () {
     $manager = userWithRole('manager');
-    $this->actingAs($manager)->post('/admin/inventory/ingredients', ['name' => 'Sirup', 'unit' => 'botol'])->assertSessionHasErrors('unit');
+    $this->actingAs($manager)->post('/admin/inventory/ingredients', ['name' => 'Sirup', 'unit' => '9 botol'])->assertSessionHasErrors('unit');
+    $this->actingAs($manager)->post('/admin/inventory/ingredients', ['name' => 'Daun bawang', 'unit' => ' Ikat '])->assertSessionHasNoErrors();
+    expect(Ingredient::query()->where('name', 'Daun bawang')->value('unit'))->toBe('ikat');
+    $this->actingAs($manager)->get('/admin/inventory')->assertInertia(fn ($p) => $p->where('baseUnits.3.key', 'ikat'));
     $this->actingAs($manager)->post('/admin/inventory/ingredients', ['name' => 'Sirup', 'unit' => 'ml', 'packs' => [['name' => 'botol', 'factor' => 750], ['name' => 'dus', 'factor' => 9000]]])->assertSessionHasNoErrors();
     $sirup = Ingredient::query()->where('name', 'Sirup')->first();
     expect(IngredientUnit::query()->where('ingredient_id', $sirup->id)->count())->toBe(2);

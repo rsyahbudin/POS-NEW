@@ -609,28 +609,25 @@ export default function InventoryPage({
                     <div className="grid grid-cols-2 gap-2">
                         <Field
                             label="Satuan dasar"
-                            hint="Dipakai stok dan resep. Pilih satuan terkecil (sirup = ml)."
+                            hint="Dipakai stok dan resep. Pilih dari daftar atau ketik satuan baru (mis. ikat, lembar). Pakai satuan terkecil (sirup = ml)."
                         >
-                            <Select
+                            <Input
+                                className="h-11"
+                                list="base-units"
+                                maxLength={12}
                                 value={edit.unit}
+                                placeholder="mis. g, ml, pcs, ikat"
                                 onChange={(e) =>
                                     setEdit({ ...edit, unit: e.target.value })
                                 }
-                            >
-                                {[
-                                    ...baseUnits.map((u) => u.key),
-                                    ...(baseUnits.some(
-                                        (u) => u.key === edit.unit,
-                                    )
-                                        ? []
-                                        : [edit.unit]),
-                                ].map((k) => (
-                                    <option key={k} value={k}>
-                                        {baseUnits.find((u) => u.key === k)
-                                            ?.label ?? k}
+                            />
+                            <datalist id="base-units">
+                                {baseUnits.map((u) => (
+                                    <option key={u.key} value={u.key}>
+                                        {u.label}
                                     </option>
                                 ))}
-                            </Select>
+                            </datalist>
                         </Field>
                         <Field label="Batas stok menipis">
                             <Input

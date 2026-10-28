@@ -67,7 +67,7 @@ class IngredientsImporter extends Importer
 
     public function lists(int $outletId): array
     {
-        return ['unit' => array_keys(Units::BASE)];
+        return ['unit' => array_column(Units::suggestions($outletId), 'key')];
     }
 
     public function check(array $rows, ImportContext $ctx): array
@@ -79,7 +79,7 @@ class IngredientsImporter extends Importer
             $c = $row['cells'];
             $name = $c['name'] ?? null;
             $unitRaw = $c['unit'] ?? null;
-            $unit = Units::base($unitRaw);
+            $unit = $unitRaw !== null && Units::isValidName($unitRaw) ? Units::normalize($unitRaw) : null;
             $packName = $c['pack_name'] ?? null;
             $packSize = ImportNumber::parse($c['pack_size'] ?? null);
             $current = $name === null ? null : $existing->get(mb_strtolower($name));
@@ -91,8 +91,8 @@ class IngredientsImporter extends Importer
             $error = match (true) {
                 $name === null => 'Nama bahan kosong.',
                 mb_strlen($name) > 80 => 'Nama bahan terlalu panjang.',
-                $unitRaw === null => 'Satuan kosong. Pilih g, ml, atau pcs.',
-                $unit === null => "Satuan \"{$unitRaw}\" tidak diizinkan. Pakai satuan dasar g (gram), ml (mililiter), atau pcs (buah).",
+                $unitRaw === null => 'Satuan kosong. Isi g, ml, pcs, atau satuan lain (mis. ikat).',
+                $unit === null => "Satuan \"{$unitRaw}\" tidak valid. Mulai dengan huruf, maksimal 12 karakter. kg dan liter bukan satuan dasar: pakai g atau ml.",
                 $current !== null && $current->unit !== $unit => "Satuan dasar {$current->name} tidak bisa diubah dari {$current->unit} ke {$unit} lewat impor.",
                 $packName !== null && (mb_strlen($packName) > 20 || in_array(mb_strtolower($packName), ['g', 'ml', 'pcs', 'kg', 'l', 'liter', 'gram', 'mililiter', 'buah'], true)) => 'Nama kemasan tidak boleh sama dengan satuan dasar dan maksimal 20 huruf.',
                 $packName !== null && ($packSize === null || $packSize <= 0) => 'Isi kemasan harus angka lebih dari 0.',

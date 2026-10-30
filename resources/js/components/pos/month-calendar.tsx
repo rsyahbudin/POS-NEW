@@ -55,7 +55,7 @@ export function MonthCalendar({
                             aria-label={date}
                             aria-pressed={selected === date}
                             className={cn(
-                                'grid min-h-20 content-start gap-0.5 border-r border-b p-1 text-left align-top sm:min-h-24 sm:p-1.5',
+                                'grid min-h-20 min-w-0 content-start gap-0.5 overflow-hidden border-r border-b p-0.5 text-left align-top sm:min-h-24 sm:p-1.5',
                                 (i + 1) % 7 === 0 && 'border-r-0',
                                 selected === date && 'bg-accent',
                                 onSelect && 'enabled:hover:bg-accent/60',

@@ -93,7 +93,7 @@ export default function Mine({
     return (
         <>
             <Head title="Absensi" />
-            <div className="mx-auto grid w-full max-w-4xl gap-5 p-4 md:p-6">
+            <div className="mx-auto grid w-full max-w-4xl grid-cols-1 gap-5 p-4 md:p-6">
                 <StaffingTabs />
                 <PageHeader
                     title="Absensi saya"
@@ -197,8 +197,10 @@ export default function Mine({
                                         key={p.name}
                                         className="truncate text-[10px] leading-tight text-muted-foreground"
                                     >
-                                        {p.name} {short(p.starts_at)}–
-                                        {short(p.ends_at)}
+                                        <span className="hidden sm:inline">
+                                            {p.name}{' '}
+                                        </span>
+                                        {short(p.starts_at)}–{short(p.ends_at)}
                                     </span>
                                 ))}
                                 {recs.map((r) => (

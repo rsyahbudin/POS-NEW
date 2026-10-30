@@ -27,7 +27,7 @@ export default function Faces({
     return (
         <>
             <Head title="Wajah Karyawan" />
-            <div className="mx-auto grid w-full max-w-[900px] gap-5 p-4 md:p-6">
+            <div className="mx-auto grid w-full max-w-[900px] grid-cols-1 gap-5 p-4 md:p-6">
                 <StaffingTabs />
                 <PageHeader
                     title="Wajah karyawan"

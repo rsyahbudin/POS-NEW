@@ -1,6 +1,7 @@
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import { LogIn, LogOut } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { AccountMenu } from '@/components/pos/account-menu';
 import { Button } from '@/components/ui/button';
 import { useSound } from '@/hooks/use-sound';
 import { api } from '@/lib/api';
@@ -299,8 +300,16 @@ export default function Kiosk({
     return (
         <>
             <Head title="Kiosk Absensi" />
-            <div className="mx-auto grid min-h-svh w-full max-w-3xl content-start gap-4 p-4">
-                <h1 className="text-xl font-semibold">Absensi</h1>
+            <div className="mx-auto grid min-h-svh w-full max-w-3xl grid-cols-1 content-start gap-4 p-4">
+                <div className="flex items-center justify-between gap-3">
+                    <h1 className="text-xl font-semibold">Absensi</h1>
+                    <div className="flex items-center gap-2">
+                        <Button asChild variant="ghost" className="h-11">
+                            <Link href="/attendance/mine">Absensi saya</Link>
+                        </Button>
+                        <AccountMenu />
+                    </div>
+                </div>
                 {action ? (
                     <Scanner
                         action={action}

@@ -62,7 +62,7 @@ export default function ExpensesPage({
     return (
         <>
             <Head title="Pengeluaran" />
-            <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
+            <div className="mx-auto grid w-full max-w-[1400px] grid-cols-1 gap-5 p-4 md:p-6">
                 <SpendingTabs />
                 <PageHeader
                     title="Pengeluaran operasional"

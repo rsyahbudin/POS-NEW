@@ -28,7 +28,7 @@ function Tabs({ tabs, path }: { tabs: Tab[]; path: string }) {
     return (
         <nav
             aria-label="Bagian"
-            className="-mx-1 flex gap-1 overflow-x-auto px-1"
+            className="-mx-1 flex [scrollbar-width:none] gap-1 overflow-x-auto px-1 [&::-webkit-scrollbar]:hidden"
         >
             {shown.map((t) => {
                 const active = path === t.href;

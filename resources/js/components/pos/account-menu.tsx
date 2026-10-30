@@ -41,9 +41,13 @@ export function AccountMenu({
           }
         | undefined;
     // The screens that have no sidebar still reach every page this person may use.
-    const pages = [...top, ...sections.flatMap((s) => s.items)].filter(
-        (i) => canSee(who, features, i) && i.href !== page.url.split('?')[0],
-    );
+    const pages = [...top, ...sections.flatMap((s) => s.items)].filter((i) => {
+        const path = page.url.split('?')[0];
+        const here =
+            i.href === path || (i.match ?? []).some((m) => path.startsWith(m));
+
+        return canSee(who, features, i) && !here;
+    });
     const initials = useInitials();
 
     if (!user) {

@@ -49,7 +49,7 @@ export default function Longshift({
     return (
         <>
             <Head title="Longshift" />
-            <div className="mx-auto grid w-full max-w-[1200px] gap-5 p-4 md:p-6">
+            <div className="mx-auto grid w-full max-w-[1200px] grid-cols-1 gap-5 p-4 md:p-6">
                 <StaffingTabs />
                 <PageHeader
                     title="Persetujuan longshift"

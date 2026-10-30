@@ -17,6 +17,9 @@ Schedule::command('horizon:snapshot')->everyFiveMinutes();
 // A shift left open for more than half a day is probably forgotten: tell the managers.
 Schedule::command('shifts:remind-open')->everyThirtyMinutes()->withoutOverlapping();
 
+// Fixed monthly costs: make the month's bills and remind about the ones falling due.
+Schedule::command('fixed-expenses:remind')->dailyAt('08:00')->withoutOverlapping()->onOneServer();
+
 // QRIS online: expire old codes, catch missed webhooks, book payments that waited for an open shift.
 Schedule::command('qris:sweep')->everyMinute()->withoutOverlapping();
 

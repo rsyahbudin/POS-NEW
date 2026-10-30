@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\DayCloseController;
 use App\Http\Controllers\Admin\DiscountController;
 use App\Http\Controllers\Admin\DiscountPresetController;
 use App\Http\Controllers\Admin\ExpenseController;
+use App\Http\Controllers\Admin\FixedExpenseController;
 use App\Http\Controllers\Admin\FloorController;
 use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\MenuController;
@@ -325,6 +326,14 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::get('expenses', [ExpenseController::class, 'index'])->name('expenses');
             Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store');
             Route::get('expenses/export', [ExpenseController::class, 'export'])->name('expenses.export');
+        });
+
+        Route::middleware('permission:manage-fixed-expenses')->group(function () {
+            Route::get('fixed-expenses', [FixedExpenseController::class, 'index'])->name('fixed-expenses');
+            Route::post('fixed-expenses', [FixedExpenseController::class, 'save'])->name('fixed-expenses.store');
+            Route::put('fixed-expenses/{cost}', [FixedExpenseController::class, 'save'])->name('fixed-expenses.update');
+            Route::post('fixed-expense-bills/{bill}/pay', [FixedExpenseController::class, 'pay'])->name('fixed-expenses.pay');
+            Route::post('fixed-expense-bills/{bill}/skip', [FixedExpenseController::class, 'skip'])->name('fixed-expenses.skip');
         });
 
         Route::middleware('permission:view-cash-ledger')->group(function () {

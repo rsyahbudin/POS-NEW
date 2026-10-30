@@ -26,6 +26,7 @@ import {
     UtensilsCrossed,
     Wrench,
     Wallet,
+    CalendarClock,
 } from 'lucide-react';
 import type { NavSection } from '@/components/nav-main';
 import type { NavItem } from '@/types';
@@ -194,6 +195,12 @@ export const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 href: '/shift',
                 icon: Coins,
                 permission: 'manage-shifts-any',
+            },
+            {
+                title: 'Beban Tetap',
+                href: '/admin/fixed-expenses',
+                icon: CalendarClock,
+                permission: 'manage-fixed-expenses',
             },
             {
                 title: 'Laporan Kas Laci',

@@ -24,6 +24,12 @@ final class SettingsCatalog
                     ['key' => 'ui.accent', 'type' => 'select', 'label' => 'Warna aksen aplikasi', 'hint' => 'Warna tombol, menu aktif, dan grafik di semua perangkat. Warna status (meja kosong/terisi, pesanan siap, peringatan) tidak ikut berubah supaya tetap jelas dibaca.', 'default' => 'blue', 'options' => Accent::options()],
                     ['key' => 'discount.cashier_limit_percent', 'type' => 'int', 'label' => 'Batas diskon kasir tanpa PIN (%)', 'hint' => 'Diskon di atas batas ini butuh PIN dari pemegang izin "Diskon di atas batas".', 'default' => 10, 'min' => 0, 'max' => 100],
                 ],
+            ], [
+                'title' => 'Beban tetap bulanan',
+                'fields' => [
+                    ['key' => 'fixed_expense.remind', 'type' => 'bool', 'label' => 'Ingatkan tagihan beban tetap', 'hint' => 'Aktif: setiap pagi (08.00) pemilik dan manager mendapat pengingat di lonceng untuk tagihan gaji, sewa, listrik, dan lainnya yang akan jatuh tempo atau sudah lewat. Pengingat hilang sendiri setelah tagihan dibayar atau dilewati.', 'default' => false],
+                    ['key' => 'fixed_expense.remind_days', 'type' => 'int', 'label' => 'Ingatkan berapa hari sebelum jatuh tempo', 'hint' => 'Hanya berlaku bila pengingat aktif. 0 berarti baru diingatkan pada hari jatuh tempo.', 'default' => 3, 'min' => 0, 'max' => 30],
+                ],
             ]]],
             ['key' => 'qr', 'label' => 'Pesanan QR', 'groups' => [[
                 'title' => 'Alur pesanan dari meja',

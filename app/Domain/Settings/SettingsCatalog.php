@@ -30,6 +30,11 @@ final class SettingsCatalog
                     ['key' => 'fixed_expense.remind', 'type' => 'bool', 'label' => 'Ingatkan tagihan beban tetap', 'hint' => 'Aktif: setiap pagi (08.00) pemilik dan manager mendapat pengingat di lonceng untuk tagihan gaji, sewa, listrik, dan lainnya yang akan jatuh tempo atau sudah lewat. Pengingat hilang sendiri setelah tagihan dibayar atau dilewati.', 'default' => false],
                     ['key' => 'fixed_expense.remind_days', 'type' => 'int', 'label' => 'Ingatkan berapa hari sebelum jatuh tempo', 'hint' => 'Hanya berlaku bila pengingat aktif. 0 berarti baru diingatkan pada hari jatuh tempo.', 'default' => 3, 'min' => 0, 'max' => 30],
                 ],
+            ], [
+                'title' => 'Jadwal kerja karyawan',
+                'fields' => [
+                    ['key' => 'schedule.enabled', 'type' => 'bool', 'label' => 'Pakai jadwal kerja karyawan', 'hint' => 'Aktif: menu Jadwal Kerja muncul. Manager mengatur siapa masuk pada shift apa tiap hari (sampai 3 shift per orang per hari, mis. Pagi dan Malam); karyawan melihat jadwalnya sendiri. Mati: menu dan halamannya ditutup, data jadwal tetap tersimpan.', 'default' => false],
+                ],
             ]]],
             ['key' => 'qr', 'label' => 'Pesanan QR', 'groups' => [[
                 'title' => 'Alur pesanan dari meja',

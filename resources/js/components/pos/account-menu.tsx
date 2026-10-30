@@ -32,7 +32,7 @@ export function AccountMenu({
     } | null;
     const canToday = (who?.permissions ?? []).includes('view-today-summary');
     const features = page.props.features as
-        | { kds: boolean; inventory: boolean }
+        | { kds: boolean; inventory: boolean; schedule: boolean }
         | undefined;
     // The screens that have no sidebar still reach every page this person may use.
     const pages = [...top, ...sections.flatMap((s) => s.items)].filter(

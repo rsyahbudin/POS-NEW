@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureKitchenEnabled;
+use App\Http\Middleware\EnsureScheduleEnabled;
 use App\Http\Middleware\EnsureStaffAccess;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -25,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => RoleOrPermissionMiddleware::class,
             'staff' => EnsureStaffAccess::class,
             'kitchen' => EnsureKitchenEnabled::class,
+            'schedule' => EnsureScheduleEnabled::class,
         ]);
 
         $middleware->validateCsrfTokens(except: ['webhooks/*']);

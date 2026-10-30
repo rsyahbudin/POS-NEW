@@ -20,7 +20,7 @@ export function AppSidebar() {
         roles?: string[];
     } | null;
     const features = usePage().props.features as
-        | { kds: boolean; inventory: boolean }
+        | { kds: boolean; inventory: boolean; schedule: boolean }
         | undefined;
     const show = (i: Item) => canSee(user, features, i);
     const visibleSections = sections

@@ -30,6 +30,8 @@ final class PermissionCatalog
                 'view-own-shift-recap' => ['label' => 'Lihat rekap shift sendiri', 'hint' => 'Rekap shift kasir.'],
                 'view-cash-ledger' => ['label' => 'Lihat laporan kas laci', 'hint' => 'Laporan per shift: modal, penjualan tunai, kas masuk/keluar, belanja tunai per kategori beserta foto nota, selisih, dan setoran. Bisa diunduh Excel/PDF.'],
                 'manage-fixed-expenses' => ['label' => 'Kelola beban tetap bulanan', 'hint' => 'Daftar gaji, sewa, listrik, internet dan tagihan rutin lain; membayar atau melewati tagihan tiap bulan; menerima pengingat jatuh tempo.'],
+                'view-schedule' => ['label' => 'Lihat jadwal kerja', 'hint' => 'Melihat jadwal shift kerja seluruh karyawan dan jadwal sendiri. Hanya tampil bila Jadwal kerja diaktifkan di Pengaturan.'],
+                'manage-schedule' => ['label' => 'Atur jadwal kerja', 'hint' => 'Membuat pola shift, mengisi jadwal mingguan (sampai 3 shift per orang per hari), dan menyalin jadwal minggu lalu.'],
                 'input-expense' => ['label' => 'Input pengeluaran', 'hint' => 'Catat pengeluaran operasional.'],
             ]],
             'report' => ['label' => 'Laporan & akuntansi', 'items' => [

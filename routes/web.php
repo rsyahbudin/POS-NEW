@@ -38,6 +38,7 @@ use App\Http\Controllers\Qr\QrPaymentController;
 use App\Http\Controllers\QrisWebhookController;
 use App\Http\Controllers\Receipt\ReceiptController;
 use App\Http\Controllers\Shift\ShiftController;
+use App\Http\Controllers\Staffing\ScheduleController;
 use App\Http\Controllers\Stock\StockController;
 use App\Http\Controllers\Stock\WasteController;
 use Illuminate\Support\Facades\Route;
@@ -137,6 +138,17 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::post('open', [ShiftController::class, 'open'])->name('open');
             Route::post('movements', [ShiftController::class, 'movement'])->name('movement');
             Route::post('close', [ShiftController::class, 'close'])->name('close');
+        });
+    });
+
+    // Work schedule (optional feature): everyone with the permission sees it, managers plan it.
+    Route::prefix('schedule')->name('schedule.')->middleware(['permission:view-schedule', 'schedule'])->group(function () {
+        Route::get('/', [ScheduleController::class, 'index'])->name('index');
+        Route::middleware('permission:manage-schedule')->group(function () {
+            Route::post('day', [ScheduleController::class, 'setDay'])->name('day');
+            Route::post('copy', [ScheduleController::class, 'copyWeek'])->name('copy');
+            Route::post('types', [ScheduleController::class, 'saveType'])->name('types.store');
+            Route::put('types/{type}', [ScheduleController::class, 'saveType'])->name('types.update');
         });
     });
 

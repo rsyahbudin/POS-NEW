@@ -27,13 +27,14 @@ import {
     Wrench,
     Wallet,
     CalendarClock,
+    CalendarDays,
 } from 'lucide-react';
 import type { NavSection } from '@/components/nav-main';
 import type { NavItem } from '@/types';
 
 export type Item = NavItem & {
     permission?: string | string[];
-    feature?: 'kds' | 'inventory';
+    feature?: 'kds' | 'inventory' | 'schedule';
 };
 
 export const top: Item[] = [
@@ -55,6 +56,13 @@ export const top: Item[] = [
         icon: ChefHat,
         permission: 'update-kitchen-status',
         feature: 'kds',
+    },
+    {
+        title: 'Jadwal Kerja',
+        href: '/schedule',
+        icon: CalendarDays,
+        permission: 'view-schedule',
+        feature: 'schedule',
     },
     {
         title: 'Daftar Stok',
@@ -267,7 +275,9 @@ export const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
 ];
 
 type Who = { permissions?: string[]; roles?: string[] } | null | undefined;
-type Features = { kds: boolean; inventory: boolean } | undefined;
+type Features =
+    | { kds: boolean; inventory: boolean; schedule: boolean }
+    | undefined;
 
 /** Whether this person may see the item: permission and, when the item depends on one, its feature switched on. */
 export function canSee(user: Who, features: Features, i: Item): boolean {

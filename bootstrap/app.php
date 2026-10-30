@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureAttendanceEnabled;
 use App\Http\Middleware\EnsureKitchenEnabled;
 use App\Http\Middleware\EnsureScheduleEnabled;
 use App\Http\Middleware\EnsureStaffAccess;
@@ -27,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'staff' => EnsureStaffAccess::class,
             'kitchen' => EnsureKitchenEnabled::class,
             'schedule' => EnsureScheduleEnabled::class,
+            'attendance' => EnsureAttendanceEnabled::class,
         ]);
 
         $middleware->validateCsrfTokens(except: ['webhooks/*']);

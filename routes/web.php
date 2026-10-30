@@ -38,6 +38,7 @@ use App\Http\Controllers\Qr\QrPaymentController;
 use App\Http\Controllers\QrisWebhookController;
 use App\Http\Controllers\Receipt\ReceiptController;
 use App\Http\Controllers\Shift\ShiftController;
+use App\Http\Controllers\Staffing\AttendanceController;
 use App\Http\Controllers\Staffing\ScheduleController;
 use App\Http\Controllers\Stock\StockController;
 use App\Http\Controllers\Stock\WasteController;
@@ -149,6 +150,25 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::post('copy', [ScheduleController::class, 'copyWeek'])->name('copy');
             Route::post('types', [ScheduleController::class, 'saveType'])->name('types.store');
             Route::put('types/{type}', [ScheduleController::class, 'saveType'])->name('types.update');
+        });
+    });
+
+    // Face attendance (optional feature): a kiosk tablet clocks people in and out; managers enrol faces and correct the log.
+    Route::prefix('attendance')->name('attendance.')->middleware('attendance')->group(function () {
+        Route::middleware('permission:use-attendance-kiosk')->group(function () {
+            Route::get('kiosk', [AttendanceController::class, 'kiosk'])->name('kiosk');
+            Route::post('kiosk/scan', [AttendanceController::class, 'scan'])->middleware('throttle:60,1')->name('scan');
+            Route::post('kiosk/undo', [AttendanceController::class, 'undo'])->name('undo');
+        });
+        Route::middleware('permission:manage-attendance')->group(function () {
+            Route::get('/', [AttendanceController::class, 'index'])->name('index');
+            Route::get('export', [AttendanceController::class, 'export'])->name('export');
+            Route::get('faces', [AttendanceController::class, 'faces'])->name('faces');
+            Route::post('faces/{user}', [AttendanceController::class, 'enroll'])->name('faces.enroll');
+            Route::delete('faces/{user}', [AttendanceController::class, 'forget'])->name('faces.forget');
+            Route::post('records', [AttendanceController::class, 'saveRecord'])->name('records.store');
+            Route::put('records/{attendance}', [AttendanceController::class, 'saveRecord'])->name('records.update');
+            Route::delete('records/{attendance}', [AttendanceController::class, 'deleteRecord'])->name('records.destroy');
         });
     });
 

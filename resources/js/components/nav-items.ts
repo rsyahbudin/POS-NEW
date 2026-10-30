@@ -28,13 +28,15 @@ import {
     Wallet,
     CalendarClock,
     CalendarDays,
+    ScanFace,
+    UserCheck,
 } from 'lucide-react';
 import type { NavSection } from '@/components/nav-main';
 import type { NavItem } from '@/types';
 
 export type Item = NavItem & {
     permission?: string | string[];
-    feature?: 'kds' | 'inventory' | 'schedule';
+    feature?: 'kds' | 'inventory' | 'schedule' | 'attendance';
 };
 
 export const top: Item[] = [
@@ -63,6 +65,13 @@ export const top: Item[] = [
         icon: CalendarDays,
         permission: 'view-schedule',
         feature: 'schedule',
+    },
+    {
+        title: 'Kiosk Absensi',
+        href: '/attendance/kiosk',
+        icon: ScanFace,
+        permission: 'use-attendance-kiosk',
+        feature: 'attendance',
     },
     {
         title: 'Daftar Stok',
@@ -205,6 +214,13 @@ export const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 permission: 'manage-shifts-any',
             },
             {
+                title: 'Absensi',
+                href: '/attendance',
+                icon: UserCheck,
+                permission: 'manage-attendance',
+                feature: 'attendance',
+            },
+            {
                 title: 'Beban Tetap',
                 href: '/admin/fixed-expenses',
                 icon: CalendarClock,
@@ -276,7 +292,12 @@ export const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
 
 type Who = { permissions?: string[]; roles?: string[] } | null | undefined;
 type Features =
-    | { kds: boolean; inventory: boolean; schedule: boolean }
+    | {
+          kds: boolean;
+          inventory: boolean;
+          schedule: boolean;
+          attendance: boolean;
+      }
     | undefined;
 
 /** Whether this person may see the item: permission and, when the item depends on one, its feature switched on. */

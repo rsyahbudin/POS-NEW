@@ -15,7 +15,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'open-close-shift', 'manage-shifts-any', 'update-kitchen-status', 'input-expense',
         'view-sales-reports', 'view-own-shift-recap', 'view-accounting', 'manage-accounting',
         'cancel-order', 'use-print-station', 'view-kitchen-report', 'view-margin-report', 'manage-printers',
-        'view-stock', 'count-stock', 'view-assets', 'manage-assets', 'import-data', 'record-purchase', 'view-activity-log', 'manage-suppliers', 'record-waste', 'view-waste-report', 'manage-online-payments', 'export-receipts', 'mark-sold-out', 'view-today-summary', 'reopen-shift', 'handle-calls', 'view-cash-ledger', 'manage-fixed-expenses', 'view-schedule', 'manage-schedule',
+        'view-stock', 'count-stock', 'view-assets', 'manage-assets', 'import-data', 'record-purchase', 'view-activity-log', 'manage-suppliers', 'record-waste', 'view-waste-report', 'manage-online-payments', 'export-receipts', 'mark-sold-out', 'view-today-summary', 'reopen-shift', 'handle-calls', 'view-cash-ledger', 'manage-fixed-expenses', 'view-schedule', 'manage-schedule', 'manage-attendance', 'use-attendance-kiosk',
         'manage-menu', 'manage-inventory', 'manage-pricing', 'manage-discount-presets', 'manage-users', 'manage-settings', 'manage-tables', 'manage-roles',
     ];
 
@@ -25,9 +25,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'open-close-shift', 'manage-shifts-any', 'update-kitchen-status', 'input-expense',
             'view-sales-reports', 'view-own-shift-recap', 'view-accounting', 'manage-menu', 'manage-inventory', 'manage-tables',
             'cancel-order', 'use-print-station', 'view-kitchen-report', 'view-margin-report',
-            'view-stock', 'count-stock', 'view-assets', 'manage-assets', 'import-data', 'record-purchase', 'view-activity-log', 'manage-suppliers', 'record-waste', 'view-waste-report', 'manage-online-payments', 'export-receipts', 'mark-sold-out', 'view-today-summary', 'reopen-shift', 'handle-calls', 'view-cash-ledger', 'manage-fixed-expenses', 'view-schedule', 'manage-schedule',
+            'view-stock', 'count-stock', 'view-assets', 'manage-assets', 'import-data', 'record-purchase', 'view-activity-log', 'manage-suppliers', 'record-waste', 'view-waste-report', 'manage-online-payments', 'export-receipts', 'mark-sold-out', 'view-today-summary', 'reopen-shift', 'handle-calls', 'view-cash-ledger', 'manage-fixed-expenses', 'view-schedule', 'manage-schedule', 'manage-attendance', 'use-attendance-kiosk',
         ],
-        'cashier' => ['handle-calls', 'view-schedule', 'reopen-shift', 'view-today-summary', 'create-order', 'receive-payment', 'discount-within-limit', 'open-close-shift', 'update-kitchen-status', 'view-own-shift-recap', 'cancel-order', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
+        'cashier' => ['handle-calls', 'use-attendance-kiosk', 'view-schedule', 'reopen-shift', 'view-today-summary', 'create-order', 'receive-payment', 'discount-within-limit', 'open-close-shift', 'update-kitchen-status', 'view-own-shift-recap', 'cancel-order', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
         'waiter' => ['handle-calls', 'view-schedule', 'view-today-summary', 'create-order', 'cancel-order', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
         'kitchen' => ['handle-calls', 'view-schedule', 'view-today-summary', 'update-kitchen-status', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
     ];

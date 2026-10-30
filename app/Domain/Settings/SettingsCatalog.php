@@ -35,6 +35,12 @@ final class SettingsCatalog
                 'fields' => [
                     ['key' => 'schedule.enabled', 'type' => 'bool', 'label' => 'Pakai jadwal kerja karyawan', 'hint' => 'Aktif: menu Jadwal Kerja muncul. Manager mengatur siapa masuk pada shift apa tiap hari (sampai 3 shift per orang per hari, mis. Pagi dan Malam); karyawan melihat jadwalnya sendiri. Mati: menu dan halamannya ditutup, data jadwal tetap tersimpan.', 'default' => false],
                 ],
+            ], [
+                'title' => 'Absensi wajah',
+                'fields' => [
+                    ['key' => 'attendance.enabled', 'type' => 'bool', 'label' => 'Pakai absensi wajah', 'hint' => 'Aktif: menu Absensi, Kiosk Absensi, dan Wajah Karyawan muncul. Karyawan didaftarkan wajahnya sekali (dengan persetujuan), lalu absen masuk dan pulang dengan menghadap kamera tablet di outlet. Yang disimpan hanya deretan angka dari wajah, bukan foto. Mati: semua halaman absensi ditutup, data tetap tersimpan.', 'default' => false],
+                    ['key' => 'attendance.late_grace_minutes', 'type' => 'int', 'label' => 'Toleransi terlambat (menit)', 'hint' => 'Masuk sampai sekian menit setelah jam shift dijadwalkan masih dianggap tepat waktu. Terlambat dihitung dari shift pertama yang dijadwalkan hari itu (butuh Jadwal kerja aktif).', 'default' => 10, 'min' => 0, 'max' => 120],
+                ],
             ]]],
             ['key' => 'qr', 'label' => 'Pesanan QR', 'groups' => [[
                 'title' => 'Alur pesanan dari meja',

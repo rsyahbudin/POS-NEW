@@ -27,6 +27,7 @@ type Result = {
     at?: string;
     attendance_id?: number;
     late?: number | null;
+    stations?: string[];
 };
 
 const STEADY = 3; // consecutive sightings before a scan is sent
@@ -212,6 +213,11 @@ function Scanner({
                     <p className="text-2xl font-semibold">
                         {result.name ?? 'Absensi'}
                     </p>
+                    {!!result.stations?.length && (
+                        <p className="text-sm text-muted-foreground">
+                            Station: {result.stations.join(' + ')}
+                        </p>
+                    )}
                     {result.status === 'in' || result.status === 'out' ? (
                         <>
                             <p className="text-lg">

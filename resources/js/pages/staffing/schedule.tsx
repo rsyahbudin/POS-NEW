@@ -1,6 +1,6 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { ChevronLeft, ChevronRight, Copy, Plus, Settings2 } from 'lucide-react';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Modal } from '@/components/pos/modal';
 import { Field, PageHeader } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ type Person = {
     name: string;
     role: string | null;
     default_position: string;
+    allowed_positions: string[];
     hours: number;
     shifts: Record<string, Entry[]>;
     longshift: Record<string, { hours: number; status: string }>;
@@ -124,6 +125,14 @@ export default function Schedule({
     const go = (w: string) =>
         router.get('/schedule', { week: w }, { preserveState: true });
     const mine = people.find((p) => p.id === me);
+    // One block per station (Kasir, Waiter, Dapur / Bar, MOD); a person sits in the block of their own station only.
+    const groups = [...positions.map((p) => p.key), 'none']
+        .map((key) => ({
+            key,
+            title: key === 'none' ? 'Lainnya' : (label[key] ?? key),
+            people: people.filter((p) => p.default_position === key),
+        }))
+        .filter((g) => g.people.length > 0);
     const firstError = Object.values(errors ?? {})[0];
 
     // Shifts may overlap on purpose (09:00-18:00 and 14:00-23:00): a person on both works 09:00-23:00, overlap counted once.
@@ -191,6 +200,14 @@ export default function Schedule({
                     : e,
             ),
         });
+    };
+    // Only what is beyond the person's own station is written in the cell (the MOD covering Kasir).
+    const extraText = (p: Person, e: Entry) => {
+        const extra = e.positions.filter((x) => x !== p.default_position);
+
+        return extra.length
+            ? `+ ${extra.map((x) => label[x] ?? x).join(' + ')}`
+            : '';
     };
     const posText = (e: Entry) =>
         e.positions.map((p) => label[p] ?? p).join(' + ');
@@ -331,7 +348,7 @@ export default function Schedule({
                             {brush
                                 ? brush.type === 'off'
                                     ? 'Ketuk kotak untuk mengosongkan harinya (libur).'
-                                    : 'Ketuk kotak untuk memasang shift ini. Ketuk lagi untuk melepas. Tombol Sen–Jum dan Semua di kiri nama mengisi satu baris sekaligus.'
+                                    : 'Ketuk kotak untuk memasang shift ini. Ketuk lagi untuk melepas. Tombol Sen–Jum dan Semua di bawah nama mengisi satu baris sekaligus.'
                                 : 'Pilih shift di bawah, lalu ketuk kotak di jadwal. Atau ketuk kotak tanpa memilih untuk mengatur satu hari secara rinci.'}
                         </p>
                         <div className="flex flex-wrap gap-2">
@@ -379,41 +396,6 @@ export default function Schedule({
                                 Libur
                             </Button>
                         </div>
-                        {brush && brush.type !== 'off' && (
-                            <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-xs text-muted-foreground">
-                                    Posisi:
-                                </span>
-                                {[
-                                    {
-                                        key: null as string | null,
-                                        label: 'Sesuai jabatan',
-                                    },
-                                    ...positions,
-                                ].map((p) => (
-                                    <Button
-                                        key={p.key ?? 'auto'}
-                                        type="button"
-                                        size="sm"
-                                        className="h-9"
-                                        aria-pressed={brush.position === p.key}
-                                        variant={
-                                            brush.position === p.key
-                                                ? 'default'
-                                                : 'outline'
-                                        }
-                                        onClick={() =>
-                                            setBrush({
-                                                ...brush,
-                                                position: p.key,
-                                            })
-                                        }
-                                    >
-                                        {p.label}
-                                    </Button>
-                                ))}
-                            </div>
-                        )}
                     </section>
                 )}
 
@@ -468,20 +450,6 @@ export default function Schedule({
                                         className="p-3 align-top font-medium"
                                     >
                                         {dayLabel(d)}
-                                        <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                                            {!coverage[d] && '–'}
-                                            {coverage[d] &&
-                                                positions.map((p) => (
-                                                    <span
-                                                        key={p.key}
-                                                        className={`mr-1 inline-block ${(coverage[d]?.[p.key] ?? 0) === 0 ? 'text-red-700 dark:text-red-400' : ''}`}
-                                                    >
-                                                        {p.label.split(' ')[0]}{' '}
-                                                        {coverage[d]?.[p.key] ??
-                                                            0}
-                                                    </span>
-                                                ))}
-                                        </span>
                                     </th>
                                 ))}
                                 <th className="p-3 text-right font-medium">
@@ -490,181 +458,225 @@ export default function Schedule({
                             </tr>
                         </thead>
                         <tbody>
-                            {people.map((p) => (
-                                <tr
-                                    key={p.id}
-                                    className={`border-b last:border-b-0 ${p.id === me ? 'bg-accent/40' : ''}`}
-                                >
-                                    <td className="sticky left-0 z-10 bg-card p-3 font-medium">
-                                        {p.name}
-                                        {p.role && (
-                                            <span className="block text-xs font-normal text-muted-foreground">
-                                                {p.role}
+                            {groups.map((g) => (
+                                <Fragment key={g.key}>
+                                    <tr className="border-b bg-muted/50">
+                                        <td className="sticky left-0 z-10 bg-muted p-2 pl-3 text-xs font-bold tracking-wide uppercase">
+                                            {g.title}
+                                            <span className="ml-1.5 font-normal text-muted-foreground normal-case">
+                                                {g.people.length} orang
                                             </span>
-                                        )}
-                                        {can.manage && brush && (
-                                            <span className="mt-1 flex flex-wrap gap-1">
-                                                {brush.type === 'off' ? (
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        variant="outline"
-                                                        className="h-8 px-2 text-xs"
-                                                        disabled={saving}
-                                                        onClick={() =>
-                                                            paint(
-                                                                p,
-                                                                days,
-                                                                'clear',
-                                                            )
-                                                        }
-                                                    >
-                                                        Kosongkan
-                                                    </Button>
-                                                ) : (
-                                                    <>
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="outline"
-                                                            className="h-8 px-2 text-xs"
-                                                            disabled={saving}
-                                                            onClick={() =>
-                                                                paint(
-                                                                    p,
-                                                                    days.slice(
-                                                                        0,
-                                                                        5,
-                                                                    ),
-                                                                    'add',
-                                                                )
-                                                            }
-                                                        >
-                                                            Sen–Jum
-                                                        </Button>
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="outline"
-                                                            className="h-8 px-2 text-xs"
-                                                            disabled={saving}
-                                                            onClick={() =>
-                                                                paint(
-                                                                    p,
-                                                                    days,
-                                                                    'add',
-                                                                )
-                                                            }
-                                                        >
-                                                            Semua
-                                                        </Button>
-                                                    </>
-                                                )}
-                                            </span>
-                                        )}
-                                    </td>
-                                    {days.map((d) => {
-                                        const entries = p.shifts[d] ?? [];
-                                        const ls = p.longshift[d];
+                                        </td>
+                                        {days.map((d) => {
+                                            const n = coverage[d]?.[g.key] ?? 0;
 
-                                        return (
-                                            <td
-                                                key={d}
-                                                className="p-1.5 align-top"
-                                            >
-                                                <button
-                                                    type="button"
-                                                    disabled={
-                                                        !can.manage ||
-                                                        active.length === 0
-                                                    }
-                                                    onClick={() =>
-                                                        brush
-                                                            ? paint(
-                                                                  p,
-                                                                  [d],
-                                                                  brush.type ===
-                                                                      'off'
-                                                                      ? 'clear'
-                                                                      : 'toggle',
-                                                              )
-                                                            : setCell({
-                                                                  person: p,
-                                                                  date: d,
-                                                                  entries,
-                                                              })
-                                                    }
-                                                    aria-label={`${p.name}, ${dayLabel(d)}`}
-                                                    className="grid min-h-12 w-full content-start gap-1 rounded-lg p-1 text-left enabled:hover:bg-accent disabled:cursor-default"
+                                            return (
+                                                <td
+                                                    key={d}
+                                                    className={`px-3 py-2 text-xs ${coverage[d] && g.key !== 'none' && n === 0 ? 'font-medium text-red-700 dark:text-red-400' : 'text-muted-foreground'}`}
                                                 >
-                                                    {entries.length === 0 ? (
-                                                        <span className="px-1 text-xs text-muted-foreground">
-                                                            {can.manage
-                                                                ? '+'
-                                                                : '–'}
-                                                        </span>
-                                                    ) : (
-                                                        entries.map((e) => (
-                                                            <span
-                                                                key={e.type_id}
-                                                                className={`rounded-md border px-1.5 py-0.5 text-xs ${tone(e.type_id)}`}
+                                                    {coverage[d] &&
+                                                    g.key !== 'none'
+                                                        ? n === 0
+                                                            ? 'Kosong'
+                                                            : `${n} bertugas`
+                                                        : ''}
+                                                </td>
+                                            );
+                                        })}
+                                        <td />
+                                    </tr>
+                                    {g.people.map((p) => (
+                                        <tr
+                                            key={p.id}
+                                            className={`border-b last:border-b-0 ${p.id === me ? 'bg-accent/40' : ''}`}
+                                        >
+                                            <td className="sticky left-0 z-10 bg-card p-3 font-medium">
+                                                {p.name}
+                                                {can.manage && brush && (
+                                                    <span className="mt-1 flex flex-wrap gap-1">
+                                                        {brush.type ===
+                                                        'off' ? (
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="h-8 px-2 text-xs"
+                                                                disabled={
+                                                                    saving
+                                                                }
+                                                                onClick={() =>
+                                                                    paint(
+                                                                        p,
+                                                                        days,
+                                                                        'clear',
+                                                                    )
+                                                                }
                                                             >
-                                                                {
-                                                                    byId[
-                                                                        e
-                                                                            .type_id
-                                                                    ]?.name
-                                                                }{' '}
-                                                                <span className="opacity-70">
-                                                                    {
-                                                                        byId[
-                                                                            e
-                                                                                .type_id
-                                                                        ]
-                                                                            ?.starts_at
+                                                                Kosongkan
+                                                            </Button>
+                                                        ) : (
+                                                            <>
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="h-8 px-2 text-xs"
+                                                                    disabled={
+                                                                        saving
                                                                     }
-                                                                </span>
-                                                                {posText(e) && (
-                                                                    <span className="block opacity-80">
-                                                                        {posText(
-                                                                            e,
-                                                                        )}
-                                                                    </span>
-                                                                )}
-                                                            </span>
-                                                        ))
-                                                    )}
-                                                    {ls && (
-                                                        <span
-                                                            className={`rounded-md border px-1.5 py-0.5 text-xs font-medium ${
-                                                                ls.status ===
-                                                                'approved'
-                                                                    ? 'border-emerald-600/40 text-emerald-700 dark:text-emerald-400'
-                                                                    : ls.status ===
-                                                                        'rejected'
-                                                                      ? 'border-red-600/40 text-red-700 line-through dark:text-red-400'
-                                                                      : 'border-amber-600/40 text-amber-700 dark:text-amber-400'
-                                                            }`}
-                                                        >
-                                                            Longshift +
-                                                            {ls.hours}j{' '}
-                                                            {ls.status ===
-                                                            'pending'
-                                                                ? '· menunggu MOD'
-                                                                : ls.status ===
-                                                                    'approved'
-                                                                  ? '· disetujui'
-                                                                  : '· ditolak'}
-                                                        </span>
-                                                    )}
-                                                </button>
+                                                                    onClick={() =>
+                                                                        paint(
+                                                                            p,
+                                                                            days.slice(
+                                                                                0,
+                                                                                5,
+                                                                            ),
+                                                                            'add',
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    Sen–Jum
+                                                                </Button>
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="h-8 px-2 text-xs"
+                                                                    disabled={
+                                                                        saving
+                                                                    }
+                                                                    onClick={() =>
+                                                                        paint(
+                                                                            p,
+                                                                            days,
+                                                                            'add',
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    Semua
+                                                                </Button>
+                                                            </>
+                                                        )}
+                                                    </span>
+                                                )}
                                             </td>
-                                        );
-                                    })}
-                                    <td className="p-3 text-right tabular-nums">
-                                        {p.hours}
-                                    </td>
-                                </tr>
+                                            {days.map((d) => {
+                                                const entries =
+                                                    p.shifts[d] ?? [];
+                                                const ls = p.longshift[d];
+
+                                                return (
+                                                    <td
+                                                        key={d}
+                                                        className="p-1.5 align-top"
+                                                    >
+                                                        <button
+                                                            type="button"
+                                                            disabled={
+                                                                !can.manage ||
+                                                                active.length ===
+                                                                    0
+                                                            }
+                                                            onClick={() =>
+                                                                brush
+                                                                    ? paint(
+                                                                          p,
+                                                                          [d],
+                                                                          brush.type ===
+                                                                              'off'
+                                                                              ? 'clear'
+                                                                              : 'toggle',
+                                                                      )
+                                                                    : setCell({
+                                                                          person: p,
+                                                                          date: d,
+                                                                          entries,
+                                                                      })
+                                                            }
+                                                            aria-label={`${p.name}, ${dayLabel(d)}`}
+                                                            className="grid min-h-12 w-full content-start gap-1 rounded-lg p-1 text-left enabled:hover:bg-accent disabled:cursor-default"
+                                                        >
+                                                            {entries.length ===
+                                                            0 ? (
+                                                                <span className="px-1 text-xs text-muted-foreground">
+                                                                    {can.manage
+                                                                        ? '+'
+                                                                        : '–'}
+                                                                </span>
+                                                            ) : (
+                                                                entries.map(
+                                                                    (e) => (
+                                                                        <span
+                                                                            key={
+                                                                                e.type_id
+                                                                            }
+                                                                            className={`rounded-md border px-1.5 py-0.5 text-xs ${tone(e.type_id)}`}
+                                                                        >
+                                                                            {
+                                                                                byId[
+                                                                                    e
+                                                                                        .type_id
+                                                                                ]
+                                                                                    ?.name
+                                                                            }{' '}
+                                                                            <span className="opacity-70">
+                                                                                {
+                                                                                    byId[
+                                                                                        e
+                                                                                            .type_id
+                                                                                    ]
+                                                                                        ?.starts_at
+                                                                                }
+                                                                            </span>
+                                                                            {extraText(
+                                                                                p,
+                                                                                e,
+                                                                            ) && (
+                                                                                <span className="block opacity-80">
+                                                                                    {extraText(
+                                                                                        p,
+                                                                                        e,
+                                                                                    )}
+                                                                                </span>
+                                                                            )}
+                                                                        </span>
+                                                                    ),
+                                                                )
+                                                            )}
+                                                            {ls && (
+                                                                <span
+                                                                    className={`rounded-md border px-1.5 py-0.5 text-xs font-medium ${
+                                                                        ls.status ===
+                                                                        'approved'
+                                                                            ? 'border-emerald-600/40 text-emerald-700 dark:text-emerald-400'
+                                                                            : ls.status ===
+                                                                                'rejected'
+                                                                              ? 'border-red-600/40 text-red-700 line-through dark:text-red-400'
+                                                                              : 'border-amber-600/40 text-amber-700 dark:text-amber-400'
+                                                                    }`}
+                                                                >
+                                                                    Longshift +
+                                                                    {ls.hours}j{' '}
+                                                                    {ls.status ===
+                                                                    'pending'
+                                                                        ? '· menunggu MOD'
+                                                                        : ls.status ===
+                                                                            'approved'
+                                                                          ? '· disetujui'
+                                                                          : '· ditolak'}
+                                                                </span>
+                                                            )}
+                                                        </button>
+                                                    </td>
+                                                );
+                                            })}
+                                            <td className="p-3 text-right tabular-nums">
+                                                {p.hours}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </Fragment>
                             ))}
                         </tbody>
                     </table>
@@ -678,8 +690,10 @@ export default function Schedule({
                     title={`${cell.person.name} · ${dayLabel(cell.date)}`}
                 >
                     <p className="text-sm text-muted-foreground">
-                        Pilih shift (maksimal {max_per_day}) dan posisinya.
-                        Boleh lebih dari satu posisi, mis. Kasir + MOD.
+                        Pilih shift (maksimal {max_per_day}).
+                        {cell.person.allowed_positions.length > 1
+                            ? ' MOD boleh merangkap station lain bila ada yang kosong.'
+                            : ` Station: ${label[cell.person.default_position] ?? 'sesuai jabatan'}.`}{' '}
                         Kosongkan semua untuk libur.
                     </p>
                     <div className="grid gap-2">
@@ -710,36 +724,44 @@ export default function Schedule({
                                             {t.hours} jam
                                         </span>
                                     </label>
-                                    {entry && (
-                                        <div className="flex flex-wrap gap-2">
-                                            {positions.map((p) => (
-                                                <Button
-                                                    key={p.key}
-                                                    type="button"
-                                                    size="sm"
-                                                    className="h-10"
-                                                    aria-pressed={entry.positions.includes(
-                                                        p.key,
-                                                    )}
-                                                    variant={
-                                                        entry.positions.includes(
+                                    {entry &&
+                                        cell.person.allowed_positions.length >
+                                            1 && (
+                                            <div className="flex flex-wrap gap-2">
+                                                {positions
+                                                    .filter((p) =>
+                                                        cell.person.allowed_positions.includes(
                                                             p.key,
-                                                        )
-                                                            ? 'default'
-                                                            : 'outline'
-                                                    }
-                                                    onClick={() =>
-                                                        togglePosition(
-                                                            t.id,
-                                                            p.key,
-                                                        )
-                                                    }
-                                                >
-                                                    {p.label}
-                                                </Button>
-                                            ))}
-                                        </div>
-                                    )}
+                                                        ),
+                                                    )
+                                                    .map((p) => (
+                                                        <Button
+                                                            key={p.key}
+                                                            type="button"
+                                                            size="sm"
+                                                            className="h-10"
+                                                            aria-pressed={entry.positions.includes(
+                                                                p.key,
+                                                            )}
+                                                            variant={
+                                                                entry.positions.includes(
+                                                                    p.key,
+                                                                )
+                                                                    ? 'default'
+                                                                    : 'outline'
+                                                            }
+                                                            onClick={() =>
+                                                                togglePosition(
+                                                                    t.id,
+                                                                    p.key,
+                                                                )
+                                                            }
+                                                        >
+                                                            {p.label}
+                                                        </Button>
+                                                    ))}
+                                            </div>
+                                        )}
                                 </div>
                             );
                         })}

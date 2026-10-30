@@ -67,6 +67,8 @@ class AttendanceController extends Controller
         return response()->json([
             'status' => $result['status'], 'name' => $result['user']->name, 'at' => $at?->toIso8601String(), 'attendance_id' => $a?->id,
             'late' => $result['status'] === 'in' && $a !== null ? $this->service->lateMinutes($a, $this->grace()) : null,
+            // the station(s) the person is scheduled on today, so the kiosk can say "Dapur / Bar" next to the name
+            'stations' => WorkSchedule::query()->where('user_id', $result['user']->id)->whereDate('work_date', now()->toDateString())->pluck('position')->reject(fn ($p) => $p === 'none')->unique()->map(fn ($p) => Positions::ALL[$p] ?? $p)->values()->all(),
         ]);
     }
 

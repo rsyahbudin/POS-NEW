@@ -18,6 +18,19 @@ final class Positions
     }
 
     /**
+     * Stations this person may be scheduled on: their own, or any of them for the MOD (who fills an empty station) and for a
+     * role that has no station of its own.
+     *
+     * @return list<string>
+     */
+    public static function allowedFor(User $user): array
+    {
+        $own = self::defaultFor($user);
+
+        return $own === 'mod' || $own === 'none' ? array_keys(self::ALL) : [$own];
+    }
+
+    /**
      * @param  array<int, mixed>  $values
      * @return list<string>
      */

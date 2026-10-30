@@ -16,10 +16,12 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Audit;
 use App\Support\BusinessDate;
+use App\Support\PermissionCatalog;
 use App\Support\ReportFile;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -68,8 +70,8 @@ class ScheduleController extends Controller
             'week' => $week->toDateString(),
             'days' => collect(range(0, 6))->map(fn (int $i) => $week->addDays($i)->toDateString())->all(),
             'types' => $types->map(fn (WorkShiftType $t) => ['id' => $t->id, 'name' => $t->name, 'starts_at' => substr($t->starts_at, 0, 5), 'ends_at' => substr($t->ends_at, 0, 5), 'is_active' => $t->is_active, 'hours' => round($t->durationMinutes() / 60, 1)])->all(),
-            'people' => User::query()->where('outlet_id', $id)->where('is_active', true)->with('roles:name')->orderBy('name')->get()->map(fn (User $u) => [
-                'id' => $u->id, 'name' => $u->name, 'role' => $u->getRoleNames()->first(), 'default_position' => Positions::defaultFor($u), 'hours' => round(($minutes[$u->id] ?? 0) / 60, 1),
+            'people' => $this->roster($id)->map(fn (User $u) => [
+                'id' => $u->id, 'name' => $u->name, 'role' => $u->getRoleNames()->first(), 'default_position' => Positions::defaultFor($u), 'allowed_positions' => Positions::allowedFor($u), 'hours' => round(($minutes[$u->id] ?? 0) / 60, 1),
                 'shifts' => collect($assign[$u->id] ?? [])->map(fn ($types) => collect($types)->map(fn ($positions, $typeId) => ['type_id' => $typeId, 'positions' => array_values(array_filter($positions, fn ($p) => $p !== 'none'))])->values()->all())->all() ?: (object) [],
                 'longshift' => $flags[$u->id] ?? (object) [],
             ])->all(),
@@ -171,7 +173,23 @@ class ScheduleController extends Controller
 
     private function personOf(int $userId): User
     {
-        return User::query()->where('outlet_id', $this->outlet->id())->whereKey($userId)->first() ?? abort(422);
+        $person = User::query()->where('outlet_id', $this->outlet->id())->whereKey($userId)->first() ?? abort(422);
+        if (PermissionCatalog::shellFor($person) !== 'floor') {
+            throw new OrderException('Owner dan manajemen tidak dijadwalkan shift. Absen mereka tetap dicatat di Absensi.');
+        }
+
+        return $person;
+    }
+
+    /**
+     * Who is scheduled: floor staff (cashier, waiter, kitchen, bar, MOD), never the owner or the back office.
+     *
+     * @return Collection<int, User>
+     */
+    private function roster(int $outletId)
+    {
+        return User::query()->where('outlet_id', $outletId)->where('is_active', true)->with('roles')->orderBy('name')->get()
+            ->filter(fn (User $u) => PermissionCatalog::shellFor($u) === 'floor')->values();
     }
 
     /**
@@ -215,6 +233,9 @@ class ScheduleController extends Controller
             foreach ($entries as $entry) {
                 $positions = Positions::clean($entry['positions'] ?? []) ?: [Positions::defaultFor($person)];
                 foreach ($positions as $position) {
+                    if ($position !== 'none' && ! in_array($position, Positions::allowedFor($person), true)) {
+                        throw new OrderException(Positions::ALL[$position].' bukan station '.$person->name.'. Hanya MOD yang boleh merangkap station lain.');
+                    }
                     WorkSchedule::create(['outlet_id' => $id, 'user_id' => $person->id, 'work_date' => $date->toDateString(), 'work_shift_type_id' => (int) $entry['type_id'], 'position' => $position, 'created_by' => $request->user()?->id]);
                 }
             }
@@ -347,7 +368,7 @@ class ScheduleController extends Controller
         $days = array_map(fn (int $i) => $week->addDays($i), range(0, 6));
         $rows = WorkSchedule::query()->where('outlet_id', $id)->whereBetween('work_date', [$week->toDateString(), $week->addDays(6)->toDateString()])->with('type')->get()->groupBy(fn (WorkSchedule $w) => $w->user_id.'|'.$w->work_date->toDateString());
         $lines = [];
-        foreach (User::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('name')->get() as $person) {
+        foreach ($this->roster($id) as $person) {
             $cells = [];
             $sum = 0.0;
             foreach ($days as $d) {

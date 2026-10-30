@@ -199,13 +199,20 @@ it('fills days quickly: tap toggles a shift, a row fills many days, clear makes 
     $paint(['dates' => array_slice($days, 0, 5), 'mode' => 'add', 'type_id' => $a->id])->assertSessionHas('success', 'Tidak ada yang berubah.');
     expect($rows()->count())->toBe(5);
 
-    // a second shift on top, and a station on the first (Kasir + MOD)
+    // a second shift on top
     $paint(['dates' => [$days[1]], 'mode' => 'toggle', 'type_id' => $b->id])->assertSessionHasNoErrors();
-    $paint(['dates' => [$days[1]], 'mode' => 'toggle', 'type_id' => $a->id, 'position' => 'mod'])->assertSessionHasNoErrors();
-    expect($rows()->whereDate('work_date', $days[1])->orderBy('work_shift_type_id')->pluck('position', 'id')->count())->toBe(3);
-    // tapping the MOD station again takes only that station away
-    $paint(['dates' => [$days[1]], 'mode' => 'toggle', 'type_id' => $a->id, 'position' => 'mod'])->assertSessionHasNoErrors();
-    expect($rows()->whereDate('work_date', $days[1])->where('work_shift_type_id', $a->id)->pluck('position')->all())->toBe(['cashier']);
+    expect($rows()->whereDate('work_date', $days[1])->count())->toBe(2);
+    // a cashier cannot be put on another station
+    $paint(['dates' => [$days[1]], 'mode' => 'toggle', 'type_id' => $a->id, 'position' => 'mod'])->assertSessionHas('error');
+    expect($rows()->whereDate('work_date', $days[1])->count())->toBe(2);
+
+    // the MOD covers an empty station: Kasir + MOD on the same shift, and tapping MOD again takes only that station away
+    $mod = userWithRole('mod');
+    $this->actingAs($manager)->post('/schedule/paint', ['user_id' => $mod->id, 'dates' => [$days[2]], 'mode' => 'toggle', 'type_id' => $a->id])->assertSessionHasNoErrors();
+    $this->actingAs($manager)->post('/schedule/paint', ['user_id' => $mod->id, 'dates' => [$days[2]], 'mode' => 'toggle', 'type_id' => $a->id, 'position' => 'cashier'])->assertSessionHasNoErrors();
+    expect(WorkSchedule::query()->where('user_id', $mod->id)->pluck('position')->sort()->values()->all())->toBe(['cashier', 'mod']);
+    $this->actingAs($manager)->post('/schedule/paint', ['user_id' => $mod->id, 'dates' => [$days[2]], 'mode' => 'toggle', 'type_id' => $a->id, 'position' => 'cashier'])->assertSessionHasNoErrors();
+    expect(WorkSchedule::query()->where('user_id', $mod->id)->pluck('position')->all())->toBe(['mod']);
 
     // clear the week
     $paint(['dates' => $days, 'mode' => 'clear'])->assertSessionHas('success');
@@ -232,4 +239,32 @@ it('saves nothing at all when one of the days may not be changed, and tells the 
     $this->actingAs($manager)->post('/schedule/paint', ['user_id' => $waiter->id, 'dates' => $soon, 'mode' => 'add', 'type_id' => $a->id])->assertSessionHasNoErrors();
     $n = AppNotification::query()->where('kind', 'schedule.changed')->get();
     expect($n)->toHaveCount(1)->and($n[0]->title)->toContain('3 hari');
+});
+
+it('schedules floor staff only, grouped by their own station: no owner, no manager, no foreign station', function () {
+    setting('schedule.enabled', true);
+    $mod = userWithRole('mod');
+    $a = workType('Shift 1', '09:00', '18:00');
+    $day = monday();
+
+    $this->actingAs($mod)->get("/schedule?week={$day}")->assertInertia(fn ($p) => $p->where('people', function ($people) {
+        $by = collect($people)->keyBy('name');
+
+        return $by->keys()->sort()->values()->all() === ['Dapur', 'Kasir', 'MOD', 'Waiter'] && $by['Dapur']['default_position'] === 'kitchen' && $by['Dapur']['allowed_positions'] === ['kitchen']
+            && count($by['MOD']['allowed_positions']) === 4;
+    }));
+
+    foreach (['owner', 'manager'] as $role) {
+        $boss = userWithRole($role);
+        $this->actingAs($mod)->post('/schedule/day', ['user_id' => $boss->id, 'date' => $day, 'entries' => entries([$a->id])])->assertSessionHas('error');
+        $this->actingAs($mod)->post('/schedule/paint', ['user_id' => $boss->id, 'dates' => [$day], 'mode' => 'add', 'type_id' => $a->id])->assertSessionHas('error');
+    }
+    expect(WorkSchedule::query()->count())->toBe(0);
+
+    $kitchen = userWithRole('kitchen');
+    $this->actingAs($mod)->post('/schedule/day', ['user_id' => $kitchen->id, 'date' => $day, 'entries' => [['type_id' => $a->id, 'positions' => ['cashier']]]])->assertSessionHas('error');
+    $this->actingAs($mod)->post('/schedule/day', ['user_id' => $kitchen->id, 'date' => $day, 'entries' => [['type_id' => $a->id]]])->assertSessionHasNoErrors()->assertSessionHas('success');
+    expect(WorkSchedule::query()->where('user_id', $kitchen->id)->pluck('position')->all())->toBe(['kitchen']);
+
+    $this->actingAs($mod)->get("/schedule/export?scope=team&week={$day}&format=xlsx")->assertOk()->assertDownload();
 });

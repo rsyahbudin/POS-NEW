@@ -146,6 +146,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::get('export', [ScheduleController::class, 'export'])->name('export');
         Route::middleware('permission:manage-schedule')->group(function () {
             Route::post('day', [ScheduleController::class, 'setDay'])->name('day');
+            Route::post('paint', [ScheduleController::class, 'paint'])->name('paint');
             Route::post('copy', [ScheduleController::class, 'copyWeek'])->name('copy');
             Route::post('types', [ScheduleController::class, 'saveType'])->name('types.store');
             Route::put('types/{type}', [ScheduleController::class, 'saveType'])->name('types.update');

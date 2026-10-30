@@ -90,6 +90,37 @@ export default function Schedule({
         is_active: boolean;
     } | null>(null);
     const [manageTypes, setManageTypes] = useState(false);
+    // Quick filling: pick a shift (or "Libur"), then tap days. null = off, tapping a day opens the editor instead.
+    const [brush, setBrush] = useState<{
+        type: number | 'off';
+        position: string | null;
+    } | null>(null);
+    const [saving, setSaving] = useState(false);
+    const paint = (
+        person: Person,
+        dates: string[],
+        mode: 'toggle' | 'add' | 'clear',
+    ) => {
+        if (!brush || saving) {
+            return;
+        }
+        router.post(
+            '/schedule/paint',
+            {
+                user_id: person.id,
+                dates,
+                mode,
+                type_id: brush.type === 'off' ? undefined : brush.type,
+                position: brush.position ?? undefined,
+            },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onStart: () => setSaving(true),
+                onFinish: () => setSaving(false),
+            },
+        );
+    };
     const go = (w: string) =>
         router.get('/schedule', { week: w }, { preserveState: true });
     const mine = people.find((p) => p.id === me);
@@ -173,7 +204,7 @@ export default function Schedule({
                     title="Jadwal kerja"
                     subtitle={
                         can.manage
-                            ? `Ketuk kotak untuk mengatur shift dan posisi. Sampai ${max_per_day} shift sehari; lebih dari ${standard_hours} jam sehari = longshift (perlu persetujuan MOD).`
+                            ? `Isi cepat: pilih shift lalu ketuk hari. Lebih dari ${standard_hours} jam sehari = longshift (perlu persetujuan MOD).`
                             : 'Jadwal kerja minggu ini.'
                     }
                     actions={
@@ -268,7 +299,7 @@ export default function Schedule({
                     </Button>
                 </div>
 
-                {active.length > 0 && (
+                {active.length > 0 && !can.manage && (
                     <div className="flex flex-wrap gap-2 text-xs">
                         {active.map((t) => (
                             <span
@@ -279,6 +310,111 @@ export default function Schedule({
                             </span>
                         ))}
                     </div>
+                )}
+
+                {active.length > 0 && can.manage && (
+                    <section className="grid gap-3 rounded-xl border bg-card p-3">
+                        <div className="flex items-baseline justify-between gap-2">
+                            <h2 className="font-semibold">Isi cepat</h2>
+                            {brush && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-9"
+                                    onClick={() => setBrush(null)}
+                                >
+                                    Selesai
+                                </Button>
+                            )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            {brush
+                                ? brush.type === 'off'
+                                    ? 'Ketuk kotak untuk mengosongkan harinya (libur).'
+                                    : 'Ketuk kotak untuk memasang shift ini. Ketuk lagi untuk melepas. Tombol Sen–Jum dan Semua di kiri nama mengisi satu baris sekaligus.'
+                                : 'Pilih shift di bawah, lalu ketuk kotak di jadwal. Atau ketuk kotak tanpa memilih untuk mengatur satu hari secara rinci.'}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                            {active.map((t) => (
+                                <Button
+                                    key={t.id}
+                                    type="button"
+                                    variant="outline"
+                                    aria-pressed={brush?.type === t.id}
+                                    className={`h-auto min-h-11 flex-col items-start gap-0 px-3 py-1.5 text-left ${tone(t.id)} ${brush?.type === t.id ? 'ring-2 ring-primary' : ''}`}
+                                    onClick={() =>
+                                        setBrush(
+                                            brush?.type === t.id
+                                                ? null
+                                                : {
+                                                      type: t.id,
+                                                      position:
+                                                          brush?.position ??
+                                                          null,
+                                                  },
+                                        )
+                                    }
+                                >
+                                    <span className="font-medium">
+                                        {t.name}
+                                    </span>
+                                    <span className="text-xs opacity-80">
+                                        {t.starts_at}–{t.ends_at}
+                                    </span>
+                                </Button>
+                            ))}
+                            <Button
+                                type="button"
+                                variant="outline"
+                                aria-pressed={brush?.type === 'off'}
+                                className={`h-auto min-h-11 px-3 ${brush?.type === 'off' ? 'ring-2 ring-primary' : ''}`}
+                                onClick={() =>
+                                    setBrush(
+                                        brush?.type === 'off'
+                                            ? null
+                                            : { type: 'off', position: null },
+                                    )
+                                }
+                            >
+                                Libur
+                            </Button>
+                        </div>
+                        {brush && brush.type !== 'off' && (
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-xs text-muted-foreground">
+                                    Posisi:
+                                </span>
+                                {[
+                                    {
+                                        key: null as string | null,
+                                        label: 'Sesuai jabatan',
+                                    },
+                                    ...positions,
+                                ].map((p) => (
+                                    <Button
+                                        key={p.key ?? 'auto'}
+                                        type="button"
+                                        size="sm"
+                                        className="h-9"
+                                        aria-pressed={brush.position === p.key}
+                                        variant={
+                                            brush.position === p.key
+                                                ? 'default'
+                                                : 'outline'
+                                        }
+                                        onClick={() =>
+                                            setBrush({
+                                                ...brush,
+                                                position: p.key,
+                                            })
+                                        }
+                                    >
+                                        {p.label}
+                                    </Button>
+                                ))}
+                            </div>
+                        )}
+                    </section>
                 )}
 
                 {active.length === 0 && (
@@ -333,15 +469,18 @@ export default function Schedule({
                                     >
                                         {dayLabel(d)}
                                         <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                                            {positions.map((p) => (
-                                                <span
-                                                    key={p.key}
-                                                    className={`mr-1 inline-block ${(coverage[d]?.[p.key] ?? 0) === 0 ? 'text-red-700 dark:text-red-400' : ''}`}
-                                                >
-                                                    {p.label.split(' ')[0]}{' '}
-                                                    {coverage[d]?.[p.key] ?? 0}
-                                                </span>
-                                            ))}
+                                            {!coverage[d] && '–'}
+                                            {coverage[d] &&
+                                                positions.map((p) => (
+                                                    <span
+                                                        key={p.key}
+                                                        className={`mr-1 inline-block ${(coverage[d]?.[p.key] ?? 0) === 0 ? 'text-red-700 dark:text-red-400' : ''}`}
+                                                    >
+                                                        {p.label.split(' ')[0]}{' '}
+                                                        {coverage[d]?.[p.key] ??
+                                                            0}
+                                                    </span>
+                                                ))}
                                         </span>
                                     </th>
                                 ))}
@@ -363,6 +502,66 @@ export default function Schedule({
                                                 {p.role}
                                             </span>
                                         )}
+                                        {can.manage && brush && (
+                                            <span className="mt-1 flex flex-wrap gap-1">
+                                                {brush.type === 'off' ? (
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="h-8 px-2 text-xs"
+                                                        disabled={saving}
+                                                        onClick={() =>
+                                                            paint(
+                                                                p,
+                                                                days,
+                                                                'clear',
+                                                            )
+                                                        }
+                                                    >
+                                                        Kosongkan
+                                                    </Button>
+                                                ) : (
+                                                    <>
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-8 px-2 text-xs"
+                                                            disabled={saving}
+                                                            onClick={() =>
+                                                                paint(
+                                                                    p,
+                                                                    days.slice(
+                                                                        0,
+                                                                        5,
+                                                                    ),
+                                                                    'add',
+                                                                )
+                                                            }
+                                                        >
+                                                            Sen–Jum
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-8 px-2 text-xs"
+                                                            disabled={saving}
+                                                            onClick={() =>
+                                                                paint(
+                                                                    p,
+                                                                    days,
+                                                                    'add',
+                                                                )
+                                                            }
+                                                        >
+                                                            Semua
+                                                        </Button>
+                                                    </>
+                                                )}
+                                            </span>
+                                        )}
                                     </td>
                                     {days.map((d) => {
                                         const entries = p.shifts[d] ?? [];
@@ -380,11 +579,20 @@ export default function Schedule({
                                                         active.length === 0
                                                     }
                                                     onClick={() =>
-                                                        setCell({
-                                                            person: p,
-                                                            date: d,
-                                                            entries,
-                                                        })
+                                                        brush
+                                                            ? paint(
+                                                                  p,
+                                                                  [d],
+                                                                  brush.type ===
+                                                                      'off'
+                                                                      ? 'clear'
+                                                                      : 'toggle',
+                                                              )
+                                                            : setCell({
+                                                                  person: p,
+                                                                  date: d,
+                                                                  entries,
+                                                              })
                                                     }
                                                     aria-label={`${p.name}, ${dayLabel(d)}`}
                                                     className="grid min-h-12 w-full content-start gap-1 rounded-lg p-1 text-left enabled:hover:bg-accent disabled:cursor-default"
@@ -471,9 +679,8 @@ export default function Schedule({
                 >
                     <p className="text-sm text-muted-foreground">
                         Pilih shift (maksimal {max_per_day}) dan posisinya.
-                        Shift boleh saling tumpang tindih; jam yang berimpit
-                        dihitung sekali. Satu orang boleh memegang beberapa
-                        posisi, mis. Kasir + MOD. Kosongkan semua untuk libur.
+                        Boleh lebih dari satu posisi, mis. Kasir + MOD.
+                        Kosongkan semua untuk libur.
                     </p>
                     <div className="grid gap-2">
                         {active.map((t) => {

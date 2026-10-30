@@ -88,38 +88,148 @@ class ScheduleController extends Controller
      */
     public function setDay(Request $request): RedirectResponse
     {
-        $id = $this->outlet->id();
         $data = $request->validate([
             'user_id' => 'required|integer', 'date' => 'required|date',
             'entries' => 'present|array|max:'.self::MAX_PER_DAY, 'entries.*.type_id' => 'required|integer|distinct',
             'entries.*.positions' => 'nullable|array|max:'.count(Positions::ALL), 'entries.*.positions.*' => 'string',
         ]);
-        $person = User::query()->where('outlet_id', $id)->whereKey((int) $data['user_id'])->first() ?? abort(422);
-        $types = WorkShiftType::query()->where('outlet_id', $id)->where('is_active', true)->whereIn('id', array_column($data['entries'], 'type_id'))->get()->keyBy('id');
-        if ($types->count() !== count($data['entries'])) {
-            throw new OrderException('Ada shift yang tidak dikenal atau sudah nonaktif.');
-        }
-
+        $person = $this->personOf((int) $data['user_id']);
         $date = CarbonImmutable::parse($data['date']);
-        $this->assertMayEdit($request, $date);
-        $before = $this->describeDay($person->id, $date);
-        DB::transaction(function () use ($id, $data, $person, $date, $request) {
-            WorkSchedule::query()->where('outlet_id', $id)->where('user_id', $person->id)->whereDate('work_date', $date)->delete();
-            foreach ($data['entries'] as $entry) {
-                $positions = Positions::clean($entry['positions'] ?? []) ?: [Positions::defaultFor($person)];
-                foreach ($positions as $position) {
-                    WorkSchedule::create(['outlet_id' => $id, 'user_id' => $person->id, 'work_date' => $date->toDateString(), 'work_shift_type_id' => $entry['type_id'], 'position' => $position, 'created_by' => $request->user()?->id]);
-                }
-            }
-            Audit::log('schedule.day_set', null, ['user_id' => $person->id, 'date' => $date->toDateString(), 'shifts' => count($data['entries'])], $request->user());
-            $this->longshift->syncSchedule($id, $person->id, $date, $request->user());
-        });
-        $after = $this->describeDay($person->id, $date);
-        if ($before !== $after && $person->id !== $request->user()?->id && ! $date->isBefore(CarbonImmutable::today())) {
-            $this->tell($id, $person->id, "Jadwalmu {$date->translatedFormat('D, d M')} diubah", "Sebelumnya: {$before}. Sekarang: {$after}.");
-        }
+        [$before, $after] = $this->saveDay($request, $person, $date, $data['entries']);
+        $this->notifyDay($request, $person, $date, $before, $after);
 
         return back()->with('success', 'Jadwal disimpan.');
+    }
+
+    /**
+     * Quick filling: tap a day with a shift "brush", or fill many days at once. toggle = add the shift, or take it (or one
+     * station of it) away when it is already there; add = only add; clear = day off. All days are saved together or not at all.
+     */
+    public function paint(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'user_id' => 'required|integer', 'dates' => 'required|array|min:1|max:31', 'dates.*' => 'date', 'mode' => 'required|in:toggle,add,clear',
+            'type_id' => 'nullable|integer', 'position' => 'nullable|string',
+        ]);
+        if ($data['mode'] !== 'clear' && empty($data['type_id'])) {
+            throw new OrderException('Pilih shift dulu.');
+        }
+        $position = $data['position'] ?? null;
+        if ($position !== null && ! isset(Positions::ALL[$position])) {
+            throw new OrderException('Posisi tidak dikenal.');
+        }
+        $person = $this->personOf((int) $data['user_id']);
+        $typeId = (int) ($data['type_id'] ?? 0);
+
+        $changed = [];
+        DB::transaction(function () use ($request, $person, $data, $typeId, $position, &$changed) {
+            foreach (array_unique($data['dates']) as $day) {
+                $date = CarbonImmutable::parse($day);
+                $now = $this->entriesOf($person->id, $date);
+                $next = $now;
+                if ($data['mode'] === 'clear') {
+                    $next = [];
+                } elseif (isset($next[$typeId])) {
+                    if ($data['mode'] === 'toggle') {
+                        if ($position === null || in_array($position, $next[$typeId], true)) {
+                            $next[$typeId] = $position === null ? [] : array_values(array_diff($next[$typeId], [$position]));
+                            if ($position === null || $next[$typeId] === []) {
+                                unset($next[$typeId]);
+                            }
+                        } else {
+                            $next[$typeId][] = $position;
+                        }
+                    } elseif ($position !== null && ! in_array($position, $next[$typeId], true)) {
+                        $next[$typeId][] = $position;
+                    }
+                } else {
+                    $next[$typeId] = $position === null ? [] : [$position];
+                }
+                if ($next == $now) {
+                    continue;
+                }
+                $entries = [];
+                foreach ($next as $tid => $positions) {
+                    $entries[] = ['type_id' => $tid, 'positions' => $positions];
+                }
+                [$before, $after] = $this->saveDay($request, $person, $date, $entries);
+                $changed[] = [$date, $before, $after];
+            }
+        });
+
+        $future = array_values(array_filter($changed, fn (array $c) => ! $c[0]->isBefore(CarbonImmutable::today())));
+        if ($future !== [] && $person->id !== $request->user()?->id) {
+            if (count($future) === 1) {
+                $this->notifyDay($request, $person, $future[0][0], $future[0][1], $future[0][2]);
+            } else {
+                $this->tell($this->outlet->id(), $person->id, 'Jadwalmu diubah ('.count($future).' hari)', 'Ada perubahan jadwal mulai '.$future[0][0]->translatedFormat('d M').'. Lihat di menu Absensi › Jadwal.');
+            }
+        }
+
+        return back()->with('success', $changed === [] ? 'Tidak ada yang berubah.' : count($changed).' hari disimpan.');
+    }
+
+    private function personOf(int $userId): User
+    {
+        return User::query()->where('outlet_id', $this->outlet->id())->whereKey($userId)->first() ?? abort(422);
+    }
+
+    /**
+     * What a person has on a day: shift type id => stations (the default of their role is a station like any other).
+     *
+     * @return array<int, list<string>>
+     */
+    private function entriesOf(int $userId, CarbonImmutable $date): array
+    {
+        $out = [];
+        foreach (WorkSchedule::query()->where('user_id', $userId)->whereDate('work_date', $date)->orderBy('id')->get() as $row) {
+            $out[$row->work_shift_type_id] ??= [];
+            if ($row->position !== 'none') {
+                $out[$row->work_shift_type_id][] = $row->position;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * The one place a day is written: checks, replaces the rows, rechecks longshift. Returns the day before and after as text.
+     *
+     * @param  array<int, array{type_id: int|string, positions?: array<int, mixed>|null}>  $entries
+     * @return array{0: string, 1: string}
+     */
+    private function saveDay(Request $request, User $person, CarbonImmutable $date, array $entries): array
+    {
+        $id = $this->outlet->id();
+        if (count($entries) > self::MAX_PER_DAY) {
+            throw new OrderException('Maksimal '.self::MAX_PER_DAY.' shift per orang per hari.');
+        }
+        $ids = array_map(fn (array $e) => (int) $e['type_id'], $entries);
+        if (WorkShiftType::query()->where('outlet_id', $id)->where('is_active', true)->whereIn('id', $ids)->count() !== count($ids)) {
+            throw new OrderException('Ada shift yang tidak dikenal atau sudah nonaktif.');
+        }
+        $this->assertMayEdit($request, $date);
+        $before = $this->describeDay($person->id, $date);
+        DB::transaction(function () use ($id, $entries, $person, $date, $request) {
+            WorkSchedule::query()->where('outlet_id', $id)->where('user_id', $person->id)->whereDate('work_date', $date)->delete();
+            foreach ($entries as $entry) {
+                $positions = Positions::clean($entry['positions'] ?? []) ?: [Positions::defaultFor($person)];
+                foreach ($positions as $position) {
+                    WorkSchedule::create(['outlet_id' => $id, 'user_id' => $person->id, 'work_date' => $date->toDateString(), 'work_shift_type_id' => (int) $entry['type_id'], 'position' => $position, 'created_by' => $request->user()?->id]);
+                }
+            }
+            Audit::log('schedule.day_set', null, ['user_id' => $person->id, 'date' => $date->toDateString(), 'shifts' => count($entries)], $request->user());
+            $this->longshift->syncSchedule($id, $person->id, $date, $request->user());
+        });
+
+        return [$before, $this->describeDay($person->id, $date)];
+    }
+
+    private function notifyDay(Request $request, User $person, CarbonImmutable $date, string $before, string $after): void
+    {
+        if ($before !== $after && $person->id !== $request->user()?->id && ! $date->isBefore(CarbonImmutable::today())) {
+            $this->tell($this->outlet->id(), $person->id, "Jadwalmu {$date->translatedFormat('D, d M')} diubah", "Sebelumnya: {$before}. Sekarang: {$after}.");
+        }
     }
 
     /** Copies the schedule of the week before onto this week, keeping what is already planned. */

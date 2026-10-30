@@ -176,3 +176,60 @@ it('lets everyone download the team week and their own month as PDF or Excel', f
     $this->actingAs($waiter)->get('/schedule/export?scope=other')->assertSessionHasErrors('scope');
     $this->actingAs(userWithRole('cashier'))->get('/schedule/export?scope=mine&month='.now()->format('Y-m').'&format=xlsx')->assertOk();
 });
+
+it('fills days quickly: tap toggles a shift, a row fills many days, clear makes days off, all saved together', function () {
+    setting('schedule.enabled', true);
+    $manager = userWithRole('manager');
+    $cashier = userWithRole('cashier');
+    $a = workType('Shift 1', '09:00', '18:00');
+    $b = workType('Shift 2', '14:00', '23:00');
+    $days = collect(range(0, 6))->map(fn (int $i) => now()->startOfWeek()->addWeek()->addDays($i)->toDateString())->all();
+    $paint = fn (array $body) => $this->actingAs($manager)->post('/schedule/paint', ['user_id' => $cashier->id] + $body);
+    $rows = fn () => WorkSchedule::query()->where('user_id', $cashier->id);
+
+    // a tap adds the shift with the person's own station, the next tap on the same shift takes it away
+    $paint(['dates' => [$days[0]], 'mode' => 'toggle', 'type_id' => $a->id])->assertSessionHasNoErrors()->assertSessionHas('success', '1 hari disimpan.');
+    expect($rows()->count())->toBe(1)->and($rows()->value('position'))->toBe('cashier');
+    $paint(['dates' => [$days[0]], 'mode' => 'toggle', 'type_id' => $a->id])->assertSessionHas('success');
+    expect($rows()->count())->toBe(0);
+
+    // a row: Monday to Friday, then the same again changes nothing
+    $paint(['dates' => array_slice($days, 0, 5), 'mode' => 'add', 'type_id' => $a->id])->assertSessionHas('success', '5 hari disimpan.');
+    expect($rows()->count())->toBe(5);
+    $paint(['dates' => array_slice($days, 0, 5), 'mode' => 'add', 'type_id' => $a->id])->assertSessionHas('success', 'Tidak ada yang berubah.');
+    expect($rows()->count())->toBe(5);
+
+    // a second shift on top, and a station on the first (Kasir + MOD)
+    $paint(['dates' => [$days[1]], 'mode' => 'toggle', 'type_id' => $b->id])->assertSessionHasNoErrors();
+    $paint(['dates' => [$days[1]], 'mode' => 'toggle', 'type_id' => $a->id, 'position' => 'mod'])->assertSessionHasNoErrors();
+    expect($rows()->whereDate('work_date', $days[1])->orderBy('work_shift_type_id')->pluck('position', 'id')->count())->toBe(3);
+    // tapping the MOD station again takes only that station away
+    $paint(['dates' => [$days[1]], 'mode' => 'toggle', 'type_id' => $a->id, 'position' => 'mod'])->assertSessionHasNoErrors();
+    expect($rows()->whereDate('work_date', $days[1])->where('work_shift_type_id', $a->id)->pluck('position')->all())->toBe(['cashier']);
+
+    // clear the week
+    $paint(['dates' => $days, 'mode' => 'clear'])->assertSessionHas('success');
+    expect($rows()->count())->toBe(0);
+
+    // invalid: no shift chosen, unknown station, too many days
+    $paint(['dates' => [$days[0]], 'mode' => 'add'])->assertSessionHas('error');
+    $paint(['dates' => [$days[0]], 'mode' => 'add', 'type_id' => $a->id, 'position' => 'ceo'])->assertSessionHas('error');
+    $this->actingAs($manager)->post('/schedule/paint', ['user_id' => $cashier->id, 'dates' => [], 'mode' => 'clear'])->assertSessionHasErrors('dates');
+    $this->actingAs(userWithRole('waiter'))->post('/schedule/paint', ['user_id' => $cashier->id, 'dates' => [$days[0]], 'mode' => 'clear'])->assertForbidden();
+});
+
+it('saves nothing at all when one of the days may not be changed, and tells the worker once for a whole row', function () {
+    setting('schedule.enabled', true);
+    $manager = userWithRole('manager');
+    $waiter = userWithRole('waiter');
+    $a = workType('Shift 1', '09:00', '18:00');
+    $past = now()->subDay()->toDateString();
+    $soon = [now()->addDays(2)->toDateString(), now()->addDays(3)->toDateString(), now()->addDays(4)->toDateString()];
+
+    $this->actingAs($manager)->post('/schedule/paint', ['user_id' => $waiter->id, 'dates' => [$soon[0], $past], 'mode' => 'add', 'type_id' => $a->id])->assertSessionHas('error');
+    expect(WorkSchedule::query()->count())->toBe(0);                        // the future day was rolled back too
+
+    $this->actingAs($manager)->post('/schedule/paint', ['user_id' => $waiter->id, 'dates' => $soon, 'mode' => 'add', 'type_id' => $a->id])->assertSessionHasNoErrors();
+    $n = AppNotification::query()->where('kind', 'schedule.changed')->get();
+    expect($n)->toHaveCount(1)->and($n[0]->title)->toContain('3 hari');
+});

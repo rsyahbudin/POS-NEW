@@ -6,7 +6,6 @@ use App\Domain\Notification\Notifier;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Settings\OutletContext;
 use App\Domain\Staffing\LongshiftService;
-use App\Domain\Staffing\Models\LongshiftApproval;
 use App\Domain\Staffing\Models\WorkSchedule;
 use App\Domain\Staffing\Models\WorkShiftType;
 use App\Domain\Staffing\Positions;
@@ -62,9 +61,6 @@ class ScheduleController extends Controller
                 $minutes[$userId] = ($minutes[$userId] ?? 0) + ShiftHours::unionMinutes(array_filter(array_map(fn ($tid) => $typeById[$tid] ?? null, array_keys($typeIds))));
             }
         }
-        $flags = LongshiftApproval::query()->where('outlet_id', $id)->where('source', 'schedule')->whereBetween('work_date', [$week->toDateString(), $end->toDateString()])->get()
-            ->mapToGroups(fn (LongshiftApproval $a) => [$a->user_id => [$a->work_date->toDateString() => ['hours' => $a->hours, 'status' => $a->status]]])
-            ->map(fn ($g) => $g->collapse());
 
         return Inertia::render('staffing/schedule', [
             'week' => $week->toDateString(),
@@ -73,7 +69,6 @@ class ScheduleController extends Controller
             'people' => $this->roster($id)->map(fn (User $u) => [
                 'id' => $u->id, 'name' => $u->name, 'role' => $u->getRoleNames()->first(), 'default_position' => Positions::defaultFor($u), 'allowed_positions' => Positions::allowedFor($u), 'hours' => round(($minutes[$u->id] ?? 0) / 60, 1),
                 'shifts' => collect($assign[$u->id] ?? [])->map(fn ($types) => collect($types)->map(fn ($positions, $typeId) => ['type_id' => $typeId, 'positions' => array_values(array_filter($positions, fn ($p) => $p !== 'none'))])->values()->all())->all() ?: (object) [],
-                'longshift' => $flags[$u->id] ?? (object) [],
             ])->all(),
             'coverage' => collect($coverage)->map(fn ($c) => collect($c)->map(fn ($u) => count($u))->all())->all() ?: (object) [],
             'positions' => collect(Positions::ALL)->map(fn ($label, $key) => ['key' => $key, 'label' => $label])->values()->all(),
@@ -240,7 +235,8 @@ class ScheduleController extends Controller
                 }
             }
             Audit::log('schedule.day_set', null, ['user_id' => $person->id, 'date' => $date->toDateString(), 'shifts' => count($entries)], $request->user());
-            $this->longshift->syncSchedule($id, $person->id, $date, $request->user());
+            // a corrected past day changes what was worked beyond the plan
+            $this->longshift->syncAttendanceDay($id, $person->id, $date);
         });
 
         return [$before, $this->describeDay($person->id, $date)];
@@ -282,9 +278,6 @@ class ScheduleController extends Controller
                 $touched[$row->user_id.'|'.$date] = [$row->user_id, $date];
                 $added++;
             }
-            foreach ($touched as [$userId, $date]) {
-                $this->longshift->syncSchedule($id, $userId, CarbonImmutable::parse($date), $request->user());
-            }
         });
         $perUser = [];
         foreach ($touched as [$userId]) {
@@ -322,12 +315,8 @@ class ScheduleController extends Controller
         }
         $type->update($data);
         if ($timesChanged) {
-            // planned days from today on follow the new hours: recheck their longshift and tell the people
+            // planned days from today on follow the new hours: tell the people
             $rows = WorkSchedule::query()->where('work_shift_type_id', $type->id)->whereDate('work_date', '>=', now()->toDateString())->get();
-            foreach ($rows->groupBy(fn (WorkSchedule $w) => $w->user_id.'|'.$w->work_date->toDateString()) as $group) {
-                $first = $group->firstOrFail();
-                $this->longshift->syncSchedule($id, $first->user_id, $first->work_date, $request->user());
-            }
             foreach ($rows->pluck('user_id')->unique() as $userId) {
                 $this->tell($id, (int) $userId, "Jam shift {$type->name} diubah", "Sekarang {$data['starts_at']}–{$data['ends_at']}. Jadwalmu yang memakai shift ini ikut berubah.");
             }

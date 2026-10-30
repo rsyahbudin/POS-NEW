@@ -24,7 +24,6 @@ type Person = {
     allowed_positions: string[];
     hours: number;
     shifts: Record<string, Entry[]>;
-    longshift: Record<string, { hours: number; status: string }>;
 };
 type Props = {
     week: string;
@@ -69,7 +68,6 @@ export default function Schedule({
     people,
     coverage,
     positions,
-    standard_hours,
     me,
     can,
     max_per_day,
@@ -166,7 +164,6 @@ export default function Schedule({
 
         return Math.round((total / 60) * 10) / 10;
     })();
-    const extra = Math.max(0, Math.floor(cellHours - standard_hours));
     const toggleType = (id: number) => {
         if (!cell) {
             return;
@@ -221,7 +218,7 @@ export default function Schedule({
                     title="Jadwal kerja"
                     subtitle={
                         can.manage
-                            ? `Isi cepat: pilih shift lalu ketuk hari. Lebih dari ${standard_hours} jam sehari = longshift (perlu persetujuan MOD).`
+                            ? `Isi cepat: pilih shift lalu ketuk hari. Satu orang boleh sampai ${max_per_day} shift sehari.`
                             : 'Jadwal kerja minggu ini.'
                     }
                     actions={
@@ -564,7 +561,6 @@ export default function Schedule({
                                             {days.map((d) => {
                                                 const entries =
                                                     p.shifts[d] ?? [];
-                                                const ls = p.longshift[d];
 
                                                 return (
                                                     <td
@@ -643,29 +639,6 @@ export default function Schedule({
                                                                         </span>
                                                                     ),
                                                                 )
-                                                            )}
-                                                            {ls && (
-                                                                <span
-                                                                    className={`rounded-md border px-1.5 py-0.5 text-xs font-medium ${
-                                                                        ls.status ===
-                                                                        'approved'
-                                                                            ? 'border-emerald-600/40 text-emerald-700 dark:text-emerald-400'
-                                                                            : ls.status ===
-                                                                                'rejected'
-                                                                              ? 'border-red-600/40 text-red-700 line-through dark:text-red-400'
-                                                                              : 'border-amber-600/40 text-amber-700 dark:text-amber-400'
-                                                                    }`}
-                                                                >
-                                                                    Longshift +
-                                                                    {ls.hours}j{' '}
-                                                                    {ls.status ===
-                                                                    'pending'
-                                                                        ? '· menunggu MOD'
-                                                                        : ls.status ===
-                                                                            'approved'
-                                                                          ? '· disetujui'
-                                                                          : '· ditolak'}
-                                                                </span>
                                                             )}
                                                         </button>
                                                     </td>
@@ -766,14 +739,11 @@ export default function Schedule({
                             );
                         })}
                     </div>
-                    <p
-                        className={`text-sm ${extra > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}`}
-                    >
-                        Total {cellHours} jam.
-                        {extra > 0 &&
-                            (can.approve
-                                ? ` Longshift +${extra} jam, langsung disetujui atas nama Anda.`
-                                : ` Longshift +${extra} jam, menunggu persetujuan MOD.`)}
+                    <p className="text-sm text-muted-foreground">
+                        Total {cellHours} jam
+                        {cell.entries.length > 1 &&
+                            ' (dua shift atau lebih dalam sehari itu biasa, bukan longshift)'}
+                        .
                     </p>
                     <Button
                         className="h-12"

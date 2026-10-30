@@ -34,7 +34,7 @@ final class SettingsCatalog
                 'title' => 'Jadwal kerja karyawan',
                 'fields' => [
                     ['key' => 'schedule.enabled', 'type' => 'bool', 'label' => 'Pakai jadwal kerja karyawan', 'hint' => 'Aktif: menu Jadwal Kerja muncul. Manager mengatur siapa masuk pada shift apa tiap hari (sampai 3 shift per orang per hari, mis. Pagi dan Malam); karyawan melihat jadwalnya sendiri. Mati: menu dan halamannya ditutup, data jadwal tetap tersimpan.', 'default' => false],
-                    ['key' => 'schedule.standard_hours', 'type' => 'int', 'label' => 'Lama satu shift standar (jam)', 'hint' => 'Jam kerja per hari di atas ini dihitung longshift, per jam penuh, dan harus disetujui MOD (baik di jadwal maupun di absensi). Bawaan 9 jam.', 'default' => 9, 'min' => 1, 'max' => 16],
+                    ['key' => 'schedule.standard_hours', 'type' => 'int', 'label' => 'Lama satu shift standar (jam)', 'hint' => 'Dipakai sebagai batas lembur bila hari itu tidak ada jadwal (mis. absen manajemen), dan untuk menghitung longshift: jam kerja nyata melebihi jadwal hari itu dihitung per jam penuh dan harus disetujui MOD; tiap kelipatan satu shift standar dihitung satu shift tambahan. Dua shift dalam sehari yang dijadwalkan BUKAN longshift. Bawaan 9 jam.', 'default' => 9, 'min' => 1, 'max' => 16],
                 ],
             ], [
                 'title' => 'Absensi wajah',

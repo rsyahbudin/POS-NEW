@@ -71,10 +71,10 @@ it('lets shift patterns overlap on purpose, and counts the hours a person works 
     $this->actingAs($mod)->post('/schedule/day', ['user_id' => $cashier->id, 'date' => $day, 'entries' => entries([$s2->id])])->assertSessionHasNoErrors();
     expect(LongshiftApproval::query()->count())->toBe(0);
 
-    // the same person on both works 09:00-23:00 = 14 h, not 18 h: 5 h longshift
+    // the same person on both works 09:00-23:00 = 14 h, not 18 h; two shifts in a day is a plan, never a longshift
     $this->actingAs($mod)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => $day, 'entries' => entries([$s1->id, $s2->id])])->assertSessionHasNoErrors()->assertSessionHas('success');
     expect(WorkSchedule::query()->where('user_id', $waiter->id)->count())->toBe(2);
-    expect(LongshiftApproval::query()->where('user_id', $waiter->id)->firstOrFail()->hours)->toBe(5);
+    expect(LongshiftApproval::query()->count())->toBe(0);
     $this->actingAs($mod)->get("/schedule?week={$day}")->assertInertia(fn ($p) => $p->where('people', fn ($people) => collect($people)->firstWhere('id', $waiter->id)['hours'] == 14));
 
     expect($night->durationMinutes())->toBe(240)->and(ShiftHours::unionMinutes([$s1, $s2]))->toBe(14 * 60)

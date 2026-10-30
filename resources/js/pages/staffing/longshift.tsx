@@ -14,6 +14,8 @@ type Row = {
     work_date: string;
     source: 'schedule' | 'attendance';
     hours: number;
+    planned_hours: number;
+    worked_hours: number;
     approved_hours: number;
     status: 'pending' | 'approved' | 'rejected';
     decided_by: string | null;
@@ -26,8 +28,6 @@ type Props = {
     standard_hours: number;
     can: { decide: boolean };
 };
-
-const SOURCE = { schedule: 'Jadwal (rencana)', attendance: 'Absensi (nyata)' };
 
 export default function Longshift({
     filters,
@@ -53,7 +53,7 @@ export default function Longshift({
                 <StaffingTabs />
                 <PageHeader
                     title="Persetujuan longshift"
-                    subtitle={`Jam kerja lebih dari ${standard_hours} jam sehari, dihitung per jam penuh. Jam yang disetujui masuk laporan HR.`}
+                    subtitle={`Jam kerja nyata melebihi jadwal hari itu (atau melebihi ${standard_hours} jam bila tidak ada jadwal), per jam penuh. Dua shift terjadwal dalam sehari bukan longshift. Jam yang disetujui masuk laporan HR.`}
                     actions={
                         <>
                             <Button asChild variant="outline" className="h-11">
@@ -99,7 +99,11 @@ export default function Longshift({
                                     )}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                    {dateId(r.work_date)} · {SOURCE[r.source]} ·{' '}
+                                    {dateId(r.work_date)} · dijadwalkan{' '}
+                                    {r.planned_hours
+                                        ? `${r.planned_hours} jam`
+                                        : 'tidak ada'}{' '}
+                                    · bekerja {r.worked_hours} jam ·{' '}
                                     <span className="font-semibold text-foreground">
                                         +
                                         {longshiftText(r.hours, standard_hours)}
@@ -176,7 +180,7 @@ export default function Longshift({
                     headers={[
                         'Tanggal',
                         'Nama',
-                        'Asal',
+                        'Jadwal / bekerja',
                         'Diajukan',
                         'Disetujui',
                         'Status',
@@ -187,7 +191,7 @@ export default function Longshift({
                     rows={decided.map((r) => [
                         dateId(r.work_date),
                         r.name,
-                        SOURCE[r.source],
+                        `${r.planned_hours ? `${r.planned_hours} jam` : '-'} / ${r.worked_hours} jam`,
                         longshiftText(r.hours, standard_hours),
                         longshiftText(r.approved_hours, standard_hours),
                         r.status === 'approved' ? 'Disetujui' : 'Ditolak',
@@ -204,8 +208,12 @@ export default function Longshift({
                     title={`${ask.approve ? 'Setujui' : 'Tolak'} longshift ${ask.row.name}`}
                 >
                     <p className="text-sm text-muted-foreground">
-                        {dateId(ask.row.work_date)} · {SOURCE[ask.row.source]} ·
-                        diajukan {longshiftText(ask.row.hours, standard_hours)}
+                        {dateId(ask.row.work_date)} · dijadwalkan{' '}
+                        {ask.row.planned_hours
+                            ? `${ask.row.planned_hours} jam`
+                            : 'tidak ada'}
+                        , bekerja {ask.row.worked_hours} jam · diajukan{' '}
+                        {longshiftText(ask.row.hours, standard_hours)}
                     </p>
                     {ask.approve && (
                         <Field

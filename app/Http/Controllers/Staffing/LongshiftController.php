@@ -49,9 +49,9 @@ class LongshiftController extends Controller
         $rows = array_filter($this->rows(LongshiftApproval::query()->where('status', 'approved')->whereBetween('work_date', [$from, $to])->orderBy('work_date')), fn (array $r) => $r['approved_hours'] > 0);
 
         return ReportFile::download((string) $request->input('format', 'xlsx'), "Longshift {$from} {$to}", [
-            new ReportSheet('Longshift', "Periode {$range}", ['Tanggal', 'Nama', 'Jabatan', 'Asal', 'Jam diajukan', 'Jam disetujui', 'Setara shift tambahan', 'Sisa jam', 'Disetujui oleh', 'Catatan'], array_map(fn (array $r) => [
-                CarbonImmutable::parse($r['work_date'])->translatedFormat('d M Y'), $r['name'], $r['role'] ?? '', $r['source'] === 'schedule' ? 'Jadwal' : 'Absensi', $r['hours'], $r['approved_hours'], $r['approved_shifts'], $r['approved_rest'], $r['decided_by'] ?? '', $r['note'] ?? '',
-            ], array_values($rows)), ['Total', '', '', '', '', array_sum(array_column($rows, 'approved_hours')), array_sum(array_column($rows, 'approved_shifts')), array_sum(array_column($rows, 'approved_rest')), '', '']),
+            new ReportSheet('Longshift', "Periode {$range}", ['Tanggal', 'Nama', 'Jabatan', 'Dijadwalkan (jam)', 'Bekerja (jam)', 'Jam diajukan', 'Jam disetujui', 'Setara shift tambahan', 'Sisa jam', 'Disetujui oleh', 'Catatan'], array_map(fn (array $r) => [
+                CarbonImmutable::parse($r['work_date'])->translatedFormat('d M Y'), $r['name'], $r['role'] ?? '', $r['planned_hours'], $r['worked_hours'], $r['hours'], $r['approved_hours'], $r['approved_shifts'], $r['approved_rest'], $r['decided_by'] ?? '', $r['note'] ?? '',
+            ], array_values($rows)), ['Total', '', '', '', '', '', array_sum(array_column($rows, 'approved_hours')), array_sum(array_column($rows, 'approved_shifts')), array_sum(array_column($rows, 'approved_rest')), '', '']),
         ]);
     }
 
@@ -70,6 +70,7 @@ class LongshiftController extends Controller
     private function rows($query): array
     {
         return $query->where('outlet_id', $this->outlet->id())->with(['user:id,name', 'decider:id,name'])->get()->map(fn (LongshiftApproval $a) => [
+            'planned_hours' => round((int) $a->planned_minutes / 60, 1), 'worked_hours' => round((int) $a->worked_minutes / 60, 1),
             'shifts' => $this->service->breakdown($a->hours)['shifts'], 'rest' => $this->service->breakdown($a->hours)['hours'],
             'approved_shifts' => $this->service->breakdown((int) $a->approved_hours)['shifts'], 'approved_rest' => $this->service->breakdown((int) $a->approved_hours)['hours'],
             'id' => $a->id, 'name' => $a->user->name ?? '-', 'role' => $a->user->getRoleNames()->first(), 'work_date' => $a->work_date->toDateString(), 'source' => $a->source,

@@ -57,39 +57,55 @@ it('a nine hour shift is normal, more than nine hours in a day is longshift coun
     expect($service->extraHours(9 * 60))->toBe(1);
 });
 
-it('a planned longshift waits for the MOD, unless the planner may approve it', function () {
+it('two shifts planned in one day are a plan, never a longshift', function () {
     staffingOn();
     $manager = userWithRole('manager');
-    $mod = userWithRole('mod');
     $waiter = userWithRole('waiter');
-    $a = shiftType('Pagi', '08:00', '17:00');   // 9 h
-    $b = shiftType('Malam', '18:00', '21:00');  // 3 h
+    $a = shiftType('Shift 1', '09:00', '18:00');
+    $b = shiftType('Shift 2', '14:00', '23:00');
     $day = now()->startOfWeek()->addWeek()->toDateString();
 
-    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => $day, 'entries' => [['type_id' => $a->id]]])->assertSessionHasNoErrors();
+    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => $day, 'entries' => [['type_id' => $a->id], ['type_id' => $b->id]]])->assertSessionHasNoErrors()->assertSessionHas('success');
+    expect(LongshiftApproval::query()->count())->toBe(0)->and(AppNotification::query()->where('kind', 'longshift.pending')->count())->toBe(0);
+    expect(app(LongshiftService::class)->plannedMinutes($waiter->id, now()->startOfWeek()->addWeek()))->toBe(14 * 60);
+});
+
+it('longshift is time worked beyond the schedule: a scheduled double shift is covered, more than that is not', function () {
+    staffingOn();
+    $mod = userWithRole('mod');
+    $waiter = userWithRole('waiter');
+    $a = shiftType('Shift 1', '09:00', '18:00');
+    $b = shiftType('Shift 2', '14:00', '23:00');
+    $service = app(LongshiftService::class);
+    $day = now()->subDay()->startOfDay();
+    $work = fn (string $in, string $out) => Attendance::create(['outlet_id' => $waiter->outlet_id, 'user_id' => $waiter->id, 'work_date' => $day->toDateString(), 'clock_in_at' => $day->setTimeFromTimeString($in), 'clock_out_at' => $out > $in ? $day->setTimeFromTimeString($out) : $day->addDay()->setTimeFromTimeString($out), 'method_in' => 'face', 'method_out' => 'face']);
+
+    // scheduled on both shifts (14 h), worked all 14 h: nothing to approve
+    foreach ([$a, $b] as $t) {
+        WorkSchedule::create(['outlet_id' => $waiter->outlet_id, 'user_id' => $waiter->id, 'work_date' => $day->toDateString(), 'work_shift_type_id' => $t->id, 'position' => 'waiter']);
+    }
+    $record = $work('09:00', '23:00');
+    $service->syncAttendanceDay($waiter->outlet_id, $waiter->id, $day);
     expect(LongshiftApproval::query()->count())->toBe(0);
 
-    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => $day, 'entries' => [['type_id' => $a->id], ['type_id' => $b->id]]])->assertSessionHasNoErrors();
+    // stays until 01:00: 2 h beyond the plan, with the plan and the real hours written down
+    $record->update(['clock_out_at' => $day->addDay()->setTime(1, 0)]);
+    $service->syncAttendanceDay($waiter->outlet_id, $waiter->id, $day);
     $row = LongshiftApproval::query()->firstOrFail();
-    expect($row->hours)->toBe(3)->and($row->status)->toBe('pending')->and($row->source)->toBe('schedule');
-    expect(AppNotification::query()->where('kind', 'longshift.pending')->count())->toBe(1);
+    expect($row->hours)->toBe(2)->and($row->planned_minutes)->toBe(14 * 60)->and($row->worked_minutes)->toBe(16 * 60)->and($row->status)->toBe('pending');
+    expect(AppNotification::query()->where('kind', 'longshift.pending')->first()->body)->toContain('16')->toContain('14');
 
-    // the manager has no right to approve
-    $this->actingAs($manager)->post("/longshift/{$row->id}/decide", ['approve' => true])->assertForbidden();
-    // the MOD approves, for fewer hours than asked
-    $this->actingAs($mod)->post("/longshift/{$row->id}/decide", ['approve' => true, 'hours' => 2, 'note' => 'ok'])->assertSessionHas('success');
-    expect($row->fresh()->status)->toBe('approved')->and($row->fresh()->approved_hours)->toBe(2)->and($row->fresh()->decided_by)->toBe($mod->id);
-    expect(AppNotification::query()->where('kind', 'longshift.pending')->whereNull('resolved_at')->count())->toBe(0);
+    // the MOD corrects that past day's plan to cover the whole stretch: the longshift goes away
+    WorkSchedule::query()->where('user_id', $waiter->id)->delete();
+    $night = shiftType('Malam', '18:00', '01:00');
+    $this->actingAs($mod)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => $day->toDateString(), 'entries' => [['type_id' => $a->id], ['type_id' => $night->id]]])->assertSessionHasNoErrors();
+    expect(LongshiftApproval::query()->count())->toBe(0);
 
-    // a MOD planning a longshift for someone: approved on the spot, under their name
-    $kitchen = userWithRole('kitchen');
-    $this->actingAs($mod)->post('/schedule/day', ['user_id' => $kitchen->id, 'date' => $day, 'entries' => [['type_id' => $a->id], ['type_id' => $b->id]]])->assertSessionHasNoErrors();
-    $own = LongshiftApproval::query()->where('user_id', $kitchen->id)->firstOrFail();
-    expect($own->status)->toBe('approved')->and($own->decided_by)->toBe($mod->id)->and($own->approved_hours)->toBe(3);
-
-    // planning back to a normal day removes the longshift
-    $this->actingAs($mod)->post('/schedule/day', ['user_id' => $kitchen->id, 'date' => $day, 'entries' => [['type_id' => $a->id]]])->assertSessionHasNoErrors();
-    expect(LongshiftApproval::query()->where('user_id', $kitchen->id)->count())->toBe(0);
+    // a day with no schedule at all (the back office): beyond one standard shift
+    $boss = userWithRole('manager');
+    Attendance::create(['outlet_id' => $boss->outlet_id, 'user_id' => $boss->id, 'work_date' => $day->toDateString(), 'clock_in_at' => $day->setTime(8, 0), 'clock_out_at' => $day->setTime(20, 30), 'method_in' => 'face', 'method_out' => 'face']);
+    $service->syncAttendanceDay($boss->outlet_id, $boss->id, $day);
+    expect(LongshiftApproval::query()->where('user_id', $boss->id)->firstOrFail()->hours)->toBe(3);
 });
 
 it('hours really worked beyond nine become a longshift when the person clocks out, and the MOD checks them again', function () {

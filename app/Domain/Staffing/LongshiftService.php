@@ -12,8 +12,9 @@ use App\Support\Audit;
 use Carbon\CarbonInterface;
 
 /**
- * A standard shift is 9 hours (a setting). Whole hours beyond it are "longshift", counted per hour, and need the manager on
- * duty to approve them, both when planned in the schedule and when really worked in the attendance.
+ * Longshift is time really worked beyond what was scheduled that day (or beyond one standard shift, 9 hours by default, on a day
+ * with no schedule). Two scheduled shifts in a day are simply a longer plan, not a longshift. Whole hours only, and each
+ * full standard shift of extra hours counts as one more shift. The manager on duty approves it.
  */
 class LongshiftService
 {
@@ -24,10 +25,10 @@ class LongshiftService
         return max(1, (int) $this->settings->get('schedule.standard_hours', 9)) * 60;
     }
 
-    /** Whole hours beyond the standard shift. */
-    public function extraHours(int $minutes): int
+    /** Whole hours worked beyond a baseline (the scheduled minutes, or the standard shift when nothing was scheduled). */
+    public function extraHours(int $workedMinutes, ?int $baselineMinutes = null): int
     {
-        return max(0, intdiv($minutes - $this->standardMinutes(), 60));
+        return max(0, intdiv($workedMinutes - ($baselineMinutes ?: $this->standardMinutes()), 60));
     }
 
     /**
@@ -43,20 +44,22 @@ class LongshiftService
         return ['shifts' => intdiv($extraHours, $standard), 'hours' => $extraHours % $standard];
     }
 
-    /** Re-checks the planned day of one person. Someone who may approve gets their own plan approved at once. */
-    public function syncSchedule(int $outletId, int $userId, CarbonInterface $date, ?User $actor): void
+    /** Minutes of work the schedule covers for one person on one day, overlapping shifts counted once. */
+    public function plannedMinutes(int $userId, CarbonInterface $date): int
     {
-        $types = WorkSchedule::query()->where('user_id', $userId)->whereDate('work_date', $date)->with('type')->get()->unique('work_shift_type_id')->map(fn (WorkSchedule $s) => $s->type);
-        $minutes = ShiftHours::unionMinutes($types);
-        $this->upsert($outletId, $userId, $date, 'schedule', $this->extraHours($minutes), null, $actor);
+        return ShiftHours::unionMinutes(WorkSchedule::query()->where('user_id', $userId)->whereDate('work_date', $date)->with('type')->get()->unique('work_shift_type_id')->map(fn (WorkSchedule $s) => $s->type));
     }
 
-    /** Re-checks the hours really worked by one person on one day (all clocked-out records of that day added up). */
+    /**
+     * Re-checks one person's day: the hours really worked (all clocked-out records added up) against what was scheduled.
+     * Call it after a clock-out, a correction, or a change of that day's schedule.
+     */
     public function syncAttendanceDay(int $outletId, int $userId, CarbonInterface $date): void
     {
         $records = Attendance::query()->where('user_id', $userId)->whereDate('work_date', $date)->whereNotNull('clock_out_at')->orderBy('clock_in_at')->get();
-        $minutes = (int) $records->sum(fn (Attendance $a) => $a->clock_in_at->diffInMinutes($a->clock_out_at, true));
-        $this->upsert($outletId, $userId, $date, 'attendance', $this->extraHours($minutes), $records->last()?->id, null);
+        $worked = (int) $records->sum(fn (Attendance $a) => $a->clock_in_at->diffInMinutes($a->clock_out_at, true));
+        $planned = $this->plannedMinutes($userId, $date);
+        $this->upsert($outletId, $userId, $date, $this->extraHours($worked, $planned), $records->last()?->id, $planned, $worked);
     }
 
     public function decide(LongshiftApproval $row, User $by, bool $approve, ?int $hours = null, ?string $note = null): void
@@ -69,9 +72,9 @@ class LongshiftService
         $this->notifier->resolve($row->outlet_id, "longshift:{$row->id}");
     }
 
-    private function upsert(int $outletId, int $userId, CarbonInterface $date, string $source, int $hours, ?int $attendanceId, ?User $actor): void
+    private function upsert(int $outletId, int $userId, CarbonInterface $date, int $hours, ?int $attendanceId, int $planned, int $worked): void
     {
-        $row = LongshiftApproval::query()->where('user_id', $userId)->whereDate('work_date', $date)->where('source', $source)->first();
+        $row = LongshiftApproval::query()->where('user_id', $userId)->whereDate('work_date', $date)->where('source', 'attendance')->first();
         if ($hours === 0) {
             if ($row !== null) {
                 $this->notifier->resolve($outletId, "longshift:{$row->id}");
@@ -81,23 +84,18 @@ class LongshiftService
             return;
         }
         if ($row !== null && $row->hours === $hours) {
-            $row->update(['attendance_id' => $attendanceId ?? $row->attendance_id]);
+            $row->update(['attendance_id' => $attendanceId ?? $row->attendance_id, 'planned_minutes' => $planned, 'worked_minutes' => $worked]);
 
             return;
         }
         $row = LongshiftApproval::query()->updateOrCreate(
-            ['user_id' => $userId, 'work_date' => $date->toDateString(), 'source' => $source],
-            ['outlet_id' => $outletId, 'hours' => $hours, 'status' => 'pending', 'approved_hours' => null, 'decided_by' => null, 'decided_at' => null, 'note' => null, 'attendance_id' => $attendanceId, 'requested_by' => $actor?->id],
+            ['user_id' => $userId, 'work_date' => $date->toDateString(), 'source' => 'attendance'],
+            ['outlet_id' => $outletId, 'hours' => $hours, 'status' => 'pending', 'approved_hours' => null, 'decided_by' => null, 'decided_at' => null, 'note' => null, 'attendance_id' => $attendanceId, 'planned_minutes' => $planned, 'worked_minutes' => $worked],
         );
-        if ($actor !== null && $source === 'schedule' && $actor->can('approve-longshift')) {
-            $this->decide($row, $actor, true, null, 'Disetujui saat menyusun jadwal');
-
-            return;
-        }
         $name = User::query()->whereKey($userId)->value('name');
         $this->notifier->notify(
             $outletId, 'longshift.pending', "Longshift {$name}: {$hours} jam menunggu persetujuan",
-            ($source === 'schedule' ? 'Dijadwalkan' : 'Tercatat di absensi').' '.$date->translatedFormat('d M Y').'.', '/longshift', 'warning', ['approve-longshift'], null, "longshift:{$row->id}",
+            'Bekerja '.round($worked / 60, 1).' jam, dijadwalkan '.($planned > 0 ? round($planned / 60, 1).' jam' : 'tidak ada').' · '.$date->translatedFormat('d M Y').'.', '/longshift', 'warning', ['approve-longshift'], null, "longshift:{$row->id}",
         );
     }
 }

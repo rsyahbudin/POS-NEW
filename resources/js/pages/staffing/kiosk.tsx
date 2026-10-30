@@ -3,12 +3,14 @@ import { LogIn, LogOut } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { AccountMenu } from '@/components/pos/account-menu';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useSound } from '@/hooks/use-sound';
 import { api } from '@/lib/api';
 import { MIN_FACE_SIZE, useFaceCamera } from '@/lib/face';
 import { timeId } from '@/lib/format';
 
 type Action = 'in' | 'out';
+type Person = { id: number; name: string };
 type Result = {
     status:
         | 'in'
@@ -16,7 +18,11 @@ type Result = {
         | 'repeat'
         | 'already_in'
         | 'not_in'
-        | 'no_match'
+        | 'unknown'
+        | 'locked'
+        | 'mismatch'
+        | 'ambiguous'
+        | 'not_enrolled'
         | 'geo_not_set'
         | 'geo_missing'
         | 'geo_weak'
@@ -28,6 +34,7 @@ type Result = {
     attendance_id?: number;
     late?: number | null;
     stations?: string[];
+    attempts_left?: number | null;
 };
 
 const STEADY = 3; // consecutive sightings before a scan is sent
@@ -59,11 +66,13 @@ function whereAmI(): Promise<Where | null> {
 
 function Scanner({
     action,
+    person,
     undoSeconds,
     geofence,
     onDone,
 }: {
     action: Action;
+    person: Person;
     undoSeconds: number;
     geofence: boolean;
     onDone: () => void;
@@ -77,13 +86,13 @@ function Scanner({
     const busy = useRef(false);
     const steady = useRef(0);
     const stop = useRef(false);
+    const startedAt = useRef(Date.now());
 
     useEffect(() => {
         if (state !== 'ready') {
             return;
         }
         let alive = true;
-        const started = Date.now();
         const tick = async () => {
             if (!alive) {
                 return;
@@ -124,21 +133,16 @@ function Scanner({
                                 ? 'ready'
                                 : 'alert',
                         );
-                        if (r.status === 'no_match') {
-                            setHint('Wajah belum dikenali. Coba lagi.');
-                            busy.current = false;
-                        } else {
-                            stop.current = true;
-                            setResult(r);
-                            busy.current = false;
-                        }
+                        stop.current = true;
+                        setResult(r);
+                        busy.current = false;
                     }
                 } catch {
                     busy.current = false;
                     setHint('Gagal terhubung. Coba lagi.');
                 }
             }
-            if (!stop.current && Date.now() - started > IDLE_MS) {
+            if (!stop.current && Date.now() - startedAt.current > IDLE_MS) {
                 onDone();
 
                 return;
@@ -163,6 +167,14 @@ function Scanner({
         return () => clearTimeout(t);
     }, [result, onDone]);
 
+    const retry = () => {
+        setResult(null);
+        stop.current = false;
+        steady.current = 0;
+        startedAt.current = Date.now();
+        setHint('Menghadap kamera');
+    };
+
     const undo = async () => {
         if (
             result?.attendance_id &&
@@ -181,7 +193,9 @@ function Scanner({
     return (
         <div className="grid gap-4">
             <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Absen {verb}</h2>
+                <h2 className="text-lg font-semibold">
+                    Absen {verb} · {person.name}
+                </h2>
                 <Button variant="ghost" className="h-11" onClick={onDone}>
                     Batal
                 </Button>
@@ -241,6 +255,34 @@ function Scanner({
                                 {Math.round(undoSeconds / 60)} menit.
                             </p>
                         </>
+                    ) : result.status === 'mismatch' ||
+                      result.status === 'ambiguous' ? (
+                        <>
+                            <p className="text-lg">
+                                Wajah tidak cocok dengan {result.name}. Tidak
+                                ada absen yang dicatat.
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                                {result.attempts_left
+                                    ? `Sisa percobaan: ${result.attempts_left}. `
+                                    : ''}
+                                Pastikan Anda memilih nama sendiri, hadap kamera
+                                lurus dengan cahaya cukup.
+                            </p>
+                            <Button className="mx-auto h-11" onClick={retry}>
+                                Coba lagi
+                            </Button>
+                        </>
+                    ) : result.status === 'locked' ? (
+                        <p className="text-lg">
+                            Terlalu banyak percobaan untuk {result.name}. Tunggu
+                            beberapa menit atau minta manager mengoreksi.
+                        </p>
+                    ) : result.status === 'not_enrolled' ? (
+                        <p className="text-lg">
+                            Wajah {result.name} belum terdaftar. Minta manager
+                            mendaftarkannya.
+                        </p>
                     ) : result.status === 'out_of_area' ? (
                         <p className="text-lg">
                             Perangkat ini{' '}
@@ -291,17 +333,84 @@ function Scanner({
     );
 }
 
+function NamePicker({
+    action,
+    people,
+    onPick,
+    onCancel,
+}: {
+    action: Action;
+    people: Person[];
+    onPick: (p: Person) => void;
+    onCancel: () => void;
+}) {
+    const [q, setQ] = useState('');
+    const shown = people.filter((p) =>
+        p.name.toLowerCase().includes(q.trim().toLowerCase()),
+    );
+
+    return (
+        <div className="grid gap-4">
+            <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold">
+                    Siapa Anda? · Absen {action === 'in' ? 'Masuk' : 'Pulang'}
+                </h2>
+                <Button variant="ghost" className="h-11" onClick={onCancel}>
+                    Batal
+                </Button>
+            </div>
+            <Input
+                className="h-12"
+                value={q}
+                placeholder="Cari nama…"
+                onChange={(e) => setQ(e.target.value)}
+                autoFocus
+            />
+            {shown.length === 0 ? (
+                <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    {people.length === 0
+                        ? 'Belum ada wajah terdaftar. Daftarkan dulu di menu User atau Wajah.'
+                        : 'Nama tidak ditemukan. Hanya karyawan yang wajahnya sudah terdaftar yang muncul.'}
+                </p>
+            ) : (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {shown.map((p) => (
+                        <Button
+                            key={p.id}
+                            variant="outline"
+                            className="h-16 text-base"
+                            onClick={() => onPick(p)}
+                        >
+                            {p.name}
+                        </Button>
+                    ))}
+                </div>
+            )}
+            <p className="text-center text-xs text-muted-foreground">
+                Pilih nama Anda sendiri. Kamera akan memeriksa apakah wajahnya
+                benar milik orang itu.
+            </p>
+        </div>
+    );
+}
+
 export default function Kiosk({
     enrolled,
+    people,
     undo_seconds,
     geofence,
 }: {
     enrolled: number;
+    people: Person[];
     undo_seconds: number;
     geofence: boolean;
 }) {
     const [action, setAction] = useState<Action | null>(null);
-    const done = useRef(() => setAction(null));
+    const [person, setPerson] = useState<Person | null>(null);
+    const done = useRef(() => {
+        setAction(null);
+        setPerson(null);
+    });
 
     return (
         <>
@@ -316,19 +425,27 @@ export default function Kiosk({
                         <AccountMenu />
                     </div>
                 </div>
-                {action ? (
+                {action && person ? (
                     <Scanner
                         action={action}
+                        person={person}
                         undoSeconds={undo_seconds}
                         geofence={geofence}
                         onDone={done.current}
+                    />
+                ) : action ? (
+                    <NamePicker
+                        action={action}
+                        people={people}
+                        onPick={setPerson}
+                        onCancel={done.current}
                     />
                 ) : (
                     <div className="grid gap-4 pt-4">
                         <p className="text-center text-muted-foreground">
                             {enrolled === 0
                                 ? 'Belum ada wajah terdaftar. Daftarkan dulu di menu User atau Wajah Karyawan.'
-                                : 'Pilih dulu, lalu hadapkan wajah ke kamera.'}
+                                : 'Pilih Masuk atau Pulang, lalu pilih nama Anda dan hadapkan wajah ke kamera.'}
                         </p>
                         <div className="grid gap-4 sm:grid-cols-2">
                             <Button

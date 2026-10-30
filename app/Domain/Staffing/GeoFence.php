@@ -35,11 +35,11 @@ class GeoFence
         if ($outlet === null || $outlet->latitude === null || $outlet->longitude === null) {
             return ['ok' => false, 'reason' => 'geo_not_set', 'distance' => null];
         }
-        if ($lat === null || $lng === null) {
+        if ($lat === null || $lng === null || $accuracy === null) {
             return ['ok' => false, 'reason' => 'geo_missing', 'distance' => null];
         }
         $distance = (int) round(self::distance($lat, $lng, (float) $outlet->latitude, (float) $outlet->longitude));
-        if ($accuracy !== null && $accuracy > $this->radius()) {
+        if ($accuracy > $this->radius()) {
             return ['ok' => false, 'reason' => 'geo_weak', 'distance' => $distance];
         }
 

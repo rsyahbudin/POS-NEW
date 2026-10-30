@@ -38,6 +38,8 @@ class AttendanceController extends Controller
 
         return Inertia::render('staffing/kiosk', [
             'enrolled' => FaceTemplate::query()->where('outlet_id', $id)->distinct('user_id')->count('user_id'),
+            // names only, and only people with a face on file: the kiosk asks who is standing there before it looks
+            'people' => User::query()->where('outlet_id', $id)->where('is_active', true)->whereIn('id', FaceTemplate::query()->where('outlet_id', $id)->select('user_id'))->orderBy('name')->get(['id', 'name'])->all(),
             'undo_seconds' => AttendanceService::UNDO_SECONDS,
             'geofence' => $this->geo->enabled(),
             'radius' => $this->geo->radius(),
@@ -47,7 +49,7 @@ class AttendanceController extends Controller
     public function scan(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'action' => 'required|in:in,out', 'descriptor' => 'required|array|size:128', 'descriptor.*' => 'required|numeric',
+            'user_id' => 'required|integer', 'action' => 'required|in:in,out', 'descriptor' => 'required|array|size:128', 'descriptor.*' => 'required|numeric',
             'lat' => 'nullable|numeric|between:-90,90', 'lng' => 'nullable|numeric|between:-180,180', 'accuracy' => 'nullable|numeric|min:0',
         ]);
         $lat = isset($data['lat']) ? (float) $data['lat'] : null;
@@ -57,9 +59,13 @@ class AttendanceController extends Controller
         if (! $place['ok']) {
             return response()->json(['status' => $place['reason'], 'distance' => $place['distance'], 'radius' => $this->geo->radius()]);
         }
-        $result = $this->service->scan($this->outlet->id(), array_values(array_map('floatval', $data['descriptor'])), $data['action'], null, ['lat' => $lat, 'lng' => $lng, 'distance' => $place['distance']]);
-        if ($result['status'] === 'no_match') {
-            return response()->json(['status' => 'no_match']);
+        $result = $this->service->scan($this->outlet->id(), (int) $data['user_id'], array_values(array_map('floatval', $data['descriptor'])), $data['action'], null, ['lat' => $lat, 'lng' => $lng, 'distance' => $place['distance']]);
+        if ($result['status'] === 'unknown') {
+            return response()->json(['status' => 'unknown']);
+        }
+        if (in_array($result['status'], ['locked', 'mismatch', 'ambiguous', 'not_enrolled'], true)) {
+            // wrong face, locked, or nobody on file: nothing is booked, and nothing says whose face it looked like
+            return response()->json(['status' => $result['status'], 'name' => $result['user']->name, 'attempts_left' => $result['attempts_left'] ?? null]);
         }
         $a = $result['attendance'];
         $at = $a === null ? null : ($result['status'] === 'out' ? $a->clock_out_at : $a->clock_in_at);

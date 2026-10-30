@@ -6,41 +6,44 @@ use App\Domain\Staffing\Models\FaceTemplate;
 use App\Models\User;
 
 /**
- * Finds whose face a 128-number descriptor is. Distances are Euclidean (face-api: the same person is usually under
- * 0.45, 0.6 is the library's loose default). We are stricter and also refuse when two people are almost as close.
+ * Checks a 128-number face descriptor. Distances are Euclidean (face-api: the same person is usually under 0.45, 0.6 is
+ * the library's loose default). We are stricter and also refuse when another person is as close as the claimed one.
  */
 class FaceMatcher
 {
     public const THRESHOLD = 0.5;
 
-    /** The runner-up must be at least this much farther, or the face is too ambiguous to book. */
+    /** Everybody else must be at least this much farther than the claimed person, or the face is too ambiguous to book. */
     public const MARGIN = 0.05;
 
     /** A new face closer than this to someone already enrolled is the same person (or a look-alike): refused. */
     public const DUPLICATE = 0.45;
 
     /**
+     * Is this face the face of the person who says they are at the camera? A 1:1 check against that person's own samples,
+     * and also against everybody else: if someone else is as close or closer, it is refused. So a person showing a
+     * colleague's face (or a colleague's photo) is never booked as themselves, and the colleague is never booked at all.
+     *
      * @param  list<float>  $descriptor
-     * @return array{user: User, distance: float}|null
+     * @return array{ok: bool, reason: 'not_enrolled'|'mismatch'|'ambiguous'|null, distance: float|null}
      */
-    public function match(int $outletId, array $descriptor, ?int $exceptUser = null): ?array
+    public function verify(int $outletId, int $userId, array $descriptor): array
     {
-        $best = $this->nearestPerUser($outletId, $descriptor, $exceptUser);
-        if ($best === []) {
-            return null;
+        $near = $this->nearestPerUser($outletId, $descriptor, null);
+        if (! isset($near[$userId])) {
+            return ['ok' => false, 'reason' => 'not_enrolled', 'distance' => null];
         }
-        asort($best);
-        $ids = array_keys($best);
-        $first = $best[$ids[0]];
-        if ($first > self::THRESHOLD) {
-            return null;
+        $own = $near[$userId];
+        if ($own > self::THRESHOLD) {
+            return ['ok' => false, 'reason' => 'mismatch', 'distance' => round($own, 4)];
         }
-        if (isset($ids[1]) && $best[$ids[1]] - $first < self::MARGIN) {
-            return null;
+        unset($near[$userId]);
+        $other = $near === [] ? null : min($near);
+        if ($other !== null && $other < $own + self::MARGIN) {
+            return ['ok' => false, 'reason' => $other < $own ? 'mismatch' : 'ambiguous', 'distance' => round($own, 4)];
         }
-        $user = User::query()->where('is_active', true)->find($ids[0]);
 
-        return $user === null ? null : ['user' => $user, 'distance' => round($first, 4)];
+        return ['ok' => true, 'reason' => null, 'distance' => round($own, 4)];
     }
 
     /**

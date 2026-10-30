@@ -2,14 +2,16 @@
 
 namespace App\Domain\Staffing;
 
+use App\Domain\Notification\Notifier;
 use App\Domain\Staffing\Models\Attendance;
 use App\Domain\Staffing\Models\WorkSchedule;
 use App\Models\User;
 use App\Support\Audit;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
-/** A scanned face clocks the person in, or out when they are already clocked in. */
+/** A person who names themselves and shows their own face is clocked in, or out when they are already clocked in. */
 class AttendanceService
 {
     /** The same person scanning again within this many seconds is ignored (they are still standing at the camera). */
@@ -21,24 +23,56 @@ class AttendanceService
     /** An open record older than this was a forgotten clock-out: a new scan starts a new day instead of closing it. */
     public const STALE_HOURS = 18;
 
-    public function __construct(private FaceMatcher $matcher, private LongshiftService $longshift) {}
+    /** Wrong faces in a row for one person before the kiosk stops trying for them, and for how long. */
+    public const MAX_MISMATCHES = 5;
+
+    public const LOCK_MINUTES = 5;
+
+    /** From this many wrong faces on, the managers are told. */
+    public const ALERT_AFTER = 3;
+
+    public function __construct(private FaceMatcher $matcher, private LongshiftService $longshift, private Notifier $notifier) {}
 
     /**
-     * The person chose Masuk or Pulang first, then showed their face.
+     * The person says who they are (picks their name) and chooses Masuk or Pulang, then shows their face. The face must be
+     * THAT person's: someone else's face, or a photo of it, books nobody, not even the person it belongs to.
      *
      * @param  'in'|'out'  $action
      * @param  list<float>  $descriptor
      * @param  array{lat: float|null, lng: float|null, distance: int|null}|null  $geo  where the kiosk was, kept with the record
-     * @return array{status: 'no_match'}|array{status: 'in'|'out'|'repeat'|'already_in'|'not_in', attendance: Attendance|null, user: User}
+     * @return array{status: 'unknown'}|array{status: 'locked'|'mismatch'|'ambiguous'|'not_enrolled', user: User, attempts_left?: int}|array{status: 'in'|'out'|'repeat'|'already_in'|'not_in', attendance: Attendance|null, user: User}
      */
-    public function scan(int $outletId, array $descriptor, string $action, ?Carbon $now = null, ?array $geo = null): array
+    public function scan(int $outletId, int $userId, array $descriptor, string $action, ?Carbon $now = null, ?array $geo = null): array
     {
         $now ??= now();
-        $hit = $this->matcher->match($outletId, $descriptor);
-        if ($hit === null) {
-            return ['status' => 'no_match'];
+        $user = User::query()->where('outlet_id', $outletId)->where('is_active', true)->find($userId);
+        if ($user === null) {
+            return ['status' => 'unknown'];
         }
-        $user = $hit['user'];
+        $key = "attendance.face_fail.{$outletId}.{$userId}";
+        $fails = (int) Cache::get($key, 0);
+        if ($fails >= self::MAX_MISMATCHES) {
+            return ['status' => 'locked', 'user' => $user];
+        }
+
+        $hit = $this->matcher->verify($outletId, $userId, $descriptor);
+        if (! $hit['ok']) {
+            if ($hit['reason'] === 'not_enrolled') {
+                return ['status' => 'not_enrolled', 'user' => $user];
+            }
+            $fails++;
+            Cache::put($key, $fails, now()->addMinutes(self::LOCK_MINUTES));
+            Audit::log('attendance.face_rejected', $user, ['user' => $user->name, 'action' => $action, 'reason' => $hit['reason'], 'distance' => $hit['distance'], 'attempt' => $fails]);
+            if ($fails >= self::ALERT_AFTER) {
+                $this->notifier->notify(
+                    $outletId, 'attendance.face_rejected', "Absen atas nama {$user->name} ditolak ({$fails}x)", 'Wajah di kamera tidak cocok dengan wajah yang terdaftar. Bisa salah orang atau percobaan memakai wajah lain.',
+                    '/attendance', 'warning', ['manage-attendance', 'approve-longshift'], null, "attendance.face_rejected:{$userId}:".$now->toDateString(),
+                );
+            }
+
+            return ['status' => $hit['reason'] ?? 'mismatch', 'user' => $user, 'attempts_left' => max(0, self::MAX_MISMATCHES - $fails)];
+        }
+        Cache::forget($key);
 
         return DB::transaction(function () use ($outletId, $user, $hit, $action, $now, $geo) {
             $latest = Attendance::query()->where('outlet_id', $outletId)->where('user_id', $user->id)->lockForUpdate()->latest('clock_in_at')->first();

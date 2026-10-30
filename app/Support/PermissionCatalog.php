@@ -2,6 +2,9 @@
 
 namespace App\Support;
 
+use App\Domain\Settings\SettingsRepository;
+use App\Models\User;
+
 /**
  * Human-readable description of every permission, grouped for the role editor.
  * Permissions are checked by name in code; this catalog only labels them.
@@ -79,6 +82,42 @@ final class PermissionCatalog
     public static function all(): array
     {
         return array_keys(array_merge(...array_column(self::groups(), 'items')));
+    }
+
+    /**
+     * Whoever holds any of these works from the back office (sidebar). Everybody else is floor staff (cashier, waiter, kitchen,
+     * bar, MOD) and gets the work screens plus a plain top bar, never a sidebar. Day-to-day rights (expenses, closing the
+     * shift, planning the schedule, approving longshift) are deliberately not here: a MOD is floor staff with extra duties.
+     *
+     * @var list<string>
+     */
+    public const OFFICE = [
+        'view-sales-reports', 'view-accounting', 'manage-accounting', 'view-margin-report', 'view-kitchen-report', 'view-activity-log', 'view-waste-report',
+        'manage-menu', 'manage-inventory', 'manage-pricing', 'manage-discount-presets', 'manage-settings', 'manage-users', 'manage-roles', 'manage-tables',
+        'manage-printers', 'manage-online-payments', 'manage-suppliers', 'manage-assets', 'import-data', 'export-receipts',
+        'manage-fixed-expenses', 'view-cash-ledger', 'manage-attendance',
+    ];
+
+    /** The page a person lands on, and returns to with the Layar kerja button. */
+    public static function homeFor(?User $user): string
+    {
+        return match (true) {
+            $user === null => '/login',
+            $user->can('view-sales-reports') => '/dashboard',
+            $user->can('receive-payment') || $user->can('create-order') => '/pos',
+            $user->can('update-kitchen-status') && (bool) app(SettingsRepository::class)->get('kitchen.enabled', false) => '/kds',
+            $user->can('view-stock') => '/stock',
+            default => '/settings/profile',
+        };
+    }
+
+    public static function shellFor(?User $user): string
+    {
+        if ($user === null) {
+            return 'floor';
+        }
+
+        return $user->hasRole('owner') || collect(self::OFFICE)->contains(fn (string $p) => $user->can($p)) ? 'office' : 'floor';
     }
 
     /** Roles shipped with the app: cannot be deleted; owner cannot be edited. */

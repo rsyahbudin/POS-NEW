@@ -44,6 +44,7 @@ use App\Http\Controllers\Staffing\LongshiftController;
 use App\Http\Controllers\Staffing\ScheduleController;
 use App\Http\Controllers\Stock\StockController;
 use App\Http\Controllers\Stock\WasteController;
+use App\Support\PermissionCatalog;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -72,16 +73,8 @@ Route::post('login/pin', [PinLoginController::class, 'store'])->middleware(['gue
 
 Route::get('/', function () {
     $user = auth()->user();
-    if (! $user) {
-        return redirect()->route('login');
-    }
 
-    return redirect()->route(match (true) {
-        $user->can('view-sales-reports') => 'dashboard',
-        $user->can('receive-payment') || $user->can('create-order') => 'pos.index',
-        $user->can('update-kitchen-status') => 'kds.index',
-        default => 'profile.edit',
-    });
+    return $user ? redirect(PermissionCatalog::homeFor($user)) : redirect()->route('login');
 })->name('home');
 
 Route::middleware(['auth', 'staff'])->group(function () {

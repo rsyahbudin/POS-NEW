@@ -56,6 +56,16 @@ export const top: Item[] = [
         feature: 'kds',
     },
     {
+        title: 'Shift & Kas',
+        href: '/shift',
+        icon: Coins,
+        permission: [
+            'open-close-shift',
+            'manage-shifts-any',
+            'view-own-shift-recap',
+        ],
+    },
+    {
         title: 'Absensi',
         href: '/staff',
         icon: ScanFace,
@@ -203,12 +213,6 @@ export const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
         title: 'Keuangan',
         icon: BookOpenCheck,
         items: [
-            {
-                title: 'Shift & Kas',
-                href: '/shift',
-                icon: Coins,
-                permission: 'manage-shifts-any',
-            },
             {
                 title: 'Pengeluaran',
                 href: '/admin/spending',

@@ -1,4 +1,5 @@
 import { Head } from '@inertiajs/react';
+import { LogIn, LogOut } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSound } from '@/hooks/use-sound';
@@ -6,8 +7,9 @@ import { api } from '@/lib/api';
 import { MIN_FACE_SIZE, useFaceCamera } from '@/lib/face';
 import { timeId } from '@/lib/format';
 
+type Action = 'in' | 'out';
 type Result = {
-    status: 'in' | 'out' | 'repeat' | 'no_match';
+    status: 'in' | 'out' | 'repeat' | 'already_in' | 'not_in' | 'no_match';
     name?: string;
     at?: string;
     attendance_id?: number;
@@ -15,14 +17,17 @@ type Result = {
 };
 
 const STEADY = 3; // consecutive sightings before a scan is sent
-const SHOW_MS = 7000;
+const SHOW_MS = 6000;
+const IDLE_MS = 30000; // back to the two buttons when nobody shows a face
 
-export default function Kiosk({
-    enrolled,
-    undo_seconds,
+function Scanner({
+    action,
+    undoSeconds,
+    onDone,
 }: {
-    enrolled: number;
-    undo_seconds: number;
+    action: Action;
+    undoSeconds: number;
+    onDone: () => void;
 }) {
     const { video, state, error, look } = useFaceCamera();
     const sound = useSound();
@@ -32,18 +37,19 @@ export default function Kiosk({
     const [hint, setHint] = useState('Menghadap kamera');
     const busy = useRef(false);
     const steady = useRef(0);
-    const pause = useRef(0);
+    const stop = useRef(false);
 
     useEffect(() => {
         if (state !== 'ready') {
             return;
         }
         let alive = true;
+        const started = Date.now();
         const tick = async () => {
             if (!alive) {
                 return;
             }
-            if (!busy.current && Date.now() > pause.current) {
+            if (!busy.current && !stop.current) {
                 try {
                     const seen = await look();
                     if (!seen) {
@@ -59,22 +65,31 @@ export default function Kiosk({
                         const r = await api<Result>(
                             'POST',
                             '/attendance/kiosk/scan',
-                            { descriptor: seen.descriptor },
+                            { action, descriptor: seen.descriptor },
                         );
-                        setResult(r);
                         beep.current(
-                            r.status === 'no_match' ? 'alert' : 'ready',
+                            r.status === 'in' || r.status === 'out'
+                                ? 'ready'
+                                : 'alert',
                         );
-                        pause.current =
-                            Date.now() +
-                            (r.status === 'no_match' ? 3000 : SHOW_MS);
-                        busy.current = false;
+                        if (r.status === 'no_match') {
+                            setHint('Wajah belum dikenali. Coba lagi.');
+                            busy.current = false;
+                        } else {
+                            stop.current = true;
+                            setResult(r);
+                            busy.current = false;
+                        }
                     }
                 } catch {
                     busy.current = false;
                     setHint('Gagal terhubung. Coba lagi.');
-                    pause.current = Date.now() + 3000;
                 }
+            }
+            if (!stop.current && Date.now() - started > IDLE_MS) {
+                onDone();
+
+                return;
             }
             if (alive) {
                 setTimeout(tick, 350);
@@ -85,19 +100,16 @@ export default function Kiosk({
         return () => {
             alive = false;
         };
-    }, [state, look]);
+    }, [state, look, action, onDone]);
 
     useEffect(() => {
         if (!result) {
             return;
         }
-        const t = setTimeout(
-            () => setResult(null),
-            result.status === 'no_match' ? 3000 : SHOW_MS,
-        );
+        const t = setTimeout(onDone, SHOW_MS);
 
         return () => clearTimeout(t);
-    }, [result]);
+    }, [result, onDone]);
 
     const undo = async () => {
         if (
@@ -109,87 +121,136 @@ export default function Kiosk({
                 action: result.status,
             }).catch(() => undefined);
         }
-        setResult(null);
-        pause.current = Date.now() + 1500;
+        onDone();
     };
+
+    const verb = action === 'in' ? 'Masuk' : 'Pulang';
+
+    return (
+        <div className="grid gap-4">
+            <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Absen {verb}</h2>
+                <Button variant="ghost" className="h-11" onClick={onDone}>
+                    Batal
+                </Button>
+            </div>
+            <div className="relative overflow-hidden rounded-2xl border bg-black">
+                <video
+                    ref={video}
+                    className="aspect-[4/3] w-full -scale-x-100 object-cover"
+                    playsInline
+                    muted
+                />
+                {state === 'loading' && (
+                    <p className="absolute inset-0 grid place-items-center text-sm text-white">
+                        Menyiapkan kamera dan model wajah…
+                    </p>
+                )}
+                {state === 'error' && (
+                    <p className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-white">
+                        {error}
+                    </p>
+                )}
+            </div>
+
+            {result ? (
+                <div
+                    role="status"
+                    className={`grid gap-2 rounded-2xl border bg-card p-5 text-center ${result.status === 'in' || result.status === 'out' ? 'border-emerald-600/40' : 'border-amber-600/40'}`}
+                >
+                    <p className="text-2xl font-semibold">{result.name}</p>
+                    {result.status === 'in' || result.status === 'out' ? (
+                        <>
+                            <p className="text-lg">
+                                {result.status === 'in' ? 'Masuk' : 'Pulang'} ·{' '}
+                                {timeId(result.at)}
+                            </p>
+                            {result.status === 'in' && !!result.late && (
+                                <p className="text-amber-700 dark:text-amber-400">
+                                    Terlambat {result.late} menit
+                                </p>
+                            )}
+                            <Button
+                                variant="outline"
+                                className="mx-auto h-11"
+                                onClick={undo}
+                            >
+                                Bukan saya
+                            </Button>
+                            <p className="text-xs text-muted-foreground">
+                                Tombol ini membatalkan catatan selama{' '}
+                                {Math.round(undoSeconds / 60)} menit.
+                            </p>
+                        </>
+                    ) : result.status === 'already_in' ? (
+                        <p className="text-lg">
+                            Sudah masuk pukul {timeId(result.at)}. Pilih Pulang
+                            untuk absen pulang.
+                        </p>
+                    ) : result.status === 'not_in' ? (
+                        <p className="text-lg">
+                            Belum tercatat masuk. Pilih Masuk dulu. Kalau
+                            kemarin lupa absen pulang, minta manager mengoreksi.
+                        </p>
+                    ) : (
+                        <p className="text-lg text-muted-foreground">
+                            Sudah tercatat barusan.
+                        </p>
+                    )}
+                </div>
+            ) : (
+                <p className="rounded-2xl border bg-card p-5 text-center text-lg text-muted-foreground">
+                    {hint}
+                </p>
+            )}
+        </div>
+    );
+}
+
+export default function Kiosk({
+    enrolled,
+    undo_seconds,
+}: {
+    enrolled: number;
+    undo_seconds: number;
+}) {
+    const [action, setAction] = useState<Action | null>(null);
+    const done = useRef(() => setAction(null));
 
     return (
         <>
             <Head title="Kiosk Absensi" />
             <div className="mx-auto grid min-h-svh w-full max-w-3xl content-start gap-4 p-4">
                 <h1 className="text-xl font-semibold">Absensi</h1>
-                <div className="relative overflow-hidden rounded-2xl border bg-black">
-                    <video
-                        ref={video}
-                        className="aspect-[4/3] w-full -scale-x-100 object-cover"
-                        playsInline
-                        muted
+                {action ? (
+                    <Scanner
+                        action={action}
+                        undoSeconds={undo_seconds}
+                        onDone={done.current}
                     />
-                    {state === 'loading' && (
-                        <p className="absolute inset-0 grid place-items-center text-sm text-white">
-                            Menyiapkan kamera dan model wajah…
-                        </p>
-                    )}
-                    {state === 'error' && (
-                        <p className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-white">
-                            {error}
-                        </p>
-                    )}
-                </div>
-
-                {result?.status === 'in' ||
-                result?.status === 'out' ||
-                result?.status === 'repeat' ? (
-                    <div
-                        role="status"
-                        className="grid gap-2 rounded-2xl border border-emerald-600/40 bg-card p-5 text-center"
-                    >
-                        <p className="text-2xl font-semibold">{result.name}</p>
-                        {result.status === 'repeat' ? (
-                            <p className="text-muted-foreground">
-                                Sudah tercatat barusan.
-                            </p>
-                        ) : (
-                            <>
-                                <p className="text-lg">
-                                    {result.status === 'in'
-                                        ? 'Masuk'
-                                        : 'Pulang'}{' '}
-                                    · {timeId(result.at)}
-                                </p>
-                                {result.status === 'in' && !!result.late && (
-                                    <p className="text-amber-700 dark:text-amber-400">
-                                        Terlambat {result.late} menit
-                                    </p>
-                                )}
-                                <Button
-                                    variant="outline"
-                                    className="mx-auto h-11"
-                                    onClick={undo}
-                                >
-                                    Bukan saya
-                                </Button>
-                                <p className="text-xs text-muted-foreground">
-                                    Tombol ini membatalkan catatan selama{' '}
-                                    {Math.round(undo_seconds / 60)} menit.
-                                </p>
-                            </>
-                        )}
-                    </div>
-                ) : result?.status === 'no_match' ? (
-                    <p
-                        role="status"
-                        className="rounded-2xl border border-red-600/40 bg-card p-5 text-center text-lg"
-                    >
-                        Wajah belum dikenali. Coba lagi, atau minta manager
-                        mendaftarkan wajah Anda.
-                    </p>
                 ) : (
-                    <p className="rounded-2xl border bg-card p-5 text-center text-lg text-muted-foreground">
-                        {enrolled === 0
-                            ? 'Belum ada wajah terdaftar. Daftarkan dulu di menu Wajah Karyawan.'
-                            : hint}
-                    </p>
+                    <div className="grid gap-4 pt-4">
+                        <p className="text-center text-muted-foreground">
+                            {enrolled === 0
+                                ? 'Belum ada wajah terdaftar. Daftarkan dulu di menu User atau Wajah Karyawan.'
+                                : 'Pilih dulu, lalu hadapkan wajah ke kamera.'}
+                        </p>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <Button
+                                className="h-40 flex-col gap-2 text-2xl"
+                                onClick={() => setAction('in')}
+                            >
+                                <LogIn className="size-10" /> Masuk
+                            </Button>
+                            <Button
+                                className="h-40 flex-col gap-2 text-2xl"
+                                variant="outline"
+                                onClick={() => setAction('out')}
+                            >
+                                <LogOut className="size-10" /> Pulang
+                            </Button>
+                        </div>
+                    </div>
                 )}
             </div>
         </>

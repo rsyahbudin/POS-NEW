@@ -32,7 +32,6 @@ final class PermissionCatalog
                 'manage-fixed-expenses' => ['label' => 'Kelola beban tetap bulanan', 'hint' => 'Daftar gaji, sewa, listrik, internet dan tagihan rutin lain; membayar atau melewati tagihan tiap bulan; menerima pengingat jatuh tempo.'],
                 'view-schedule' => ['label' => 'Lihat jadwal kerja', 'hint' => 'Melihat jadwal shift kerja seluruh karyawan dan jadwal sendiri. Hanya tampil bila Jadwal kerja diaktifkan di Pengaturan.'],
                 'manage-schedule' => ['label' => 'Atur jadwal kerja', 'hint' => 'Membuat pola shift, mengisi jadwal mingguan (sampai 3 shift per orang per hari), dan menyalin jadwal minggu lalu.'],
-                'clock-own-attendance' => ['label' => 'Absen sendiri dengan tombol', 'hint' => 'Halaman Absen Saya: tombol Masuk dan Pulang untuk diri sendiri. Hanya tampil bila "Boleh absen dengan tombol" aktif di Pengaturan.'],
                 'manage-attendance' => ['label' => 'Kelola absensi & wajah karyawan', 'hint' => 'Melihat dan mengoreksi absensi, mengunduh laporan, mendaftarkan atau menghapus data wajah karyawan. Data wajah bersifat sensitif: batasi ke owner dan manager.'],
                 'use-attendance-kiosk' => ['label' => 'Pakai kiosk absensi', 'hint' => 'Membuka layar kamera absensi di tablet outlet. Disarankan satu akun khusus dengan izin ini saja.'],
                 'approve-longshift' => ['label' => 'Setujui longshift', 'hint' => 'Menyetujui atau menolak jam kerja di atas standar (longshift) dari jadwal dan absensi. Jam yang disetujui masuk laporan HR. Untuk MOD dan owner.'],

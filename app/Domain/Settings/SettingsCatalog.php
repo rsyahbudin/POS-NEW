@@ -40,7 +40,6 @@ final class SettingsCatalog
                 'title' => 'Absensi wajah',
                 'fields' => [
                     ['key' => 'attendance.enabled', 'type' => 'bool', 'label' => 'Pakai absensi wajah', 'hint' => 'Aktif: menu Absensi, Kiosk Absensi, dan Wajah Karyawan muncul. Karyawan didaftarkan wajahnya sekali (dengan persetujuan), lalu absen masuk dan pulang dengan menghadap kamera tablet di outlet. Yang disimpan hanya deretan angka dari wajah, bukan foto. Mati: semua halaman absensi ditutup, data tetap tersimpan.', 'default' => false],
-                    ['key' => 'attendance.self_clock', 'type' => 'bool', 'label' => 'Boleh absen dengan tombol', 'hint' => 'Aktif: menu Absen Saya muncul, karyawan menekan Masuk atau Pulang sendiri setelah login (untuk outlet tanpa kamera atau cadangan bila wajah gagal). Lebih mudah dipakai orang lain daripada wajah, jadi pakai di outlet yang bisa mengawasi. Tercatat sebagai sumber "Tombol".', 'default' => false],
                     ['key' => 'attendance.late_grace_minutes', 'type' => 'int', 'label' => 'Toleransi terlambat (menit)', 'hint' => 'Masuk sampai sekian menit setelah jam shift dijadwalkan masih dianggap tepat waktu. Terlambat dihitung dari shift pertama yang dijadwalkan hari itu (butuh Jadwal kerja aktif).', 'default' => 10, 'min' => 0, 'max' => 120],
                 ],
             ]]],

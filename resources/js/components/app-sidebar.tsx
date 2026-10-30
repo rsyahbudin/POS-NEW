@@ -26,7 +26,6 @@ export function AppSidebar() {
               schedule: boolean;
               attendance: boolean;
               staffing: boolean;
-              clock: boolean;
           }
         | undefined;
     const show = (i: Item) => canSee(user, features, i);

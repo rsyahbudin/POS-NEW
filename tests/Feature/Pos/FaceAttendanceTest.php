@@ -28,18 +28,39 @@ it('clocks a recognised person in, then out, and ignores a repeat scan', functio
     enrolled($budi, 3);
     $this->travelTo(now()->setTime(8, 0));
 
-    $in = $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['descriptor' => face(3, 0.1)])->assertOk()->json();
+    $in = $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'in', 'descriptor' => face(3, 0.1)])->assertOk()->json();
     expect($in['status'])->toBe('in')->and($in['name'])->toBe($budi->name);
     expect(Attendance::query()->count())->toBe(1);
 
-    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['descriptor' => face(3)])->assertOk()->assertJsonPath('status', 'repeat');
+    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'in', 'descriptor' => face(3)])->assertOk()->assertJsonPath('status', 'repeat');
     expect(Attendance::query()->count())->toBe(1);
 
     $this->travelTo(now()->setTime(16, 30));
-    $out = $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['descriptor' => face(3, 0.3)])->assertOk()->json();
+    $out = $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'out', 'descriptor' => face(3, 0.3)])->assertOk()->json();
     expect($out['status'])->toBe('out');
     $a = Attendance::query()->firstOrFail();
     expect($a->clock_out_at)->not->toBeNull()->and($a->method_in)->toBe('face');
+});
+
+it('follows the button chosen first: Masuk twice says already in, Pulang before Masuk says not in', function () {
+    attendanceOn();
+    $kiosk = userWithRole('manager');
+    $budi = userWithRole('waiter');
+    enrolled($budi, 3);
+    $this->travelTo(now()->setTime(8, 0));
+
+    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'out', 'descriptor' => face(3)])->assertJsonPath('status', 'not_in');
+    expect(Attendance::query()->count())->toBe(0);
+
+    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'in', 'descriptor' => face(3)])->assertJsonPath('status', 'in');
+    $this->travelTo(now()->addHours(2));
+    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'in', 'descriptor' => face(3)])->assertJsonPath('status', 'already_in')->assertJsonPath('name', $budi->name);
+    expect(Attendance::query()->count())->toBe(1)->and(Attendance::query()->firstOrFail()->clock_out_at)->toBeNull();
+
+    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'out', 'descriptor' => face(3)])->assertJsonPath('status', 'out');
+    $this->travelTo(now()->addHours(1));
+    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'out', 'descriptor' => face(3)])->assertJsonPath('status', 'not_in');
+    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['descriptor' => face(3)])->assertUnprocessable();
 });
 
 it('does not book a stranger or an ambiguous face', function () {
@@ -48,7 +69,7 @@ it('does not book a stranger or an ambiguous face', function () {
     $budi = userWithRole('waiter');
     enrolled($budi, 3);
 
-    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['descriptor' => face(9)])->assertOk()->assertJsonPath('status', 'no_match');
+    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'in', 'descriptor' => face(9)])->assertOk()->assertJsonPath('status', 'no_match');
     expect(Attendance::query()->count())->toBe(0);
 
     // two people with practically the same face: refuse rather than guess
@@ -56,8 +77,8 @@ it('does not book a stranger or an ambiguous face', function () {
     foreach ([0.0, 0.1] as $n) {
         FaceTemplate::create(['outlet_id' => $siti->outlet_id, 'user_id' => $siti->id, 'descriptor' => face(3, $n + 0.01), 'consented_at' => now()]);
     }
-    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['descriptor' => face(3, 0.05)])->assertJsonPath('status', 'no_match');
-    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['descriptor' => [1, 2]])->assertUnprocessable();
+    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'in', 'descriptor' => face(3, 0.05)])->assertJsonPath('status', 'no_match');
+    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'in', 'descriptor' => [1, 2]])->assertUnprocessable();
 });
 
 it('lets the kiosk take back a scan for a short time only', function () {
@@ -65,11 +86,11 @@ it('lets the kiosk take back a scan for a short time only', function () {
     $kiosk = userWithRole('manager');
     enrolled(userWithRole('waiter'), 3);
 
-    $id = $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['descriptor' => face(3)])->json('attendance_id');
+    $id = $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'in', 'descriptor' => face(3)])->json('attendance_id');
     $this->actingAs($kiosk)->postJson('/attendance/kiosk/undo', ['attendance_id' => $id, 'action' => 'in'])->assertJsonPath('undone', true);
     expect(Attendance::query()->count())->toBe(0);
 
-    $id = $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['descriptor' => face(3)])->json('attendance_id');
+    $id = $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'in', 'descriptor' => face(3)])->json('attendance_id');
     $this->travelTo(now()->addSeconds(AttendanceService::UNDO_SECONDS + 5));
     $this->actingAs($kiosk)->postJson('/attendance/kiosk/undo', ['attendance_id' => $id, 'action' => 'in'])->assertJsonPath('undone', false);
     expect(Attendance::query()->count())->toBe(1);
@@ -82,7 +103,7 @@ it('starts a new day instead of closing a record that was left open since yester
     enrolled($budi, 3);
     Attendance::create(['outlet_id' => $budi->outlet_id, 'user_id' => $budi->id, 'work_date' => now()->subDay()->toDateString(), 'clock_in_at' => now()->subHours(30), 'method_in' => 'face']);
 
-    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['descriptor' => face(3)])->assertJsonPath('status', 'in');
+    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'in', 'descriptor' => face(3)])->assertJsonPath('status', 'in');
     expect(Attendance::query()->count())->toBe(2)->and(Attendance::query()->whereNull('clock_out_at')->count())->toBe(2);
 });
 
@@ -119,7 +140,7 @@ it('lets only managers see and correct the log, and the kiosk only people with t
 
     $this->actingAs($waiter)->get('/attendance')->assertForbidden();
     $this->actingAs($waiter)->get('/attendance/kiosk')->assertForbidden();
-    $this->actingAs($waiter)->post('/attendance/kiosk/scan', ['descriptor' => face(1)])->assertForbidden();
+    $this->actingAs($waiter)->post('/attendance/kiosk/scan', ['action' => 'in', 'descriptor' => face(1)])->assertForbidden();
     $this->actingAs(userWithRole('cashier'))->get('/attendance/kiosk')->assertOk();
 
     $this->actingAs($manager)->post('/attendance/records', ['user_id' => $waiter->id, 'date' => $today, 'clock_in' => '08:00', 'clock_out' => '16:00', 'note' => 'lupa absen'])->assertSessionHasNoErrors();
@@ -148,31 +169,6 @@ it('counts lateness against the first planned shift, with a grace period', funct
     expect($service->lateMinutes($mk('07:55'), 10))->toBe(0)->and($service->lateMinutes($mk('08:09'), 10))->toBe(0)->and($service->lateMinutes($mk('08:25'), 10))->toBe(25);
     $other = userWithRole('kitchen');
     expect($service->lateMinutes(Attendance::create(['outlet_id' => $type->outlet_id, 'user_id' => $other->id, 'work_date' => $day, 'clock_in_at' => "{$day} 09:00", 'method_in' => 'face']), 10))->toBeNull();
-});
-
-it('lets a signed-in person clock themselves in and out with a button only when that is switched on', function () {
-    attendanceOn();
-    $waiter = userWithRole('waiter');
-
-    $this->actingAs($waiter)->get('/attendance/me')->assertNotFound();
-    $this->actingAs($waiter)->post('/attendance/me/clock')->assertNotFound();
-
-    setting('attendance.self_clock', true);
-    $this->travelTo(now()->setTime(9, 0));
-    $this->actingAs($waiter)->get('/attendance/me')->assertOk()->assertInertia(fn ($p) => $p->component('staffing/me')->where('open_since', null));
-    $this->actingAs($waiter)->post('/attendance/me/clock')->assertSessionHas('success');
-    $a = Attendance::query()->firstOrFail();
-    expect($a->method_in)->toBe('button')->and($a->clock_out_at)->toBeNull()->and($a->user_id)->toBe($waiter->id);
-    $this->actingAs($waiter)->get('/attendance/me')->assertInertia(fn ($p) => $p->where('open_since', fn ($v) => is_string($v)));
-
-    $this->actingAs($waiter)->post('/attendance/me/clock')->assertSessionHas('success');       // pressed again at once: ignored
-    expect(Attendance::query()->count())->toBe(1)->and($a->fresh()->clock_out_at)->toBeNull();
-
-    $this->travelTo(now()->setTime(17, 0));
-    $this->actingAs($waiter)->post('/attendance/me/clock')->assertSessionHas('success');
-    expect($a->fresh()->clock_out_at)->not->toBeNull()->and($a->fresh()->method_out)->toBe('button');
-    // a button record cannot be taken back through the face kiosk undo
-    $this->actingAs(userWithRole('manager'))->postJson('/attendance/kiosk/undo', ['attendance_id' => $a->id, 'action' => 'out'])->assertJsonPath('undone', false);
 });
 
 it('shows face enrolment on the users page only to people who manage attendance, and only while attendance is on', function () {

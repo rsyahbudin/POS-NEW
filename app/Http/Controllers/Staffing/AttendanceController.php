@@ -10,8 +10,6 @@ use App\Domain\Staffing\LongshiftService;
 use App\Domain\Staffing\Models\Attendance;
 use App\Domain\Staffing\Models\FaceTemplate;
 use App\Domain\Staffing\Models\LongshiftApproval;
-use App\Domain\Staffing\Models\WorkSchedule;
-use App\Domain\Staffing\Positions;
 use App\Exports\ReportSheet;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -41,62 +39,19 @@ class AttendanceController extends Controller
         ]);
     }
 
-    /** The signed-in person's own page: where they stand today and a button to clock in or out. */
-    public function me(Request $request): Response
-    {
-        abort_unless($this->selfClockOn(), 404);
-        $user = $this->actor($request);
-        $today = now()->toDateString();
-        $records = Attendance::query()->where('user_id', $user->id)->where('work_date', '>=', now()->subDays(6)->toDateString())->orderByDesc('clock_in_at')->get();
-        $open = $records->first(fn (Attendance $a) => $a->clock_out_at === null && $a->clock_in_at->diffInHours(now(), true) < AttendanceService::STALE_HOURS);
-
-        return Inertia::render('staffing/me', [
-            'name' => $user->name,
-            'open_since' => $open?->clock_in_at->toIso8601String(),
-            'planned' => WorkSchedule::query()->where('user_id', $user->id)->whereDate('work_date', $today)->with('type')->get()->groupBy('work_shift_type_id')->map(function ($group) {
-                $type = $group->firstOrFail()->type;
-
-                return [
-                    'name' => $type->name, 'starts_at' => substr($type->starts_at, 0, 5), 'ends_at' => substr($type->ends_at, 0, 5),
-                    'positions' => $group->pluck('position')->reject(fn ($p) => $p === 'none')->map(fn ($p) => Positions::ALL[$p] ?? $p)->values()->all(),
-                ];
-            })->values()->all(),
-            'recent' => $records->map(fn (Attendance $a) => [
-                'id' => $a->id, 'work_date' => $a->work_date->toDateString(), 'clock_in_at' => $a->clock_in_at->toIso8601String(), 'clock_out_at' => $a->clock_out_at?->toIso8601String(),
-                'hours' => $a->clock_out_at ? round($a->clock_in_at->diffInMinutes($a->clock_out_at, true) / 60, 1) : null, 'method' => $a->method_in,
-            ])->all(),
-        ]);
-    }
-
-    public function clock(Request $request): RedirectResponse
-    {
-        abort_unless($this->selfClockOn(), 404);
-        $r = $this->service->clockSelf($this->outlet->id(), $this->actor($request));
-        $when = ($r['status'] === 'out' ? $r['attendance']->clock_out_at : $r['attendance']->clock_in_at)?->setTimezone(config('app.timezone'))->format('H:i');
-
-        return back()->with('success', match ($r['status']) {
-            'in' => "Masuk tercatat pukul {$when}.", 'out' => "Pulang tercatat pukul {$when}.", default => 'Sudah tercatat barusan.',
-        });
-    }
-
-    private function selfClockOn(): bool
-    {
-        return (bool) $this->settings->get('attendance.self_clock', false);
-    }
-
     public function scan(Request $request): JsonResponse
     {
-        $data = $request->validate(['descriptor' => 'required|array|size:128', 'descriptor.*' => 'required|numeric']);
-        $result = $this->service->scan($this->outlet->id(), array_values(array_map('floatval', $data['descriptor'])));
+        $data = $request->validate(['action' => 'required|in:in,out', 'descriptor' => 'required|array|size:128', 'descriptor.*' => 'required|numeric']);
+        $result = $this->service->scan($this->outlet->id(), array_values(array_map('floatval', $data['descriptor'])), $data['action']);
         if ($result['status'] === 'no_match') {
             return response()->json(['status' => 'no_match']);
         }
         $a = $result['attendance'];
-        $at = $result['status'] === 'out' ? $a->clock_out_at : $a->clock_in_at;
+        $at = $a === null ? null : ($result['status'] === 'out' ? $a->clock_out_at : $a->clock_in_at);
 
         return response()->json([
-            'status' => $result['status'], 'name' => $result['user']->name, 'at' => $at?->toIso8601String(), 'attendance_id' => $a->id,
-            'late' => $result['status'] === 'in' ? $this->service->lateMinutes($a, $this->grace()) : null,
+            'status' => $result['status'], 'name' => $result['user']->name, 'at' => $at?->toIso8601String(), 'attendance_id' => $a?->id,
+            'late' => $result['status'] === 'in' && $a !== null ? $this->service->lateMinutes($a, $this->grace()) : null,
         ]);
     }
 

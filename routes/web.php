@@ -161,10 +161,6 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::post('kiosk/scan', [AttendanceController::class, 'scan'])->middleware('throttle:60,1')->name('scan');
             Route::post('kiosk/undo', [AttendanceController::class, 'undo'])->name('undo');
         });
-        Route::middleware('permission:clock-own-attendance')->group(function () {
-            Route::get('me', [AttendanceController::class, 'me'])->name('me');
-            Route::post('me/clock', [AttendanceController::class, 'clock'])->middleware('throttle:30,1')->name('clock');
-        });
         Route::middleware('permission:manage-attendance')->group(function () {
             Route::get('/', [AttendanceController::class, 'index'])->name('index');
             Route::get('export', [AttendanceController::class, 'export'])->name('export');

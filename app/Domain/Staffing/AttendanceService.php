@@ -6,7 +6,6 @@ use App\Domain\Staffing\Models\Attendance;
 use App\Domain\Staffing\Models\WorkSchedule;
 use App\Models\User;
 use App\Support\Audit;
-use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -25,51 +24,49 @@ class AttendanceService
     public function __construct(private FaceMatcher $matcher, private LongshiftService $longshift) {}
 
     /**
+     * The person chose Masuk or Pulang first, then showed their face.
+     *
+     * @param  'in'|'out'  $action
      * @param  list<float>  $descriptor
-     * @return array{status: 'no_match'}|array{status: 'in'|'out'|'repeat', attendance: Attendance, user: User}
+     * @return array{status: 'no_match'}|array{status: 'in'|'out'|'repeat'|'already_in'|'not_in', attendance: Attendance|null, user: User}
      */
-    public function scan(int $outletId, array $descriptor, ?Carbon $now = null): array
+    public function scan(int $outletId, array $descriptor, string $action, ?Carbon $now = null): array
     {
         $now ??= now();
         $hit = $this->matcher->match($outletId, $descriptor);
         if ($hit === null) {
             return ['status' => 'no_match'];
         }
+        $user = $hit['user'];
 
-        return $this->punch($outletId, $hit['user'], 'face', $hit['distance'], $now);
-    }
-
-    /**
-     * A signed-in person clocks themselves in or out with a button (for outlets or people without the face camera).
-     *
-     * @return array{status: 'in'|'out'|'repeat', attendance: Attendance, user: User}
-     */
-    public function clockSelf(int $outletId, User $user, ?Carbon $now = null): array
-    {
-        return $this->punch($outletId, $user, 'button', null, $now ?? now());
-    }
-
-    /** @return array{status: 'in'|'out'|'repeat', attendance: Attendance, user: User} */
-    private function punch(int $outletId, User $user, string $method, ?float $distance, CarbonInterface $now): array
-    {
-        return DB::transaction(function () use ($outletId, $user, $method, $distance, $now) {
+        return DB::transaction(function () use ($outletId, $user, $hit, $action, $now) {
             $latest = Attendance::query()->where('outlet_id', $outletId)->where('user_id', $user->id)->lockForUpdate()->latest('clock_in_at')->first();
+            $open = $latest !== null && $latest->clock_out_at === null && $latest->clock_in_at->diffInHours($now, true) < self::STALE_HOURS ? $latest : null;
 
             if ($latest !== null) {
                 $last = $latest->clock_out_at ?? $latest->clock_in_at;
-                if ($last->diffInSeconds($now, true) < self::REPEAT_SECONDS) {
+                $sameAction = $action === 'out' ? $latest->clock_out_at !== null : $open !== null;
+                if ($sameAction && $last->diffInSeconds($now, true) < self::REPEAT_SECONDS) {
                     return ['status' => 'repeat', 'attendance' => $latest, 'user' => $user];
-                }
-                if ($latest->clock_out_at === null && $latest->clock_in_at->diffInHours($now, true) < self::STALE_HOURS) {
-                    $latest->update(['clock_out_at' => $now, 'method_out' => $method]);
-                    $this->longshift->syncAttendanceDay($outletId, $user->id, $latest->work_date);
-
-                    return ['status' => 'out', 'attendance' => $latest, 'user' => $user];
                 }
             }
 
+            if ($action === 'out') {
+                if ($open === null) {
+                    return ['status' => 'not_in', 'attendance' => $latest, 'user' => $user];
+                }
+                $open->update(['clock_out_at' => $now, 'method_out' => 'face']);
+                $this->longshift->syncAttendanceDay($outletId, $user->id, $open->work_date);
+
+                return ['status' => 'out', 'attendance' => $open, 'user' => $user];
+            }
+
+            if ($open !== null) {
+                return ['status' => 'already_in', 'attendance' => $open, 'user' => $user];
+            }
+            // an older open record is a forgotten clock-out: it stays open for the manager to correct, and a new day starts
             $in = Attendance::create([
-                'outlet_id' => $outletId, 'user_id' => $user->id, 'work_date' => $now->toDateString(), 'clock_in_at' => $now, 'method_in' => $method, 'distance' => $distance,
+                'outlet_id' => $outletId, 'user_id' => $user->id, 'work_date' => $now->toDateString(), 'clock_in_at' => $now, 'method_in' => 'face', 'distance' => $hit['distance'],
             ]);
 
             return ['status' => 'in', 'attendance' => $in, 'user' => $user];

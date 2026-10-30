@@ -55,7 +55,6 @@ class HandleInertiaRequests extends Middleware
                 'inventory' => (bool) app(SettingsRepository::class)->get('inventory.enabled', false),
                 'schedule' => (bool) app(SettingsRepository::class)->get('schedule.enabled', false),
                 'attendance' => (bool) app(SettingsRepository::class)->get('attendance.enabled', false),
-                'clock' => (bool) app(SettingsRepository::class)->get('attendance.enabled', false) && (bool) app(SettingsRepository::class)->get('attendance.self_clock', false),
                 'staffing' => (bool) app(SettingsRepository::class)->get('schedule.enabled', false) || (bool) app(SettingsRepository::class)->get('attendance.enabled', false),
             ],
             'print_routing' => fn () => $request->user()?->outlet_id ? PrintDispatcher::routing((int) $request->user()->outlet_id) : ['receipt' => false, 'bill' => false, 'ticket' => false],

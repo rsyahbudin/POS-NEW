@@ -154,3 +154,16 @@ it('counts every full standard shift of extra hours as one more shift, the rest 
     LongshiftApproval::create(['outlet_id' => $waiter->outlet_id, 'user_id' => $waiter->id, 'work_date' => now()->toDateString(), 'source' => 'attendance', 'hours' => 11, 'approved_hours' => 10, 'status' => 'approved', 'decided_by' => $mod->id]);
     $this->actingAs($mod)->get('/longshift')->assertInertia(fn ($p) => $p->where('decided.0.approved_shifts', 1)->where('decided.0.approved_rest', 2)->where('decided.0.shifts', 1)->where('decided.0.rest', 3));
 });
+
+it('lets the MOD approve any longshift whether or not the MOD has a shift or an attendance that day', function () {
+    staffingOn();
+    $mod = userWithRole('mod');
+    $waiter = userWithRole('waiter');
+    // the MOD is neither scheduled nor clocked in: approving is the MOD's job, not tied to a shift
+    expect(WorkSchedule::query()->where('user_id', $mod->id)->count())->toBe(0)->and(Attendance::query()->where('user_id', $mod->id)->count())->toBe(0);
+    $row = LongshiftApproval::create(['outlet_id' => $waiter->outlet_id, 'user_id' => $waiter->id, 'work_date' => now()->toDateString(), 'source' => 'attendance', 'hours' => 2, 'status' => 'pending']);
+
+    $this->actingAs($mod)->get('/longshift')->assertOk()->assertInertia(fn ($p) => $p->has('pending', 1)->where('can.decide', true));
+    $this->actingAs($mod)->post("/longshift/{$row->id}/decide", ['approve' => true])->assertSessionHas('success');
+    expect($row->fresh()->status)->toBe('approved')->and($row->fresh()->decided_by)->toBe($mod->id);
+});

@@ -28,9 +28,10 @@ class AttendanceService
      *
      * @param  'in'|'out'  $action
      * @param  list<float>  $descriptor
+     * @param  array{lat: float|null, lng: float|null, distance: int|null}|null  $geo  where the kiosk was, kept with the record
      * @return array{status: 'no_match'}|array{status: 'in'|'out'|'repeat'|'already_in'|'not_in', attendance: Attendance|null, user: User}
      */
-    public function scan(int $outletId, array $descriptor, string $action, ?Carbon $now = null): array
+    public function scan(int $outletId, array $descriptor, string $action, ?Carbon $now = null, ?array $geo = null): array
     {
         $now ??= now();
         $hit = $this->matcher->match($outletId, $descriptor);
@@ -39,7 +40,7 @@ class AttendanceService
         }
         $user = $hit['user'];
 
-        return DB::transaction(function () use ($outletId, $user, $hit, $action, $now) {
+        return DB::transaction(function () use ($outletId, $user, $hit, $action, $now, $geo) {
             $latest = Attendance::query()->where('outlet_id', $outletId)->where('user_id', $user->id)->lockForUpdate()->latest('clock_in_at')->first();
             $open = $latest !== null && $latest->clock_out_at === null && $latest->clock_in_at->diffInHours($now, true) < self::STALE_HOURS ? $latest : null;
 
@@ -55,7 +56,7 @@ class AttendanceService
                 if ($open === null) {
                     return ['status' => 'not_in', 'attendance' => $latest, 'user' => $user];
                 }
-                $open->update(['clock_out_at' => $now, 'method_out' => 'face']);
+                $open->update(['clock_out_at' => $now, 'method_out' => 'face', 'out_geo_distance_m' => $geo['distance'] ?? null]);
                 $this->longshift->syncAttendanceDay($outletId, $user->id, $open->work_date);
 
                 return ['status' => 'out', 'attendance' => $open, 'user' => $user];
@@ -67,6 +68,7 @@ class AttendanceService
             // an older open record is a forgotten clock-out: it stays open for the manager to correct, and a new day starts
             $in = Attendance::create([
                 'outlet_id' => $outletId, 'user_id' => $user->id, 'work_date' => $now->toDateString(), 'clock_in_at' => $now, 'method_in' => 'face', 'distance' => $hit['distance'],
+                'lat' => $geo['lat'] ?? null, 'lng' => $geo['lng'] ?? null, 'geo_distance_m' => $geo['distance'] ?? null,
             ]);
 
             return ['status' => 'in', 'attendance' => $in, 'user' => $user];

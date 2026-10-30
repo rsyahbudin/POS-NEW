@@ -275,3 +275,50 @@ it('counts how many times and how many minutes someone was late', function () {
     $to = $base->addDays(5)->toDateString();
     $this->actingAs(userWithRole('manager'))->get("/attendance?from={$from}&to={$to}")->assertInertia(fn ($p) => $p->where('summary.0.late', 2)->where('summary.0.late_minutes', 85));
 });
+
+it('accepts a scan only within the radius of the cafe when the geofence is on, and keeps where it was made', function () {
+    attendanceOn();
+    $owner = userWithRole('owner');
+    $kiosk = userWithRole('manager');
+    $budi = userWithRole('waiter');
+    enrolled($budi, 3);
+    $scan = fn (array $geo, string $action = 'in') => $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => $action, 'descriptor' => face(3)] + $geo)->assertOk()->json();
+
+    // off by default: no place needed, nothing refused
+    expect($scan([])['status'])->toBe('in');
+    Attendance::query()->delete();
+
+    setting('attendance.geofence', true);
+    expect($scan(['lat' => -6.2, 'lng' => 106.8])['status'])->toBe('geo_not_set');           // the owner has not set the cafe's spot
+
+    $this->actingAs($owner)->post('/admin/settings/outlet', ['name' => 'Kafe Contoh', 'latitude' => -6.2, 'longitude' => 106.8])->assertSessionHasNoErrors();
+    expect($scan([])['status'])->toBe('geo_missing');
+    $far = $scan(['lat' => -6.21, 'lng' => 106.8]);
+    expect($far['status'])->toBe('out_of_area')->and($far['distance'])->toBeGreaterThan(1000)->and($far['radius'])->toBe(500);
+    expect($scan(['lat' => -6.2, 'lng' => 106.8, 'accuracy' => 900])['status'])->toBe('geo_weak');
+    expect(Attendance::query()->count())->toBe(0);                                          // nothing booked from outside
+
+    $near = $scan(['lat' => -6.202, 'lng' => 106.8, 'accuracy' => 30]);
+    expect($near['status'])->toBe('in');
+    $a = Attendance::query()->firstOrFail();
+    expect($a->geo_distance_m)->toBeBetween(200, 245)->and((float) $a->lat)->toBe(-6.202);
+
+    // the radius is a setting; a stranger is still not recognised even inside it
+    setting('attendance.radius_m', 100);
+    $this->travelTo(now()->addHours(2));
+    expect($scan(['lat' => -6.202, 'lng' => 106.8], 'out')['status'])->toBe('out_of_area');
+    setting('attendance.radius_m', 500);
+    expect($scan(['lat' => -6.2005, 'lng' => 106.8], 'out')['status'])->toBe('out');
+    expect($a->fresh()->out_geo_distance_m)->toBeLessThan(100);
+    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'in', 'descriptor' => face(9), 'lat' => -6.2, 'lng' => 106.8])->assertJsonPath('status', 'no_match');
+    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'in', 'descriptor' => face(3), 'lat' => 99, 'lng' => 0])->assertUnprocessable();
+    $this->actingAs($owner)->post('/admin/settings/outlet', ['name' => 'Kafe Contoh', 'latitude' => 120])->assertSessionHasErrors('latitude');
+});
+
+it('gives the kiosk page the geofence state', function () {
+    attendanceOn();
+    $this->actingAs(userWithRole('manager'))->get('/attendance/kiosk')->assertInertia(fn ($p) => $p->where('geofence', false)->where('radius', 500));
+    setting('attendance.geofence', true);
+    setting('attendance.radius_m', 300);
+    $this->actingAs(userWithRole('manager'))->get('/attendance/kiosk')->assertInertia(fn ($p) => $p->where('geofence', true)->where('radius', 300));
+});

@@ -42,6 +42,8 @@ type Props = {
         website: string | null;
         maps_url: string | null;
         google_review_url: string | null;
+        latitude: number | string | null;
+        longitude: number | string | null;
     };
     settings: Record<string, string | number | boolean | null>;
     catalog: CatalogTab[];
@@ -108,6 +110,8 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
         website: outlet.website ?? '',
         maps_url: outlet.maps_url ?? '',
         google_review_url: outlet.google_review_url ?? '',
+        latitude: outlet.latitude === null ? '' : String(outlet.latitude),
+        longitude: outlet.longitude === null ? '' : String(outlet.longitude),
     });
     const text = (
         key: keyof typeof f,
@@ -235,6 +239,58 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
                     'Tempel link dari tombol Bagikan di Google Maps. Dipakai untuk tombol Petunjuk arah.',
                     'https://maps.app.goo.gl/...',
                 )}
+                <div className="grid gap-2 rounded-xl border p-3">
+                    <p className="text-sm font-medium">Titik lokasi kafe</p>
+                    <p className="text-xs text-muted-foreground">
+                        Dipakai untuk membatasi absen di sekitar kafe. Buka
+                        halaman ini dari tablet atau HP yang berada di dalam
+                        kafe, lalu tekan tombol di bawah. Perlu izin lokasi.
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                        {text('latitude', 'Latitude', undefined, '-6.2000000')}
+                        {text(
+                            'longitude',
+                            'Longitude',
+                            undefined,
+                            '106.8166667',
+                        )}
+                    </div>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11"
+                        onClick={() => {
+                            if (!navigator.geolocation) {
+                                toast.error(
+                                    'Perangkat ini tidak mendukung lokasi.',
+                                );
+
+                                return;
+                            }
+                            navigator.geolocation.getCurrentPosition(
+                                (pos) => {
+                                    setF((cur) => ({
+                                        ...cur,
+                                        latitude:
+                                            pos.coords.latitude.toFixed(7),
+                                        longitude:
+                                            pos.coords.longitude.toFixed(7),
+                                    }));
+                                    toast.success(
+                                        `Lokasi terbaca (akurasi sekitar ${Math.round(pos.coords.accuracy)} m). Tekan Simpan.`,
+                                    );
+                                },
+                                () =>
+                                    toast.error(
+                                        'Lokasi tidak bisa dibaca. Izinkan lokasi di browser (butuh https).',
+                                    ),
+                                { enableHighAccuracy: true, timeout: 15000 },
+                            );
+                        }}
+                    >
+                        Pakai lokasi perangkat ini
+                    </Button>
+                </div>
                 {text(
                     'google_review_url',
                     'Link review Google',

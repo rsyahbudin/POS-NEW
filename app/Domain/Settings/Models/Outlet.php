@@ -19,6 +19,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $instagram
  * @property string|null $wifi_name
  * @property string|null $wifi_password
+ * @property float|null $latitude
+ * @property float|null $longitude
  * @property string|null $about
  * @property string|null $whatsapp
  * @property string|null $tiktok

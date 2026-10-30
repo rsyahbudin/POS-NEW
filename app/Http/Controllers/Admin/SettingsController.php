@@ -53,7 +53,7 @@ class SettingsController extends Controller
     /** @return array<string, mixed> */
     private function outletProps(Outlet $o): array
     {
-        return $o->only(['name', 'address', 'npwp', 'tagline', 'opening_hours', 'phone', 'instagram', 'wifi_name', 'wifi_password', 'about', 'whatsapp', 'tiktok', 'facebook', 'website', 'maps_url', 'google_review_url'])
+        return $o->only(['name', 'address', 'npwp', 'tagline', 'opening_hours', 'phone', 'instagram', 'wifi_name', 'wifi_password', 'about', 'whatsapp', 'tiktok', 'facebook', 'website', 'maps_url', 'google_review_url', 'latitude', 'longitude'])
             + ['logo' => MediaUrl::public($o->logo_path), 'banner' => MediaUrl::public($o->banner_path)];
     }
 
@@ -65,6 +65,7 @@ class SettingsController extends Controller
             'phone' => 'nullable|string|max:40', 'instagram' => 'nullable|string|max:60', 'wifi_name' => 'nullable|string|max:60', 'wifi_password' => 'nullable|string|max:80',
             'about' => 'nullable|string|max:400', 'whatsapp' => 'nullable|string|max:40', 'tiktok' => 'nullable|string|max:60', 'facebook' => 'nullable|string|max:120',
             'website' => 'nullable|string|max:160', 'maps_url' => 'nullable|url:http,https|max:300', 'google_review_url' => 'nullable|url:http,https|max:300',
+            'latitude' => 'nullable|numeric|between:-90,90', 'longitude' => 'nullable|numeric|between:-180,180',
         ]);
         if (! empty($data['website']) && ! preg_match('#^https?://#i', $data['website'])) {
             $data['website'] = 'https://'.$data['website'];

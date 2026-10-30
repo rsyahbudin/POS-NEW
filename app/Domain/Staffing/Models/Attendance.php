@@ -20,6 +20,10 @@ use Illuminate\Support\Carbon;
  * @property string|null $method_out
  * @property float|null $distance
  * @property string|null $note
+ * @property float|null $lat
+ * @property float|null $lng
+ * @property int|null $geo_distance_m
+ * @property int|null $out_geo_distance_m
  * @property int|null $edited_by
  * @property-read User $user
  */

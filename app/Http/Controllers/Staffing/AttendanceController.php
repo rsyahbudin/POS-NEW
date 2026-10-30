@@ -6,6 +6,7 @@ use App\Domain\Settings\OutletContext;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Staffing\AttendanceService;
 use App\Domain\Staffing\FaceMatcher;
+use App\Domain\Staffing\GeoFence;
 use App\Domain\Staffing\LongshiftService;
 use App\Domain\Staffing\Models\Attendance;
 use App\Domain\Staffing\Models\FaceTemplate;
@@ -29,7 +30,7 @@ class AttendanceController extends Controller
 {
     public const MAX_SAMPLES = 5;
 
-    public function __construct(private OutletContext $outlet, private AttendanceService $service, private FaceMatcher $matcher, private SettingsRepository $settings, private LongshiftService $longshift) {}
+    public function __construct(private OutletContext $outlet, private AttendanceService $service, private FaceMatcher $matcher, private SettingsRepository $settings, private LongshiftService $longshift, private GeoFence $geo) {}
 
     public function kiosk(): Response
     {
@@ -38,13 +39,25 @@ class AttendanceController extends Controller
         return Inertia::render('staffing/kiosk', [
             'enrolled' => FaceTemplate::query()->where('outlet_id', $id)->distinct('user_id')->count('user_id'),
             'undo_seconds' => AttendanceService::UNDO_SECONDS,
+            'geofence' => $this->geo->enabled(),
+            'radius' => $this->geo->radius(),
         ]);
     }
 
     public function scan(Request $request): JsonResponse
     {
-        $data = $request->validate(['action' => 'required|in:in,out', 'descriptor' => 'required|array|size:128', 'descriptor.*' => 'required|numeric']);
-        $result = $this->service->scan($this->outlet->id(), array_values(array_map('floatval', $data['descriptor'])), $data['action']);
+        $data = $request->validate([
+            'action' => 'required|in:in,out', 'descriptor' => 'required|array|size:128', 'descriptor.*' => 'required|numeric',
+            'lat' => 'nullable|numeric|between:-90,90', 'lng' => 'nullable|numeric|between:-180,180', 'accuracy' => 'nullable|numeric|min:0',
+        ]);
+        $lat = isset($data['lat']) ? (float) $data['lat'] : null;
+        $lng = isset($data['lng']) ? (float) $data['lng'] : null;
+        // Where the kiosk is comes first: a scan from outside the radius never reaches the face match.
+        $place = $this->geo->check($this->outlet->id(), $lat, $lng, isset($data['accuracy']) ? (float) $data['accuracy'] : null);
+        if (! $place['ok']) {
+            return response()->json(['status' => $place['reason'], 'distance' => $place['distance'], 'radius' => $this->geo->radius()]);
+        }
+        $result = $this->service->scan($this->outlet->id(), array_values(array_map('floatval', $data['descriptor'])), $data['action'], null, ['lat' => $lat, 'lng' => $lng, 'distance' => $place['distance']]);
         if ($result['status'] === 'no_match') {
             return response()->json(['status' => 'no_match']);
         }

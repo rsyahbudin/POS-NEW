@@ -9,7 +9,19 @@ import { timeId } from '@/lib/format';
 
 type Action = 'in' | 'out';
 type Result = {
-    status: 'in' | 'out' | 'repeat' | 'already_in' | 'not_in' | 'no_match';
+    status:
+        | 'in'
+        | 'out'
+        | 'repeat'
+        | 'already_in'
+        | 'not_in'
+        | 'no_match'
+        | 'geo_not_set'
+        | 'geo_missing'
+        | 'geo_weak'
+        | 'out_of_area';
+    distance?: number | null;
+    radius?: number;
     name?: string;
     at?: string;
     attendance_id?: number;
@@ -20,13 +32,38 @@ const STEADY = 3; // consecutive sightings before a scan is sent
 const SHOW_MS = 6000;
 const IDLE_MS = 30000; // back to the two buttons when nobody shows a face
 
+type Where = { lat: number; lng: number; accuracy: number };
+
+/** The device's own GPS fix (a recent one is fine), or null when it is refused or unavailable. */
+function whereAmI(): Promise<Where | null> {
+    return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+            resolve(null);
+
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (p) =>
+                resolve({
+                    lat: p.coords.latitude,
+                    lng: p.coords.longitude,
+                    accuracy: p.coords.accuracy,
+                }),
+            () => resolve(null),
+            { enableHighAccuracy: true, maximumAge: 20000, timeout: 10000 },
+        );
+    });
+}
+
 function Scanner({
     action,
     undoSeconds,
+    geofence,
     onDone,
 }: {
     action: Action;
     undoSeconds: number;
+    geofence: boolean;
     onDone: () => void;
 }) {
     const { video, state, error, look } = useFaceCamera();
@@ -62,10 +99,23 @@ function Scanner({
                         busy.current = true;
                         steady.current = 0;
                         setHint('Memeriksa…');
+                        const where = geofence ? await whereAmI() : null;
+                        if (geofence && where === null) {
+                            setHint(
+                                'Lokasi perangkat tidak terbaca. Izinkan lokasi di browser, lalu coba lagi.',
+                            );
+                            busy.current = false;
+
+                            return;
+                        }
                         const r = await api<Result>(
                             'POST',
                             '/attendance/kiosk/scan',
-                            { action, descriptor: seen.descriptor },
+                            {
+                                action,
+                                descriptor: seen.descriptor,
+                                ...where,
+                            },
                         );
                         beep.current(
                             r.status === 'in' || r.status === 'out'
@@ -158,7 +208,9 @@ function Scanner({
                     role="status"
                     className={`grid gap-2 rounded-2xl border bg-card p-5 text-center ${result.status === 'in' || result.status === 'out' ? 'border-emerald-600/40' : 'border-amber-600/40'}`}
                 >
-                    <p className="text-2xl font-semibold">{result.name}</p>
+                    <p className="text-2xl font-semibold">
+                        {result.name ?? 'Absensi'}
+                    </p>
                     {result.status === 'in' || result.status === 'out' ? (
                         <>
                             <p className="text-lg">
@@ -182,6 +234,31 @@ function Scanner({
                                 {Math.round(undoSeconds / 60)} menit.
                             </p>
                         </>
+                    ) : result.status === 'out_of_area' ? (
+                        <p className="text-lg">
+                            Perangkat ini{' '}
+                            {result.distance !== null &&
+                            result.distance !== undefined
+                                ? `sekitar ${result.distance} m`
+                                : 'terlalu jauh'}{' '}
+                            dari kafe. Absen hanya sah dalam radius{' '}
+                            {result.radius} m.
+                        </p>
+                    ) : result.status === 'geo_weak' ? (
+                        <p className="text-lg">
+                            Sinyal lokasi kurang akurat. Pindah ke dekat jendela
+                            atau tunggu sebentar, lalu coba lagi.
+                        </p>
+                    ) : result.status === 'geo_not_set' ? (
+                        <p className="text-lg">
+                            Titik lokasi kafe belum diatur. Minta owner
+                            mengisinya di Pengaturan › Profil outlet.
+                        </p>
+                    ) : result.status === 'geo_missing' ? (
+                        <p className="text-lg">
+                            Lokasi perangkat tidak terbaca. Izinkan lokasi di
+                            browser.
+                        </p>
                     ) : result.status === 'already_in' ? (
                         <p className="text-lg">
                             Sudah masuk pukul {timeId(result.at)}. Pilih Pulang
@@ -210,9 +287,11 @@ function Scanner({
 export default function Kiosk({
     enrolled,
     undo_seconds,
+    geofence,
 }: {
     enrolled: number;
     undo_seconds: number;
+    geofence: boolean;
 }) {
     const [action, setAction] = useState<Action | null>(null);
     const done = useRef(() => setAction(null));
@@ -226,6 +305,7 @@ export default function Kiosk({
                     <Scanner
                         action={action}
                         undoSeconds={undo_seconds}
+                        geofence={geofence}
                         onDone={done.current}
                     />
                 ) : (

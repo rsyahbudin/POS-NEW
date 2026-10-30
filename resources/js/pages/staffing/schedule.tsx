@@ -94,9 +94,37 @@ export default function Schedule({
     const mine = people.find((p) => p.id === me);
     const firstError = Object.values(errors ?? {})[0];
 
-    const cellHours = cell
-        ? cell.entries.reduce((s, e) => s + (byId[e.type_id]?.hours ?? 0), 0)
-        : 0;
+    // Shifts may overlap on purpose (09:00-18:00 and 14:00-23:00): a person on both works 09:00-23:00, overlap counted once.
+    const minutesOf = (t: string) =>
+        Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+    const cellHours = (() => {
+        if (!cell) {
+            return 0;
+        }
+        const spans = cell.entries
+            .map((e) => byId[e.type_id])
+            .filter(Boolean)
+            .map((t) => {
+                const from = minutesOf(t.starts_at);
+                const to = minutesOf(t.ends_at);
+
+                return [from, to <= from ? to + 1440 : to];
+            })
+            .sort((x, y) => x[0] - y[0]);
+        let total = 0;
+        let end = -1;
+        for (const [from, to] of spans) {
+            if (from >= end) {
+                total += to - from;
+                end = to;
+            } else if (to > end) {
+                total += to - end;
+                end = to;
+            }
+        }
+
+        return Math.round((total / 60) * 10) / 10;
+    })();
     const extra = Math.max(0, Math.floor(cellHours - standard_hours));
     const toggleType = (id: number) => {
         if (!cell) {
@@ -440,9 +468,10 @@ export default function Schedule({
                     title={`${cell.person.name} · ${dayLabel(cell.date)}`}
                 >
                     <p className="text-sm text-muted-foreground">
-                        Pilih shift (maksimal {max_per_day}) dan posisinya. Satu
-                        orang boleh memegang beberapa posisi, mis. Kasir + MOD.
-                        Kosongkan semua untuk libur.
+                        Pilih shift (maksimal {max_per_day}) dan posisinya.
+                        Shift boleh saling tumpang tindih; jam yang berimpit
+                        dihitung sekali. Satu orang boleh memegang beberapa
+                        posisi, mis. Kasir + MOD. Kosongkan semua untuk libur.
                     </p>
                     <div className="grid gap-2">
                         {active.map((t) => {

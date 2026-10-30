@@ -78,6 +78,7 @@ export default function Attendance({
     absent,
     people,
     grace,
+    standard_hours,
 }: Props) {
     const errors = usePage().props.errors as Record<string, string>;
     const qs = new URLSearchParams({
@@ -297,7 +298,9 @@ export default function Attendance({
                             p.days,
                             p.hours,
                             p.late,
-                            p.long_hours ? longshiftText(p.long_hours, standard_hours) : '-',
+                            p.long_hours
+                                ? longshiftText(p.long_hours, standard_hours)
+                                : '-',
                             p.open || '-',
                             <Button
                                 key="f"

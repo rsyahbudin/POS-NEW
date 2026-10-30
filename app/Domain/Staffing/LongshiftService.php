@@ -46,8 +46,8 @@ class LongshiftService
     /** Re-checks the planned day of one person. Someone who may approve gets their own plan approved at once. */
     public function syncSchedule(int $outletId, int $userId, CarbonInterface $date, ?User $actor): void
     {
-        $minutes = (int) WorkSchedule::query()->where('user_id', $userId)->whereDate('work_date', $date)->with('type')->get()
-            ->unique('work_shift_type_id')->sum(fn (WorkSchedule $s) => $s->type->durationMinutes());
+        $types = WorkSchedule::query()->where('user_id', $userId)->whereDate('work_date', $date)->with('type')->get()->unique('work_shift_type_id')->map(fn (WorkSchedule $s) => $s->type);
+        $minutes = ShiftHours::unionMinutes($types);
         $this->upsert($outletId, $userId, $date, 'schedule', $this->extraHours($minutes), null, $actor);
     }
 

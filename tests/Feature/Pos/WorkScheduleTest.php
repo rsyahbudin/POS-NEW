@@ -2,8 +2,10 @@
 
 use App\Domain\Notification\Models\AppNotification;
 use App\Domain\Settings\OutletContext;
+use App\Domain\Staffing\Models\LongshiftApproval;
 use App\Domain\Staffing\Models\WorkSchedule;
 use App\Domain\Staffing\Models\WorkShiftType;
+use App\Domain\Staffing\ShiftHours;
 
 function workType(string $name, string $from, string $to): WorkShiftType
 {
@@ -54,21 +56,31 @@ it('lets a manager give a person up to three shifts in one day, and a day off by
     expect(WorkSchedule::query()->count())->toBe(0);
 });
 
-it('refuses two shifts that overlap, and counts the hours of a shift past midnight', function () {
+it('lets shift patterns overlap on purpose, and counts the hours a person works on both once', function () {
     setting('schedule.enabled', true);
-    $manager = userWithRole('manager');
+    $mod = userWithRole('mod');
     $waiter = userWithRole('waiter');
-    $a = workType('Pagi', '08:00', '16:00');
-    $b = workType('Sore', '15:00', '20:00');
-    $late = workType('Malam', '22:00', '02:00');
-    $ok = workType('Petang', '16:00', '20:00');
+    $cashier = userWithRole('cashier');
+    $s1 = workType('Shift 1', '09:00', '18:00');
+    $s2 = workType('Shift 2', '14:00', '23:00');
+    $night = workType('Malam', '22:00', '02:00');
+    $day = monday();
 
-    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => monday(), 'entries' => entries([$a->id, $b->id])])->assertSessionHas('error');
-    expect(WorkSchedule::query()->count())->toBe(0);
+    // one person on each: nobody refused, the afternoon is covered twice
+    $this->actingAs($mod)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => $day, 'entries' => entries([$s1->id])])->assertSessionHasNoErrors();
+    $this->actingAs($mod)->post('/schedule/day', ['user_id' => $cashier->id, 'date' => $day, 'entries' => entries([$s2->id])])->assertSessionHasNoErrors();
+    expect(LongshiftApproval::query()->count())->toBe(0);
 
-    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => monday(), 'entries' => entries([$a->id, $ok->id])])->assertSessionHasNoErrors();
-    expect(WorkSchedule::query()->count())->toBe(2);
-    expect($late->durationMinutes())->toBe(240);
+    // the same person on both works 09:00-23:00 = 14 h, not 18 h: 5 h longshift
+    $this->actingAs($mod)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => $day, 'entries' => entries([$s1->id, $s2->id])])->assertSessionHasNoErrors()->assertSessionHas('success');
+    expect(WorkSchedule::query()->where('user_id', $waiter->id)->count())->toBe(2);
+    expect(LongshiftApproval::query()->where('user_id', $waiter->id)->firstOrFail()->hours)->toBe(5);
+    $this->actingAs($mod)->get("/schedule?week={$day}")->assertInertia(fn ($p) => $p->where('people', fn ($people) => collect($people)->firstWhere('id', $waiter->id)['hours'] == 14));
+
+    expect($night->durationMinutes())->toBe(240)->and(ShiftHours::unionMinutes([$s1, $s2]))->toBe(14 * 60)
+        ->and(ShiftHours::unionMinutes([$s1, $night]))->toBe(9 * 60 + 4 * 60)
+        ->and(ShiftHours::unionMinutes([$s2, $s1, $s2]))->toBe(14 * 60)
+        ->and(ShiftHours::unionMinutes([]))->toBe(0);
 });
 
 it('shows everyone the week, and lets only managers change it', function () {

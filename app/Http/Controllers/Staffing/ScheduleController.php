@@ -10,6 +10,7 @@ use App\Domain\Staffing\Models\LongshiftApproval;
 use App\Domain\Staffing\Models\WorkSchedule;
 use App\Domain\Staffing\Models\WorkShiftType;
 use App\Domain\Staffing\Positions;
+use App\Domain\Staffing\ShiftHours;
 use App\Exports\ReportSheet;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -39,7 +40,7 @@ class ScheduleController extends Controller
 
         $types = WorkShiftType::query()->where('outlet_id', $id)->orderBy('starts_at')->orderBy('id')->get();
         $rows = WorkSchedule::query()->where('outlet_id', $id)->whereBetween('work_date', [$week->toDateString(), $end->toDateString()])->get();
-        $duration = $types->mapWithKeys(fn (WorkShiftType $t) => [$t->id => $t->durationMinutes()])->all();
+        $typeById = $types->keyBy('id');
 
         $assign = [];
         $minutes = [];
@@ -48,13 +49,15 @@ class ScheduleController extends Controller
         foreach ($rows as $r) {
             $day = $r->work_date->toDateString();
             $assign[$r->user_id][$day][$r->work_shift_type_id][] = $r->position;
-            if (! isset($seen[$r->user_id][$day][$r->work_shift_type_id])) {
-                $seen[$r->user_id][$day][$r->work_shift_type_id] = true;
-                $minutes[$r->user_id] = ($minutes[$r->user_id] ?? 0) + ($duration[$r->work_shift_type_id] ?? 0);
-            }
+            $seen[$r->user_id][$day][$r->work_shift_type_id] = true;
             $coverage[$day]['people'][$r->user_id] = true;
             if ($r->position !== 'none') {
                 $coverage[$day][$r->position][$r->user_id] = true;
+            }
+        }
+        foreach ($seen as $userId => $perDay) {
+            foreach ($perDay as $typeIds) {
+                $minutes[$userId] = ($minutes[$userId] ?? 0) + ShiftHours::unionMinutes(array_filter(array_map(fn ($tid) => $typeById[$tid] ?? null, array_keys($typeIds))));
             }
         }
         $flags = LongshiftApproval::query()->where('outlet_id', $id)->where('source', 'schedule')->whereBetween('work_date', [$week->toDateString(), $end->toDateString()])->get()
@@ -96,7 +99,6 @@ class ScheduleController extends Controller
         if ($types->count() !== count($data['entries'])) {
             throw new OrderException('Ada shift yang tidak dikenal atau sudah nonaktif.');
         }
-        $this->assertNoOverlap($types->values()->all());
 
         $date = CarbonImmutable::parse($data['date']);
         $this->assertMayEdit($request, $date);
@@ -219,9 +221,9 @@ class ScheduleController extends Controller
             $lines = [];
             $total = 0.0;
             foreach ($rows as $date => $day) {
+                $total += ShiftHours::unionMinutes($day->unique('work_shift_type_id')->map(fn (WorkSchedule $w) => $w->type)) / 60;
                 foreach ($day->groupBy('work_shift_type_id') as $group) {
                     $type = $group->firstOrFail()->type;
-                    $total += $hours($type);
                     $lines[] = [CarbonImmutable::parse($date)->translatedFormat('d M Y'), CarbonImmutable::parse($date)->translatedFormat('l'), $type->name, substr($type->starts_at, 0, 5).'–'.substr($type->ends_at, 0, 5), $group->pluck('position')->reject(fn ($p) => $p === 'none')->map(fn ($p) => Positions::ALL[$p] ?? $p)->implode(' + '), $hours($type)];
                 }
             }
@@ -240,9 +242,9 @@ class ScheduleController extends Controller
             $sum = 0.0;
             foreach ($days as $d) {
                 $day = $rows[$person->id.'|'.$d->toDateString()] ?? collect();
-                $cells[] = $day->isEmpty() ? '-' : $day->groupBy('work_shift_type_id')->map(function ($group) use (&$sum, $hours) {
+                $sum += ShiftHours::unionMinutes($day->unique('work_shift_type_id')->map(fn (WorkSchedule $w) => $w->type)) / 60;
+                $cells[] = $day->isEmpty() ? '-' : $day->groupBy('work_shift_type_id')->map(function ($group) {
                     $type = $group->firstOrFail()->type;
-                    $sum += $hours($type);
                     $pos = $group->pluck('position')->reject(fn ($p) => $p === 'none')->map(fn ($p) => Positions::ALL[$p] ?? $p)->implode(' + ');
 
                     return "{$type->name} ".substr($type->starts_at, 0, 5).'–'.substr($type->ends_at, 0, 5).($pos !== '' ? " ({$pos})" : '');
@@ -281,17 +283,5 @@ class ScheduleController extends Controller
     private function tell(int $outletId, int $userId, string $title, string $body): void
     {
         $this->notifier->notify($outletId, 'schedule.changed', $title, $body, '/schedule', 'info', null, $userId);
-    }
-
-    /** @param  array<int, WorkShiftType>  $types */
-    private function assertNoOverlap(array $types): void
-    {
-        foreach ($types as $i => $a) {
-            foreach (array_slice($types, $i + 1) as $b) {
-                if ($a->startMinute() < $b->endMinute() && $b->startMinute() < $a->endMinute()) {
-                    throw new OrderException("Shift {$a->name} dan {$b->name} bertabrakan jamnya.");
-                }
-            }
-        }
     }
 }

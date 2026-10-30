@@ -53,7 +53,7 @@ class SettingsController extends Controller
     /** @return array<string, mixed> */
     private function outletProps(Outlet $o): array
     {
-        return $o->only(['name', 'address', 'npwp', 'tagline', 'opening_hours', 'phone', 'instagram', 'wifi_name', 'wifi_password'])
+        return $o->only(['name', 'address', 'npwp', 'tagline', 'opening_hours', 'phone', 'instagram', 'wifi_name', 'wifi_password', 'about', 'whatsapp', 'tiktok', 'facebook', 'website', 'maps_url', 'google_review_url'])
             + ['logo' => MediaUrl::public($o->logo_path), 'banner' => MediaUrl::public($o->banner_path)];
     }
 
@@ -63,7 +63,12 @@ class SettingsController extends Controller
             'name' => 'required|string|max:80', 'address' => 'nullable|string|max:200', 'npwp' => 'nullable|string|max:40', 'logo' => 'nullable|image|max:4096',
             'banner' => 'nullable|image|max:8192', 'remove_banner' => 'nullable|boolean', 'tagline' => 'nullable|string|max:120', 'opening_hours' => 'nullable|string|max:160',
             'phone' => 'nullable|string|max:40', 'instagram' => 'nullable|string|max:60', 'wifi_name' => 'nullable|string|max:60', 'wifi_password' => 'nullable|string|max:80',
+            'about' => 'nullable|string|max:400', 'whatsapp' => 'nullable|string|max:40', 'tiktok' => 'nullable|string|max:60', 'facebook' => 'nullable|string|max:120',
+            'website' => 'nullable|string|max:160', 'maps_url' => 'nullable|url:http,https|max:300', 'google_review_url' => 'nullable|url:http,https|max:300',
         ]);
+        if (! empty($data['website']) && ! preg_match('#^https?://#i', $data['website'])) {
+            $data['website'] = 'https://'.$data['website'];
+        }
         $outlet = Outlet::findOrFail($this->outlet->id());
         $fields = Arr::except($data, ['logo', 'banner', 'remove_banner']);
         if ($request->hasFile('logo')) {

@@ -50,6 +50,11 @@ final class SettingsCatalog
                     ['key' => 'qr.confirm_alert_seconds', 'type' => 'int', 'label' => 'Alarm jika belum dikonfirmasi (detik)', 'hint' => 'Hanya berlaku bila konfirmasi kasir diwajibkan. Bunyi dan notifikasi diulang sampai ditangani.', 'default' => 180, 'min' => 30, 'max' => 3600],
                 ],
             ], [
+                'title' => 'Ajakan review Google',
+                'fields' => [
+                    ['key' => 'qr.review_popup', 'type' => 'bool', 'label' => 'Ajak pelanggan memberi review Google setelah memesan', 'hint' => 'Muncul sebagai jendela kecil sekali setelah pesanan terkirim (tidak lebih dari sekali per 12 jam di HP yang sama), dengan tombol ke halaman review Google. Hanya tampil bila "Link review Google" diisi di Pengaturan > Profil outlet. Link yang sama selalu ada di Info kafe.', 'default' => true],
+                ],
+            ], [
                 'title' => 'Panggil waiter dari meja',
                 'fields' => [
                     ['key' => 'call.enabled', 'type' => 'bool', 'label' => 'Tombol "Panggil waiter" di halaman QR', 'hint' => 'Aktif: pelanggan bisa memanggil staf dari HP-nya (butuh bantuan, minta bill, minta air). Meja yang memanggil ditandai di peta meja dan staf mendengar bunyi.', 'default' => false],

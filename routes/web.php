@@ -37,6 +37,7 @@ use App\Http\Controllers\Qr\QrMenuController;
 use App\Http\Controllers\Qr\QrPaymentController;
 use App\Http\Controllers\QrisWebhookController;
 use App\Http\Controllers\Receipt\ReceiptController;
+use App\Http\Controllers\SectionHomeController;
 use App\Http\Controllers\Shift\ShiftController;
 use App\Http\Controllers\Staffing\AttendanceController;
 use App\Http\Controllers\Staffing\LongshiftController;
@@ -142,6 +143,9 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::post('close', [ShiftController::class, 'close'])->name('close');
         });
     });
+
+    Route::get('staff', [SectionHomeController::class, 'staff'])->middleware('staffing')->name('staff');
+    Route::get('admin/spending', [SectionHomeController::class, 'spending'])->name('spending');
 
     // Work schedule (optional feature): everyone with the permission sees it, managers plan it.
     Route::prefix('schedule')->name('schedule.')->middleware(['permission:view-schedule', 'schedule'])->group(function () {

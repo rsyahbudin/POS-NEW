@@ -35,6 +35,13 @@ type Props = {
         instagram: string | null;
         wifi_name: string | null;
         wifi_password: string | null;
+        about: string | null;
+        whatsapp: string | null;
+        tiktok: string | null;
+        facebook: string | null;
+        website: string | null;
+        maps_url: string | null;
+        google_review_url: string | null;
     };
     settings: Record<string, string | number | boolean | null>;
     catalog: CatalogTab[];
@@ -94,6 +101,13 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
         instagram: outlet.instagram ?? '',
         wifi_name: outlet.wifi_name ?? '',
         wifi_password: outlet.wifi_password ?? '',
+        about: outlet.about ?? '',
+        whatsapp: outlet.whatsapp ?? '',
+        tiktok: outlet.tiktok ?? '',
+        facebook: outlet.facebook ?? '',
+        website: outlet.website ?? '',
+        maps_url: outlet.maps_url ?? '',
+        google_review_url: outlet.google_review_url ?? '',
     });
     const text = (
         key: keyof typeof f,
@@ -194,12 +208,39 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
                     'Mis. Setiap hari 08.00–22.00',
                 )}
                 {text(
-                    'phone',
-                    'Telepon / WhatsApp',
-                    undefined,
+                    'about',
+                    'Tentang kafe',
+                    'Cerita singkat yang tampil di Info kafe pelanggan (maks. 400 huruf).',
+                    'Mis. Kafe keluarga dengan biji kopi pilihan dari petani lokal.',
+                )}
+                {text('phone', 'Telepon', undefined, 'Mis. 0812-3456-7890')}
+                {text(
+                    'whatsapp',
+                    'WhatsApp',
+                    'Pelanggan bisa langsung chat. Boleh diawali 0 atau 62.',
                     'Mis. 0812-3456-7890',
                 )}
                 {text('instagram', 'Instagram', undefined, '@namakafe')}
+                {text('tiktok', 'TikTok', undefined, '@namakafe')}
+                {text(
+                    'facebook',
+                    'Facebook',
+                    'Nama halaman atau link lengkap.',
+                    'Mis. namakafe',
+                )}
+                {text('website', 'Website', undefined, 'namakafe.com')}
+                {text(
+                    'maps_url',
+                    'Link Google Maps',
+                    'Tempel link dari tombol Bagikan di Google Maps. Dipakai untuk tombol Petunjuk arah.',
+                    'https://maps.app.goo.gl/...',
+                )}
+                {text(
+                    'google_review_url',
+                    'Link review Google',
+                    'Di Google Maps buka profil kafe, pilih Tulis ulasan, lalu salin linknya. Dipakai untuk ajakan review setelah pelanggan memesan.',
+                    'https://g.page/r/.../review',
+                )}
                 {text('wifi_name', 'Nama WiFi')}
                 {text(
                     'wifi_password',

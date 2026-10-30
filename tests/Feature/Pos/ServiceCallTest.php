@@ -180,3 +180,29 @@ it('hands the cafe name and logo to the sign-in page', function () {
     auth()->logout();
     $this->get('/login')->assertInertia(fn ($p) => $p->where('brand.name', 'Kopi Tetangga')->where('brand.logo', fn ($url) => str_starts_with($url, '/storage/logo/')));
 });
+
+it('shows contact, social links and about on the QR page, and offers a Google review only when the link is filled and the option is on', function () {
+    $owner = userWithRole('owner');
+    $table = callTable();
+    $page = fn () => $this->get("/m/{$table->qr_token}")->viewData('page')['props'];
+
+    expect($page()['reviewPopup'])->toBeFalse();
+
+    $this->actingAs($owner)->post('/admin/settings/outlet', [
+        'name' => 'Kafe Contoh', 'about' => 'Kafe keluarga', 'whatsapp' => '0812-3456-7890', 'tiktok' => '@kafe', 'facebook' => 'kafecontoh', 'website' => 'kafecontoh.com',
+        'maps_url' => 'https://maps.app.goo.gl/abc', 'google_review_url' => 'https://g.page/r/abc/review',
+    ])->assertSessionHas('success')->assertSessionHasNoErrors();
+
+    expect($page()['venue'])->toMatchArray(['about' => 'Kafe keluarga', 'whatsapp' => '0812-3456-7890', 'tiktok' => '@kafe', 'facebook' => 'kafecontoh', 'website' => 'https://kafecontoh.com', 'maps_url' => 'https://maps.app.goo.gl/abc', 'review_url' => 'https://g.page/r/abc/review'])
+        ->and($page()['reviewPopup'])->toBeTrue();
+
+    setting('qr.review_popup', false);
+    expect($page()['reviewPopup'])->toBeFalse()->and($page()['venue']['review_url'])->toBe('https://g.page/r/abc/review');   // the link in Info kafe stays
+
+    $this->actingAs($owner)->post('/admin/settings/outlet', ['name' => 'Kafe Contoh', 'google_review_url' => 'javascript:alert(1)'])->assertSessionHasErrors('google_review_url');
+    $this->actingAs($owner)->post('/admin/settings/outlet', ['name' => 'Kafe Contoh', 'maps_url' => 'not a link'])->assertSessionHasErrors('maps_url');
+
+    setting('qr.review_popup', true);
+    $this->actingAs($owner)->post('/admin/settings/outlet', ['name' => 'Kafe Contoh', 'google_review_url' => ''])->assertSessionHas('success');
+    expect($page()['reviewPopup'])->toBeFalse();
+});

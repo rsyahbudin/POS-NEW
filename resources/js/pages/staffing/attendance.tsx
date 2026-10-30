@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { dateId, longshiftText, timeId } from '@/lib/format';
+import { StaffingTabs } from '@/components/pos/section-tabs';
 
 type Rec = {
     id: number;
@@ -34,6 +35,7 @@ type Summary = {
     days: number;
     hours: number;
     late: number;
+    late_minutes: number;
     long_hours: number;
     open: number;
 };
@@ -95,6 +97,7 @@ export default function Attendance({
     } | null>(null);
     const open = records.filter((r) => !r.clock_out_at).length;
     const late = records.filter((r) => (r.late ?? 0) > 0).length;
+    const lateMin = summary.reduce((sum, p) => sum + p.late_minutes, 0);
     const hours = records.reduce((s, r) => s + (r.hours ?? 0), 0);
     const firstError = Object.values(errors ?? {})[0];
 
@@ -102,6 +105,7 @@ export default function Attendance({
         <>
             <Head title="Absensi" />
             <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
+                <StaffingTabs />
                 <PageHeader
                     title="Rekap absensi"
                     subtitle={`Masuk sampai ${grace} menit setelah jam shift dianggap tepat waktu.`}
@@ -297,7 +301,9 @@ export default function Attendance({
                             </span>,
                             p.days,
                             p.hours,
-                            p.late,
+                            p.late
+                                ? `${p.late}× · ${p.late_minutes} menit`
+                                : '-',
                             p.long_hours
                                 ? longshiftText(p.long_hours, standard_hours)
                                 : '-',
@@ -327,7 +333,11 @@ export default function Attendance({
                         label="Total jam kerja"
                         value={`${Math.round(hours * 10) / 10} jam`}
                     />
-                    <Stat label="Terlambat" value={late} />
+                    <Stat
+                        label="Terlambat"
+                        value={`${late} kali`}
+                        hint={late ? `Total ${lateMin} menit` : undefined}
+                    />
                     <Stat
                         label="Belum pulang"
                         value={open}

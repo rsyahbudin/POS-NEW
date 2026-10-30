@@ -99,7 +99,7 @@ class AttendanceController extends Controller
             'name' => $user->name,
             'month' => $month->format('Y-m'),
             'records' => $mine,
-            'totals' => $this->summary($mine)[0] ?? ['days' => 0, 'hours' => 0, 'late' => 0, 'long_hours' => 0, 'open' => 0],
+            'totals' => $this->summary($mine)[0] ?? ['days' => 0, 'hours' => 0, 'late' => 0, 'late_minutes' => 0, 'long_hours' => 0, 'open' => 0],
             'planned' => WorkSchedule::query()->where('user_id', $user->id)->whereBetween('work_date', [$from, $to])->with('type')->orderBy('work_date')->get()->groupBy(fn (WorkSchedule $w) => $w->work_date->toDateString())->map(
                 fn ($day) => $day->groupBy('work_shift_type_id')->map(function ($group) {
                     $type = $group->firstOrFail()->type;
@@ -123,9 +123,9 @@ class AttendanceController extends Controller
         $summary = $this->summary($rows);
 
         return ReportFile::download((string) $request->input('format', 'xlsx'), "Absensi {$from} {$to}", [
-            new ReportSheet('Ringkasan', "Periode {$range}", ['Nama', 'Jabatan', 'Hari hadir', 'Total jam kerja', 'Kali terlambat', 'Longshift disetujui (jam)', 'Belum pulang'], array_map(fn (array $p) => [
-                $p['name'], $p['role'] ?? '', $p['days'], $p['hours'], $p['late'], $p['long_hours'], $p['open'],
-            ], $summary), ['Total', '', array_sum(array_column($summary, 'days')), round(array_sum(array_column($summary, 'hours')), 1), array_sum(array_column($summary, 'late')), array_sum(array_column($summary, 'long_hours')), array_sum(array_column($summary, 'open'))]),
+            new ReportSheet('Ringkasan', "Periode {$range}", ['Nama', 'Jabatan', 'Hari hadir', 'Total jam kerja', 'Kali terlambat', 'Total menit terlambat', 'Longshift disetujui (jam)', 'Belum pulang'], array_map(fn (array $p) => [
+                $p['name'], $p['role'] ?? '', $p['days'], $p['hours'], $p['late'], $p['late_minutes'], $p['long_hours'], $p['open'],
+            ], $summary), ['Total', '', array_sum(array_column($summary, 'days')), round(array_sum(array_column($summary, 'hours')), 1), array_sum(array_column($summary, 'late')), array_sum(array_column($summary, 'late_minutes')), array_sum(array_column($summary, 'long_hours')), array_sum(array_column($summary, 'open'))]),
             new ReportSheet('Absensi', "Periode {$range}", ['Tanggal', 'Nama', 'Jabatan', 'Masuk', 'Pulang', 'Jam kerja', 'Terlambat (menit)', 'Longshift disetujui (jam)', 'Sumber', 'Catatan'], array_map(fn (array $r) => [
                 CarbonImmutable::parse($r['work_date'])->translatedFormat('d M Y'), $r['name'], $r['role'] ?? '', CarbonImmutable::parse($r['clock_in_at'])->format('H:i'),
                 $r['clock_out_at'] ? CarbonImmutable::parse($r['clock_out_at'])->format('H:i') : 'Belum pulang', $r['hours'] ?? '', $r['late'] ?? '', ($r['longshift']['status'] ?? '') === 'approved' ? $r['longshift']['approved_hours'] : '',
@@ -233,10 +233,11 @@ class AttendanceController extends Controller
     {
         $by = [];
         foreach ($records as $r) {
-            $p = $by[$r['user_id']] ??= ['user_id' => $r['user_id'], 'name' => $r['name'], 'role' => $r['role'], 'dates' => [], 'hours' => 0.0, 'late' => 0, 'long_hours' => 0, 'long_dates' => [], 'open' => 0];
+            $p = $by[$r['user_id']] ??= ['user_id' => $r['user_id'], 'name' => $r['name'], 'role' => $r['role'], 'dates' => [], 'hours' => 0.0, 'late' => 0, 'late_minutes' => 0, 'long_hours' => 0, 'long_dates' => [], 'open' => 0];
             $p['dates'][$r['work_date']] = true;
             $p['hours'] += (float) ($r['hours'] ?? 0);
             $p['late'] += ($r['late'] ?? 0) > 0 ? 1 : 0;
+            $p['late_minutes'] += max(0, (int) ($r['late'] ?? 0));
             $p['open'] += $r['clock_out_at'] === null ? 1 : 0;
             if (($r['longshift']['status'] ?? '') === 'approved' && ! isset($p['long_dates'][$r['work_date']])) {
                 $p['long_dates'][$r['work_date']] = true;
@@ -245,7 +246,7 @@ class AttendanceController extends Controller
             $by[$r['user_id']] = $p;
         }
 
-        return array_values(array_map(fn (array $p) => ['user_id' => $p['user_id'], 'name' => $p['name'], 'role' => $p['role'], 'days' => count($p['dates']), 'hours' => round($p['hours'], 1), 'late' => $p['late'], 'long_hours' => $p['long_hours'], 'open' => $p['open']], $by));
+        return array_values(array_map(fn (array $p) => ['user_id' => $p['user_id'], 'name' => $p['name'], 'role' => $p['role'], 'days' => count($p['dates']), 'hours' => round($p['hours'], 1), 'late' => $p['late'], 'late_minutes' => $p['late_minutes'], 'long_hours' => $p['long_hours'], 'open' => $p['open']], $by));
     }
 
     /** @return array<int, array{name: string, since: string}> */

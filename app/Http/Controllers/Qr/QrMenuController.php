@@ -41,6 +41,7 @@ class QrMenuController extends Controller
             'qris' => app(OnlinePaymentService::class)->enabled(),
             'call' => ['enabled' => app(ServiceCalls::class)->enabled(), 'reasons' => ServiceCall::REASONS],
             'kds' => (bool) app(SettingsRepository::class)->get('kitchen.enabled', false),
+            'reviewPopup' => (bool) app(SettingsRepository::class)->get('qr.review_popup', true) && filled(Outlet::query()->whereKey($table->outlet_id)->value('google_review_url')),
             'autoConfirm' => SubmitQrOrderAction::autoConfirms(app(SettingsRepository::class), app(OnlinePaymentService::class)),
         ]);
     }
@@ -53,6 +54,8 @@ class QrMenuController extends Controller
         return [
             'logo' => MediaUrl::public($o->logo_path), 'banner' => MediaUrl::public($o->banner_path), 'tagline' => $o->tagline, 'hours' => $o->opening_hours,
             'address' => $o->address, 'phone' => $o->phone, 'instagram' => $o->instagram, 'wifi_name' => $o->wifi_name, 'wifi_password' => $o->wifi_password,
+            'about' => $o->about, 'whatsapp' => $o->whatsapp, 'tiktok' => $o->tiktok, 'facebook' => $o->facebook, 'website' => $o->website, 'maps_url' => $o->maps_url,
+            'review_url' => $o->google_review_url,
         ];
     }
 

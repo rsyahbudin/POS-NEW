@@ -5,6 +5,7 @@ import { Modal } from '@/components/pos/modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { dateId, longshiftText } from '@/lib/format';
+import { StaffingTabs } from '@/components/pos/section-tabs';
 
 type Row = {
     id: number;
@@ -49,6 +50,7 @@ export default function Longshift({
         <>
             <Head title="Longshift" />
             <div className="mx-auto grid w-full max-w-[1200px] gap-5 p-4 md:p-6">
+                <StaffingTabs />
                 <PageHeader
                     title="Persetujuan longshift"
                     subtitle={`Jam kerja lebih dari ${standard_hours} jam sehari, dihitung per jam penuh. Jam yang disetujui masuk laporan HR.`}

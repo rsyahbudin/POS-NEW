@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { FaceCapture } from '@/components/pos/face-capture';
 import { PageHeader } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
+import { StaffingTabs } from '@/components/pos/section-tabs';
 
 type Person = {
     id: number;
@@ -27,6 +28,7 @@ export default function Faces({
         <>
             <Head title="Wajah Karyawan" />
             <div className="mx-auto grid w-full max-w-[900px] gap-5 p-4 md:p-6">
+                <StaffingTabs />
                 <PageHeader
                     title="Wajah karyawan"
                     subtitle={`Daftarkan wajah tiap karyawan sekali (sampai ${max_samples} sampel). Yang disimpan hanya angka dari wajah, bukan foto.`}

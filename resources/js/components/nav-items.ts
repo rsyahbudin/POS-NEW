@@ -25,12 +25,7 @@ import {
     Users,
     UtensilsCrossed,
     Wrench,
-    Wallet,
-    CalendarClock,
-    CalendarDays,
-    Hourglass,
     ScanFace,
-    UserCheck,
 } from 'lucide-react';
 import type { NavSection } from '@/components/nav-main';
 import type { NavItem } from '@/types';
@@ -61,25 +56,18 @@ export const top: Item[] = [
         feature: 'kds',
     },
     {
-        title: 'Jadwal Kerja',
-        href: '/schedule',
-        icon: CalendarDays,
-        permission: 'view-schedule',
-        feature: 'schedule',
-    },
-    {
-        title: 'Persetujuan Longshift',
-        href: '/longshift',
-        icon: Hourglass,
-        permission: 'approve-longshift',
-        feature: 'staffing',
-    },
-    {
         title: 'Absensi',
-        href: '/attendance/mine',
+        href: '/staff',
         icon: ScanFace,
-        permission: ['view-own-attendance', 'use-attendance-kiosk'],
-        feature: 'attendance',
+        permission: [
+            'view-own-attendance',
+            'use-attendance-kiosk',
+            'view-schedule',
+            'manage-attendance',
+            'approve-longshift',
+        ],
+        feature: 'staffing',
+        match: ['/schedule', '/attendance', '/longshift'],
     },
     {
         title: 'Daftar Stok',
@@ -222,36 +210,19 @@ export const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 permission: 'manage-shifts-any',
             },
             {
-                title: 'Wajah Karyawan',
-                href: '/attendance/faces',
-                icon: ScanFace,
-                permission: 'manage-attendance',
-                feature: 'attendance',
-            },
-            {
-                title: 'Rekap Absensi',
-                href: '/attendance',
-                icon: UserCheck,
-                permission: 'manage-attendance',
-                feature: 'attendance',
-            },
-            {
-                title: 'Beban Tetap',
-                href: '/admin/fixed-expenses',
-                icon: CalendarClock,
-                permission: 'manage-fixed-expenses',
-            },
-            {
-                title: 'Laporan Kas Laci',
-                href: '/admin/cash-ledger',
-                icon: Wallet,
-                permission: 'view-cash-ledger',
-            },
-            {
                 title: 'Pengeluaran',
-                href: '/admin/expenses',
+                href: '/admin/spending',
                 icon: ShoppingBasket,
-                permission: 'input-expense',
+                permission: [
+                    'input-expense',
+                    'manage-fixed-expenses',
+                    'view-cash-ledger',
+                ],
+                match: [
+                    '/admin/expenses',
+                    '/admin/fixed-expenses',
+                    '/admin/cash-ledger',
+                ],
             },
             {
                 title: 'Pembayaran & Pajak',

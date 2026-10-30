@@ -31,7 +31,7 @@ export function NavMain({
     top: NavItem[];
     sections: NavSection[];
 }) {
-    const { isCurrentUrl } = useCurrentUrl();
+    const { isCurrentUrl, isCurrentOrParentUrl } = useCurrentUrl();
     const { state } = useSidebar();
     const collapsed = state === 'collapsed';
 
@@ -39,7 +39,10 @@ export function NavMain({
         <SidebarMenuItem key={item.title}>
             <SidebarMenuButton
                 asChild
-                isActive={isCurrentUrl(item.href)}
+                isActive={
+                    isCurrentUrl(item.href) ||
+                    (item.match ?? []).some((m) => isCurrentOrParentUrl(m))
+                }
                 tooltip={{ children: item.title }}
             >
                 <Link href={item.href} prefetch>

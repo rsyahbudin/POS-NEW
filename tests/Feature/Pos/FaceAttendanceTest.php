@@ -243,3 +243,35 @@ it('gives the calendar the month plan beside the real clock times', function () 
     $this->actingAs($waiter)->get('/attendance/mine')->assertInertia(fn ($p) => $p->where("planned.{$day}.0.name", 'Pagi')->where("planned.{$day}.0.positions.0", 'Waiter')
         ->where('records.0.work_date', $day)->where('standard_hours', 9)->where('today', now()->toDateString()));
 });
+
+it('sends each person from the single Absensi and Pengeluaran sidebar entries to the first page they may open', function () {
+    $this->actingAs(userWithRole('waiter'))->get('/staff')->assertRedirect('/');   // neither feature is on yet
+
+    attendanceOn();
+    setting('schedule.enabled', true);
+    $this->actingAs(userWithRole('waiter'))->get('/staff')->assertRedirect('/attendance/mine');
+    $this->actingAs(userWithRole('owner'))->get('/staff')->assertRedirect('/attendance/mine');
+    setting('attendance.enabled', false);
+    $this->actingAs(userWithRole('waiter'))->get('/staff')->assertRedirect('/schedule');
+
+    $this->actingAs(userWithRole('manager'))->get('/admin/spending')->assertRedirect('/admin/expenses');
+    $this->actingAs(userWithRole('cashier'))->get('/admin/spending')->assertForbidden();
+    $this->actingAs(userWithRole('waiter'))->get('/admin/spending')->assertForbidden();
+});
+
+it('counts how many times and how many minutes someone was late', function () {
+    attendanceOn();
+    $waiter = userWithRole('waiter');
+    $type = WorkShiftType::create(['outlet_id' => $waiter->outlet_id, 'name' => 'Pagi', 'starts_at' => '08:00', 'ends_at' => '16:00', 'is_active' => true]);
+    $base = now()->startOfMonth();
+    foreach ([['08:05', 0], ['08:25', 25], ['09:00', 60], ['07:50', 0]] as $i => [$in, $late]) {
+        $day = $base->addDays($i)->toDateString();
+        WorkSchedule::create(['outlet_id' => $waiter->outlet_id, 'user_id' => $waiter->id, 'work_date' => $day, 'work_shift_type_id' => $type->id, 'position' => 'waiter']);
+        Attendance::create(['outlet_id' => $waiter->outlet_id, 'user_id' => $waiter->id, 'work_date' => $day, 'clock_in_at' => "{$day} {$in}", 'clock_out_at' => "{$day} 16:00", 'method_in' => 'face', 'method_out' => 'face']);
+    }
+
+    $this->actingAs($waiter)->get('/attendance/mine')->assertInertia(fn ($p) => $p->where('totals.late', 2)->where('totals.late_minutes', 85));
+    $from = $base->toDateString();
+    $to = $base->addDays(5)->toDateString();
+    $this->actingAs(userWithRole('manager'))->get("/attendance?from={$from}&to={$to}")->assertInertia(fn ($p) => $p->where('summary.0.late', 2)->where('summary.0.late_minutes', 85));
+});

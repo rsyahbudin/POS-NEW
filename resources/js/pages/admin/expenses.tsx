@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { dateId, rupiah } from '@/lib/format';
+import { SpendingTabs } from '@/components/pos/section-tabs';
 
 type Props = {
     filters: { from: string; to: string };
@@ -62,6 +63,7 @@ export default function ExpensesPage({
         <>
             <Head title="Pengeluaran" />
             <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
+                <SpendingTabs />
                 <PageHeader
                     title="Pengeluaran operasional"
                     subtitle={`Total periode: ${rupiah(total)}`}

@@ -5,6 +5,7 @@ import { MonthCalendar } from '@/components/pos/month-calendar';
 import { PageHeader, Stat } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { dateId, longshiftText, timeId } from '@/lib/format';
+import { StaffingTabs } from '@/components/pos/section-tabs';
 
 type Rec = {
     id: number;
@@ -33,6 +34,7 @@ type Props = {
         days: number;
         hours: number;
         late: number;
+        late_minutes: number;
         long_hours: number;
         open: number;
     };
@@ -92,6 +94,7 @@ export default function Mine({
         <>
             <Head title="Absensi" />
             <div className="mx-auto grid w-full max-w-4xl gap-5 p-4 md:p-6">
+                <StaffingTabs />
                 <PageHeader
                     title="Absensi saya"
                     subtitle={name}
@@ -161,7 +164,15 @@ export default function Mine({
                         label="Total jam kerja"
                         value={`${totals.hours} jam`}
                     />
-                    <Stat label="Terlambat" value={`${totals.late} kali`} />
+                    <Stat
+                        label="Terlambat"
+                        value={`${totals.late} kali`}
+                        hint={
+                            totals.late
+                                ? `Total ${totals.late_minutes} menit`
+                                : 'Tidak pernah terlambat'
+                        }
+                    />
                     <Stat
                         label="Longshift disetujui"
                         value={longshiftText(totals.long_hours, standard_hours)}

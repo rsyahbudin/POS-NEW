@@ -5,6 +5,7 @@ import { Modal } from '@/components/pos/modal';
 import { Field, PageHeader } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { StaffingTabs } from '@/components/pos/section-tabs';
 
 type ShiftType = {
     id: number;
@@ -167,6 +168,7 @@ export default function Schedule({
         <>
             <Head title="Jadwal Kerja" />
             <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
+                <StaffingTabs />
                 <PageHeader
                     title="Jadwal kerja"
                     subtitle={

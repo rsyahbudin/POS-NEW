@@ -11,4 +11,6 @@ export type NavItem = {
     href: NonNullable<InertiaLinkProps['href']>;
     icon?: LucideIcon | null;
     isActive?: boolean;
+    /** Other paths that belong to this entry (its tabs), so it stays highlighted on them. */
+    match?: string[];
 };

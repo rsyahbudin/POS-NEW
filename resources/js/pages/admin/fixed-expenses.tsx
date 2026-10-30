@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { dateId, rupiah } from '@/lib/format';
+import { SpendingTabs } from '@/components/pos/section-tabs';
 
 type Bill = {
     id: number;
@@ -146,6 +147,7 @@ export default function FixedExpenses({
         <>
             <Head title="Beban Tetap" />
             <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
+                <SpendingTabs />
                 <PageHeader
                     title="Beban tetap bulanan"
                     subtitle="Gaji, sewa, listrik, internet, dan tagihan rutin lain. Satu tagihan dibuat tiap bulan; bayar atau lewati."

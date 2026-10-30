@@ -19,6 +19,13 @@ use Illuminate\Support\Carbon;
  * @property string|null $instagram
  * @property string|null $wifi_name
  * @property string|null $wifi_password
+ * @property string|null $about
+ * @property string|null $whatsapp
+ * @property string|null $tiktok
+ * @property string|null $facebook
+ * @property string|null $website
+ * @property string|null $maps_url
+ * @property string|null $google_review_url
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */

@@ -44,6 +44,13 @@ type Venue = {
     instagram: string | null;
     wifi_name: string | null;
     wifi_password: string | null;
+    about: string | null;
+    whatsapp: string | null;
+    tiktok: string | null;
+    facebook: string | null;
+    website: string | null;
+    maps_url: string | null;
+    review_url: string | null;
 };
 type CallState = { status: string; reason: string; at: string } | null;
 type Status = { rounds: StatusRound[]; total: number; call?: CallState };
@@ -56,6 +63,7 @@ type Props = {
     menu: Category[];
     outletId: number;
     autoConfirm: boolean;
+    reviewPopup: boolean;
     qris: boolean;
     status: Status;
     call: { enabled: boolean; reasons: Record<string, string> };
@@ -117,6 +125,7 @@ export default function QrMenu({
     menu: initialMenu,
     status: initialStatus,
     autoConfirm,
+    reviewPopup,
     qris,
     call,
     kds,
@@ -139,8 +148,15 @@ export default function QrMenu({
         venue.address ||
         venue.phone ||
         venue.instagram ||
-        venue.wifi_name
+        venue.wifi_name ||
+        venue.about ||
+        venue.whatsapp ||
+        venue.tiktok ||
+        venue.facebook ||
+        venue.website ||
+        venue.review_url
     );
+    const [review, setReview] = useState(false);
     const [cat, setCat] = useState<number | 'all'>('all');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
@@ -345,6 +361,20 @@ export default function QrMenu({
             setStatus(data.status);
             setDone(true);
             setOpen('status');
+            if (reviewPopup && venue.review_url) {
+                let shown = false;
+                try {
+                    const at = Number(
+                        localStorage.getItem('qr.review.at') ?? 0,
+                    );
+                    shown = Date.now() - at < 12 * 3600 * 1000;
+                } catch {
+                    // ignore
+                }
+                if (!shown) {
+                    setTimeout(() => setReview(true), 1800);
+                }
+            }
         } catch (e) {
             setError(
                 e instanceof Error ? e.message : 'Gagal mengirim pesanan.',
@@ -871,9 +901,32 @@ export default function QrMenu({
                     </Sheet>
                 )}
 
+                {review && venue.review_url && (
+                    <ReviewAsk
+                        url={venue.review_url}
+                        outlet={outlet}
+                        onClose={() => {
+                            setReview(false);
+                            try {
+                                localStorage.setItem(
+                                    'qr.review.at',
+                                    String(Date.now()),
+                                );
+                            } catch {
+                                // ignore
+                            }
+                        }}
+                    />
+                )}
+
                 {open === 'info' && (
                     <Sheet title="Info kafe" onClose={() => setOpen(null)}>
                         <dl className="grid gap-4 text-sm">
+                            {venue.about && (
+                                <InfoRow label="Tentang kami">
+                                    {venue.about}
+                                </InfoRow>
+                            )}
                             {venue.hours && (
                                 <InfoRow label="Jam buka">
                                     {venue.hours}
@@ -886,9 +939,12 @@ export default function QrMenu({
                                         className="mt-1 block font-semibold text-primary underline"
                                         target="_blank"
                                         rel="noreferrer"
-                                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${outlet ?? ''} ${venue.address}`)}`}
+                                        href={
+                                            venue.maps_url ??
+                                            `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${outlet ?? ''} ${venue.address}`)}`
+                                        }
                                     >
-                                        Buka di Maps
+                                        Petunjuk arah
                                     </a>
                                 </InfoRow>
                             )}
@@ -913,6 +969,73 @@ export default function QrMenu({
                                         {venue.instagram.startsWith('@')
                                             ? venue.instagram
                                             : `@${venue.instagram}`}
+                                    </a>
+                                </InfoRow>
+                            )}
+                            {venue.whatsapp && (
+                                <InfoRow label="WhatsApp">
+                                    <a
+                                        className="font-semibold text-primary underline"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        href={waLink(venue.whatsapp)}
+                                    >
+                                        Chat {venue.whatsapp}
+                                    </a>
+                                </InfoRow>
+                            )}
+                            {venue.tiktok && (
+                                <InfoRow label="TikTok">
+                                    <a
+                                        className="font-semibold text-primary underline"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        href={`https://www.tiktok.com/@${venue.tiktok.replace(/^@/, '')}`}
+                                    >
+                                        @{venue.tiktok.replace(/^@/, '')}
+                                    </a>
+                                </InfoRow>
+                            )}
+                            {venue.facebook && (
+                                <InfoRow label="Facebook">
+                                    <a
+                                        className="font-semibold text-primary underline"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        href={
+                                            /^https?:\/\//i.test(venue.facebook)
+                                                ? venue.facebook
+                                                : `https://facebook.com/${venue.facebook.replace(/^@/, '')}`
+                                        }
+                                    >
+                                        {venue.facebook}
+                                    </a>
+                                </InfoRow>
+                            )}
+                            {venue.website && (
+                                <InfoRow label="Website">
+                                    <a
+                                        className="font-semibold text-primary underline"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        href={venue.website}
+                                    >
+                                        {venue.website.replace(
+                                            /^https?:\/\//i,
+                                            '',
+                                        )}
+                                    </a>
+                                </InfoRow>
+                            )}
+                            {venue.review_url && (
+                                <InfoRow label="Ulasan">
+                                    <a
+                                        className="font-semibold text-primary underline"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        href={venue.review_url}
+                                    >
+                                        Tulis review di Google
                                     </a>
                                 </InfoRow>
                             )}
@@ -1031,6 +1154,68 @@ export default function QrMenu({
                 )}
             </div>
         </>
+    );
+}
+
+/** wa.me wants the number in international form: 0812... becomes 62812... */
+function waLink(raw: string): string {
+    let d = raw.replace(/\D/g, '');
+    if (d.startsWith('0')) {
+        d = `62${d.slice(1)}`;
+    }
+
+    return `https://wa.me/${d}`;
+}
+
+function ReviewAsk({
+    url,
+    outlet,
+    onClose,
+}: {
+    url: string;
+    outlet: string | null;
+    onClose: () => void;
+}) {
+    return (
+        <div
+            className="qr-fade fixed inset-0 z-40 grid place-items-center bg-black/50 p-5"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Review Google"
+            onClick={onClose}
+        >
+            <div
+                className="qr-rise w-full max-w-sm rounded-3xl bg-card p-6 text-center shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <p className="text-4xl" aria-hidden>
+                    ⭐
+                </p>
+                <h2 className="mt-2 text-lg font-bold">
+                    Terima kasih sudah memesan!
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                    Kalau {outlet ?? 'kami'} sudah berkesan, bantu kami dengan
+                    review singkat di Google. Hanya 1 menit dan sangat berarti.
+                </p>
+                <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={onClose}
+                    className="mt-5 block rounded-2xl bg-primary px-4 py-3.5 text-base font-bold text-primary-foreground"
+                >
+                    Tulis review di Google
+                </a>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="mt-2 w-full rounded-2xl px-4 py-3 text-sm font-medium text-muted-foreground"
+                >
+                    Nanti saja
+                </button>
+            </div>
+        </div>
     );
 }
 

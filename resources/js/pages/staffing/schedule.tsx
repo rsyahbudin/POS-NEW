@@ -149,8 +149,28 @@ export default function Schedule({
                     actions={
                         <>
                             <Button asChild variant="outline" className="h-11">
-                                <Link href="/longshift">Longshift</Link>
+                                <a
+                                    href={`/schedule/export?scope=team&week=${week}&format=pdf`}
+                                >
+                                    Unduh PDF minggu ini
+                                </a>
                             </Button>
+                            <Button asChild variant="outline" className="h-11">
+                                <a
+                                    href={`/schedule/export?scope=mine&month=${week.slice(0, 7)}&format=pdf`}
+                                >
+                                    Jadwal saya (PDF)
+                                </a>
+                            </Button>
+                            {(can.manage || can.approve) && (
+                                <Button
+                                    asChild
+                                    variant="outline"
+                                    className="h-11"
+                                >
+                                    <Link href="/longshift">Longshift</Link>
+                                </Button>
+                            )}
                             {can.manage && (
                                 <>
                                     <Button
@@ -239,7 +259,7 @@ export default function Schedule({
                     </p>
                 )}
 
-                {mine && !can.manage && (
+                {mine && mine.shifts && Object.keys(mine.shifts).length > 0 && (
                     <section className="rounded-xl border bg-card p-4">
                         <h2 className="mb-2 font-semibold">Jadwal saya</h2>
                         <ul className="grid gap-1 text-sm">

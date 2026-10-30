@@ -34,7 +34,7 @@ it('schedules one person on several stations in the same shift, defaulting to th
     $mod = userWithRole('mod');
     $cashier = userWithRole('cashier');
     $shift = shiftType('Shift 1', '09:00', '18:00');
-    $day = now()->startOfWeek()->toDateString();
+    $day = now()->startOfWeek()->addWeek()->toDateString();
 
     $this->actingAs($mod)->post('/schedule/day', ['user_id' => $mod->id, 'date' => $day, 'entries' => [['type_id' => $shift->id, 'positions' => ['mod', 'cashier']]]])->assertSessionHasNoErrors();
     expect(WorkSchedule::query()->where('user_id', $mod->id)->pluck('position')->sort()->values()->all())->toBe(['cashier', 'mod']);
@@ -42,7 +42,7 @@ it('schedules one person on several stations in the same shift, defaulting to th
     $this->actingAs($mod)->post('/schedule/day', ['user_id' => $cashier->id, 'date' => $day, 'entries' => [['type_id' => $shift->id]]])->assertSessionHasNoErrors();
     expect(WorkSchedule::query()->where('user_id', $cashier->id)->pluck('position')->all())->toBe(['cashier']);
 
-    $this->actingAs($mod)->get('/schedule')->assertInertia(fn ($p) => $p->where('standard_hours', 9)->where("coverage.{$day}.cashier", 2)->where("coverage.{$day}.mod", 1)->where("coverage.{$day}.people", 2));
+    $this->actingAs($mod)->get("/schedule?week={$day}")->assertInertia(fn ($p) => $p->where('standard_hours', 9)->where("coverage.{$day}.cashier", 2)->where("coverage.{$day}.mod", 1)->where("coverage.{$day}.people", 2));
     // saving again replaces, a bogus station is dropped
     $this->actingAs($mod)->post('/schedule/day', ['user_id' => $mod->id, 'date' => $day, 'entries' => [['type_id' => $shift->id, 'positions' => ['waiter', 'ceo']]]])->assertSessionHasNoErrors();
     expect(WorkSchedule::query()->where('user_id', $mod->id)->pluck('position')->all())->toBe(['waiter']);
@@ -64,7 +64,7 @@ it('a planned longshift waits for the MOD, unless the planner may approve it', f
     $waiter = userWithRole('waiter');
     $a = shiftType('Pagi', '08:00', '17:00');   // 9 h
     $b = shiftType('Malam', '18:00', '21:00');  // 3 h
-    $day = now()->startOfWeek()->toDateString();
+    $day = now()->startOfWeek()->addWeek()->toDateString();
 
     $this->actingAs($manager)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => $day, 'entries' => [['type_id' => $a->id]]])->assertSessionHasNoErrors();
     expect(LongshiftApproval::query()->count())->toBe(0);
@@ -139,4 +139,18 @@ it('stays closed when neither the schedule nor the attendance is on', function (
     $this->actingAs($mod)->get('/longshift')->assertRedirect('/');
     setting('schedule.enabled', true);
     $this->actingAs($mod)->get('/longshift')->assertOk();
+});
+
+it('counts every full standard shift of extra hours as one more shift, the rest as hours', function () {
+    staffingOn();
+    $service = app(LongshiftService::class);
+    expect($service->breakdown(3))->toBe(['shifts' => 0, 'hours' => 3])->and($service->breakdown(9))->toBe(['shifts' => 1, 'hours' => 0])
+        ->and($service->breakdown(11))->toBe(['shifts' => 1, 'hours' => 2])->and($service->breakdown(18))->toBe(['shifts' => 2, 'hours' => 0]);
+    setting('schedule.standard_hours', 8);
+    expect($service->breakdown(9))->toBe(['shifts' => 1, 'hours' => 1]);
+
+    $mod = userWithRole('mod');
+    $waiter = userWithRole('waiter');
+    LongshiftApproval::create(['outlet_id' => $waiter->outlet_id, 'user_id' => $waiter->id, 'work_date' => now()->toDateString(), 'source' => 'attendance', 'hours' => 11, 'approved_hours' => 10, 'status' => 'approved', 'decided_by' => $mod->id]);
+    $this->actingAs($mod)->get('/longshift')->assertInertia(fn ($p) => $p->where('decided.0.approved_shifts', 1)->where('decided.0.approved_rest', 2)->where('decided.0.shifts', 1)->where('decided.0.rest', 3));
 });

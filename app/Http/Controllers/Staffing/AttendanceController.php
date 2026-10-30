@@ -11,6 +11,7 @@ use App\Domain\Staffing\Models\Attendance;
 use App\Domain\Staffing\Models\FaceTemplate;
 use App\Domain\Staffing\Models\LongshiftApproval;
 use App\Domain\Staffing\Models\WorkSchedule;
+use App\Domain\Staffing\Positions;
 use App\Exports\ReportSheet;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -79,6 +80,7 @@ class AttendanceController extends Controller
             'absent' => $this->absent(),
             'people' => User::query()->where('outlet_id', $this->outlet->id())->where('is_active', true)->orderBy('name')->get(['id', 'name'])->all(),
             'grace' => $this->grace(),
+            'standard_hours' => intdiv($this->longshift->standardMinutes(), 60),
         ]);
     }
 
@@ -98,6 +100,15 @@ class AttendanceController extends Controller
             'month' => $month->format('Y-m'),
             'records' => $mine,
             'totals' => $this->summary($mine)[0] ?? ['days' => 0, 'hours' => 0, 'late' => 0, 'long_hours' => 0, 'open' => 0],
+            'planned' => WorkSchedule::query()->where('user_id', $user->id)->whereBetween('work_date', [$from, $to])->with('type')->orderBy('work_date')->get()->groupBy(fn (WorkSchedule $w) => $w->work_date->toDateString())->map(
+                fn ($day) => $day->groupBy('work_shift_type_id')->map(function ($group) {
+                    $type = $group->firstOrFail()->type;
+
+                    return ['name' => $type->name, 'starts_at' => substr($type->starts_at, 0, 5), 'ends_at' => substr($type->ends_at, 0, 5), 'positions' => $group->pluck('position')->reject(fn ($p) => $p === 'none')->map(fn ($p) => Positions::ALL[$p] ?? $p)->values()->all()];
+                })->values()->all(),
+            )->all() ?: (object) [],
+            'today' => now()->toDateString(),
+            'standard_hours' => intdiv($this->longshift->standardMinutes(), 60),
             'open_since' => $open?->clock_in_at->toIso8601String(),
             'can' => ['kiosk' => (bool) $user->can('use-attendance-kiosk')],
         ]);

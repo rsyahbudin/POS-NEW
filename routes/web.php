@@ -146,6 +146,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
     // Work schedule (optional feature): everyone with the permission sees it, managers plan it.
     Route::prefix('schedule')->name('schedule.')->middleware(['permission:view-schedule', 'schedule'])->group(function () {
         Route::get('/', [ScheduleController::class, 'index'])->name('index');
+        Route::get('export', [ScheduleController::class, 'export'])->name('export');
         Route::middleware('permission:manage-schedule')->group(function () {
             Route::post('day', [ScheduleController::class, 'setDay'])->name('day');
             Route::post('copy', [ScheduleController::class, 'copyWeek'])->name('copy');

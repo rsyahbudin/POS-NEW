@@ -11,7 +11,7 @@ import {
 } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { dateId, timeId } from '@/lib/format';
+import { dateId, longshiftText, timeId } from '@/lib/format';
 
 type Rec = {
     id: number;
@@ -45,6 +45,7 @@ type Props = {
     absent: { name: string; shift: string; starts_at: string; late: number }[];
     people: { id: number; name: string }[];
     grace: number;
+    standard_hours: number;
 };
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -296,7 +297,7 @@ export default function Attendance({
                             p.days,
                             p.hours,
                             p.late,
-                            p.long_hours ? `${p.long_hours} jam` : '-',
+                            p.long_hours ? longshiftText(p.long_hours, standard_hours) : '-',
                             p.open || '-',
                             <Button
                                 key="f"

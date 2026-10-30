@@ -4,7 +4,7 @@ import { Field, PageHeader, ResponsiveTable } from '@/components/pos/ui';
 import { Modal } from '@/components/pos/modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { dateId } from '@/lib/format';
+import { dateId, longshiftText } from '@/lib/format';
 
 type Row = {
     id: number;
@@ -99,7 +99,8 @@ export default function Longshift({
                                 <p className="text-sm text-muted-foreground">
                                     {dateId(r.work_date)} · {SOURCE[r.source]} ·{' '}
                                     <span className="font-semibold text-foreground">
-                                        +{r.hours} jam
+                                        +
+                                        {longshiftText(r.hours, standard_hours)}
                                     </span>
                                 </p>
                             </div>
@@ -185,8 +186,8 @@ export default function Longshift({
                         dateId(r.work_date),
                         r.name,
                         SOURCE[r.source],
-                        `${r.hours} jam`,
-                        `${r.approved_hours} jam`,
+                        longshiftText(r.hours, standard_hours),
+                        longshiftText(r.approved_hours, standard_hours),
                         r.status === 'approved' ? 'Disetujui' : 'Ditolak',
                         r.decided_by ?? '-',
                         r.note ?? '-',
@@ -202,7 +203,7 @@ export default function Longshift({
                 >
                     <p className="text-sm text-muted-foreground">
                         {dateId(ask.row.work_date)} · {SOURCE[ask.row.source]} ·
-                        diajukan {ask.row.hours} jam
+                        diajukan {longshiftText(ask.row.hours, standard_hours)}
                     </p>
                     {ask.approve && (
                         <Field

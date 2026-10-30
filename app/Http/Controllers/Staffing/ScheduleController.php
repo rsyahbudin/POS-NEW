@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Staffing;
 
+use App\Domain\Notification\Notifier;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Settings\OutletContext;
 use App\Domain\Staffing\LongshiftService;
@@ -9,10 +10,12 @@ use App\Domain\Staffing\Models\LongshiftApproval;
 use App\Domain\Staffing\Models\WorkSchedule;
 use App\Domain\Staffing\Models\WorkShiftType;
 use App\Domain\Staffing\Positions;
+use App\Exports\ReportSheet;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Audit;
 use App\Support\BusinessDate;
+use App\Support\ReportFile;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,7 +28,7 @@ class ScheduleController extends Controller
 {
     public const MAX_PER_DAY = 3;
 
-    public function __construct(private OutletContext $outlet, private LongshiftService $longshift) {}
+    public function __construct(private OutletContext $outlet, private LongshiftService $longshift, private Notifier $notifier) {}
 
     public function index(Request $request): Response
     {
@@ -96,6 +99,8 @@ class ScheduleController extends Controller
         $this->assertNoOverlap($types->values()->all());
 
         $date = CarbonImmutable::parse($data['date']);
+        $this->assertMayEdit($request, $date);
+        $before = $this->describeDay($person->id, $date);
         DB::transaction(function () use ($id, $data, $person, $date, $request) {
             WorkSchedule::query()->where('outlet_id', $id)->where('user_id', $person->id)->whereDate('work_date', $date)->delete();
             foreach ($data['entries'] as $entry) {
@@ -107,6 +112,10 @@ class ScheduleController extends Controller
             Audit::log('schedule.day_set', null, ['user_id' => $person->id, 'date' => $date->toDateString(), 'shifts' => count($data['entries'])], $request->user());
             $this->longshift->syncSchedule($id, $person->id, $date, $request->user());
         });
+        $after = $this->describeDay($person->id, $date);
+        if ($before !== $after && $person->id !== $request->user()?->id && ! $date->isBefore(CarbonImmutable::today())) {
+            $this->tell($id, $person->id, "Jadwalmu {$date->translatedFormat('D, d M')} diubah", "Sebelumnya: {$before}. Sekarang: {$after}.");
+        }
 
         return back()->with('success', 'Jadwal disimpan.');
     }
@@ -117,6 +126,7 @@ class ScheduleController extends Controller
         $id = $this->outlet->id();
         $data = $request->validate(['week' => 'required|date']);
         $week = CarbonImmutable::parse($data['week'])->startOfWeek();
+        $this->assertMayEdit($request, $week->addDays(6));
         $previous = $week->subWeek();
 
         $source = WorkSchedule::query()->where('outlet_id', $id)->whereBetween('work_date', [$previous->toDateString(), $previous->addDays(6)->toDateString()])
@@ -143,6 +153,15 @@ class ScheduleController extends Controller
                 $this->longshift->syncSchedule($id, $userId, CarbonImmutable::parse($date), $request->user());
             }
         });
+        $perUser = [];
+        foreach ($touched as [$userId]) {
+            $perUser[$userId] = ($perUser[$userId] ?? 0) + 1;
+        }
+        foreach ($perUser as $userId => $count) {
+            if ($userId !== $request->user()?->id) {
+                $this->tell($id, $userId, 'Jadwal minggu '.$week->translatedFormat('d M').' ditambahkan', "{$count} shift baru masuk jadwalmu. Lihat di menu Jadwal Kerja.");
+            }
+        }
 
         return back()->with('success', "{$added} shift disalin dari minggu sebelumnya.");
     }
@@ -158,9 +177,110 @@ class ScheduleController extends Controller
         if ($data['starts_at'] === $data['ends_at']) {
             return back()->with('error', 'Jam mulai dan selesai tidak boleh sama.');
         }
-        $type ? $type->update($data) : WorkShiftType::create($data + ['outlet_id' => $id, 'is_active' => true]);
+        if ($type === null) {
+            WorkShiftType::create($data + ['outlet_id' => $id, 'is_active' => true]);
+
+            return back()->with('success', 'Pola shift disimpan.');
+        }
+
+        $timesChanged = substr($type->starts_at, 0, 5) !== $data['starts_at'] || substr($type->ends_at, 0, 5) !== $data['ends_at'];
+        if ($timesChanged && WorkSchedule::query()->where('work_shift_type_id', $type->id)->whereDate('work_date', '<', now()->toDateString())->exists()) {
+            return back()->with('error', 'Pola ini sudah dipakai di jadwal yang sudah lewat, jam-nya tidak bisa diubah supaya jam kerja lama tidak berubah. Nonaktifkan pola ini lalu buat pola baru.');
+        }
+        $type->update($data);
+        if ($timesChanged) {
+            // planned days from today on follow the new hours: recheck their longshift and tell the people
+            $rows = WorkSchedule::query()->where('work_shift_type_id', $type->id)->whereDate('work_date', '>=', now()->toDateString())->get();
+            foreach ($rows->groupBy(fn (WorkSchedule $w) => $w->user_id.'|'.$w->work_date->toDateString()) as $group) {
+                $first = $group->firstOrFail();
+                $this->longshift->syncSchedule($id, $first->user_id, $first->work_date, $request->user());
+            }
+            foreach ($rows->pluck('user_id')->unique() as $userId) {
+                $this->tell($id, (int) $userId, "Jam shift {$type->name} diubah", "Sekarang {$data['starts_at']}–{$data['ends_at']}. Jadwalmu yang memakai shift ini ikut berubah.");
+            }
+        }
+        Audit::log('schedule.type_saved', $type, ['name' => $type->name, 'starts_at' => $data['starts_at'], 'ends_at' => $data['ends_at'], 'is_active' => $data['is_active'] ?? true], $request->user());
 
         return back()->with('success', 'Pola shift disimpan.');
+    }
+
+    /** The team's week (scope=team) or the signed-in person's own month (scope=mine) as PDF or Excel. */
+    public function export(Request $request): \Symfony\Component\HttpFoundation\Response
+    {
+        $id = $this->outlet->id();
+        $data = $request->validate(['scope' => 'required|in:team,mine', 'week' => 'nullable|date', 'month' => ['nullable', 'regex:/^\d{4}-\d{2}$/'], 'format' => 'nullable|in:pdf,xlsx']);
+        $format = (string) ($data['format'] ?? 'pdf');
+        $hours = fn (WorkShiftType $t) => round($t->durationMinutes() / 60, 1);
+
+        if ($data['scope'] === 'mine') {
+            $user = $this->actor($request);
+            $month = CarbonImmutable::parse(((string) ($data['month'] ?? now()->format('Y-m'))).'-01');
+            $rows = WorkSchedule::query()->where('user_id', $user->id)->whereBetween('work_date', [$month->toDateString(), $month->endOfMonth()->toDateString()])->with('type')->orderBy('work_date')->get()->groupBy(fn (WorkSchedule $w) => $w->work_date->toDateString());
+            $lines = [];
+            $total = 0.0;
+            foreach ($rows as $date => $day) {
+                foreach ($day->groupBy('work_shift_type_id') as $group) {
+                    $type = $group->firstOrFail()->type;
+                    $total += $hours($type);
+                    $lines[] = [CarbonImmutable::parse($date)->translatedFormat('d M Y'), CarbonImmutable::parse($date)->translatedFormat('l'), $type->name, substr($type->starts_at, 0, 5).'–'.substr($type->ends_at, 0, 5), $group->pluck('position')->reject(fn ($p) => $p === 'none')->map(fn ($p) => Positions::ALL[$p] ?? $p)->implode(' + '), $hours($type)];
+                }
+            }
+
+            return ReportFile::download($format, "Jadwal {$user->name} {$month->format('Y-m')}", [
+                new ReportSheet('Jadwal saya', "{$user->name} · ".$month->translatedFormat('F Y'), ['Tanggal', 'Hari', 'Shift', 'Jam', 'Posisi', 'Durasi (jam)'], $lines, ['Total', '', '', '', '', round($total, 1)]),
+            ]);
+        }
+
+        $week = CarbonImmutable::parse((string) ($data['week'] ?? BusinessDate::for()))->startOfWeek();
+        $days = array_map(fn (int $i) => $week->addDays($i), range(0, 6));
+        $rows = WorkSchedule::query()->where('outlet_id', $id)->whereBetween('work_date', [$week->toDateString(), $week->addDays(6)->toDateString()])->with('type')->get()->groupBy(fn (WorkSchedule $w) => $w->user_id.'|'.$w->work_date->toDateString());
+        $lines = [];
+        foreach (User::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('name')->get() as $person) {
+            $cells = [];
+            $sum = 0.0;
+            foreach ($days as $d) {
+                $day = $rows[$person->id.'|'.$d->toDateString()] ?? collect();
+                $cells[] = $day->isEmpty() ? '-' : $day->groupBy('work_shift_type_id')->map(function ($group) use (&$sum, $hours) {
+                    $type = $group->firstOrFail()->type;
+                    $sum += $hours($type);
+                    $pos = $group->pluck('position')->reject(fn ($p) => $p === 'none')->map(fn ($p) => Positions::ALL[$p] ?? $p)->implode(' + ');
+
+                    return "{$type->name} ".substr($type->starts_at, 0, 5).'–'.substr($type->ends_at, 0, 5).($pos !== '' ? " ({$pos})" : '');
+                })->implode("\n");
+            }
+            $lines[] = [$person->name, $person->getRoleNames()->first() ?? '', ...$cells, round($sum, 1)];
+        }
+
+        return ReportFile::download($format, "Jadwal kerja {$week->toDateString()}", [
+            new ReportSheet('Jadwal kerja', 'Minggu '.$week->translatedFormat('d M').' – '.$week->addDays(6)->translatedFormat('d M Y'), ['Karyawan', 'Jabatan', ...array_map(fn (CarbonImmutable $d) => $d->translatedFormat('D d/m'), $days), 'Jam'], $lines),
+        ]);
+    }
+
+    /** Days that are already over are history (they feed longshift and HR): only the MOD or the owner may correct them. */
+    private function assertMayEdit(Request $request, CarbonImmutable $date): void
+    {
+        $user = $request->user();
+        if ($date->isBefore(CarbonImmutable::today()) && ! ($user?->can('approve-longshift') || $user?->hasRole('owner'))) {
+            throw new OrderException('Jadwal hari yang sudah lewat hanya bisa diubah oleh MOD atau owner.');
+        }
+    }
+
+    /** "Pagi 09:00–18:00 (Kasir + MOD); Malam 20:00–23:00" or "libur". */
+    private function describeDay(int $userId, CarbonImmutable $date): string
+    {
+        $text = WorkSchedule::query()->where('user_id', $userId)->whereDate('work_date', $date)->with('type')->get()->groupBy('work_shift_type_id')->map(function ($group) {
+            $type = $group->firstOrFail()->type;
+            $pos = $group->pluck('position')->reject(fn ($p) => $p === 'none')->map(fn ($p) => Positions::ALL[$p] ?? $p)->implode(' + ');
+
+            return "{$type->name} ".substr($type->starts_at, 0, 5).'–'.substr($type->ends_at, 0, 5).($pos !== '' ? " ({$pos})" : '');
+        })->implode('; ');
+
+        return $text === '' ? 'libur' : $text;
+    }
+
+    private function tell(int $outletId, int $userId, string $title, string $body): void
+    {
+        $this->notifier->notify($outletId, 'schedule.changed', $title, $body, '/schedule', 'info', null, $userId);
     }
 
     /** @param  array<int, WorkShiftType>  $types */

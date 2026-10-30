@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Notification\Models\AppNotification;
 use App\Domain\Settings\OutletContext;
 use App\Domain\Staffing\Models\WorkSchedule;
 use App\Domain\Staffing\Models\WorkShiftType;
@@ -17,7 +18,7 @@ function entries(array $ids): array
 
 function monday(): string
 {
-    return now()->startOfWeek()->toDateString();
+    return now()->startOfWeek()->addWeek()->toDateString();
 }
 
 it('stays closed until the schedule is switched on in the settings', function () {
@@ -76,7 +77,7 @@ it('shows everyone the week, and lets only managers change it', function () {
     $pagi = workType('Pagi', '08:00', '16:00');
     WorkSchedule::create(['outlet_id' => $pagi->outlet_id, 'user_id' => $cashier->id, 'work_date' => monday(), 'work_shift_type_id' => $pagi->id]);
 
-    $this->actingAs($cashier)->get('/schedule')->assertOk()->assertInertia(fn ($p) => $p->where('can.manage', false)->where('me', $cashier->id)
+    $this->actingAs($cashier)->get('/schedule?week='.monday())->assertOk()->assertInertia(fn ($p) => $p->where('can.manage', false)->where('me', $cashier->id)
         ->where('people', fn ($people) => collect($people)->firstWhere('id', $cashier->id)['hours'] == 8)->where('coverage.'.monday().'.people', 1));
     $this->actingAs($cashier)->post('/schedule/day', ['user_id' => $cashier->id, 'date' => monday(), 'entries' => entries([])])->assertForbidden();
     $this->actingAs($cashier)->post('/schedule/types', ['name' => 'X', 'starts_at' => '08:00', 'ends_at' => '09:00'])->assertForbidden();
@@ -88,20 +89,78 @@ it('copies last week onto this week without touching what is planned, and manage
     $manager = userWithRole('manager');
     $waiter = userWithRole('waiter');
     $pagi = workType('Pagi', '08:00', '16:00');
-    $last = now()->startOfWeek()->subWeek();
+    $last = now()->startOfWeek();
     foreach ([0, 1, 2] as $i) {
         WorkSchedule::create(['outlet_id' => $pagi->outlet_id, 'user_id' => $waiter->id, 'work_date' => $last->addDays($i)->toDateString(), 'work_shift_type_id' => $pagi->id]);
     }
     WorkSchedule::create(['outlet_id' => $pagi->outlet_id, 'user_id' => $waiter->id, 'work_date' => monday(), 'work_shift_type_id' => $pagi->id]);
 
     $this->actingAs($manager)->post('/schedule/copy', ['week' => monday()])->assertSessionHas('success');
-    expect(WorkSchedule::query()->whereBetween('work_date', [monday(), now()->startOfWeek()->addDays(6)->toDateString()])->count())->toBe(3);
+    expect(WorkSchedule::query()->whereBetween('work_date', [monday(), now()->startOfWeek()->addWeek()->addDays(6)->toDateString()])->count())->toBe(3);
     $this->actingAs($manager)->post('/schedule/copy', ['week' => monday()])->assertSessionHas('success');
-    expect(WorkSchedule::query()->whereBetween('work_date', [monday(), now()->startOfWeek()->addDays(6)->toDateString()])->count())->toBe(3);
+    expect(WorkSchedule::query()->whereBetween('work_date', [monday(), now()->startOfWeek()->addWeek()->addDays(6)->toDateString()])->count())->toBe(3);
 
     $this->actingAs($manager)->post('/schedule/types', ['name' => 'Malam', 'starts_at' => '22:00', 'ends_at' => '06:00'])->assertSessionHasNoErrors();
     $this->actingAs($manager)->post('/schedule/types', ['name' => 'Salah', 'starts_at' => '08:00', 'ends_at' => '08:00'])->assertSessionHas('error');
     $this->actingAs($manager)->post('/schedule/types', ['name' => 'Salah', 'starts_at' => '8am', 'ends_at' => '10:00'])->assertSessionHasErrors('starts_at');
-    $this->actingAs($manager)->put("/schedule/types/{$pagi->id}", ['name' => 'Pagi', 'starts_at' => '07:00', 'ends_at' => '15:00', 'is_active' => false])->assertSessionHasNoErrors();
+    $this->actingAs($manager)->put("/schedule/types/{$pagi->id}", ['name' => 'Pagi', 'starts_at' => '08:00', 'ends_at' => '16:00', 'is_active' => false])->assertSessionHasNoErrors();
     expect($pagi->fresh()->is_active)->toBeFalse();
+});
+
+it('keeps history safe: past days only for MOD or owner, a pattern used in the past keeps its hours', function () {
+    setting('schedule.enabled', true);
+    $manager = userWithRole('manager');
+    $mod = userWithRole('mod');
+    $waiter = userWithRole('waiter');
+    $pagi = workType('Pagi', '08:00', '16:00');
+    $yesterday = now()->subDay()->toDateString();
+
+    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => $yesterday, 'entries' => entries([$pagi->id])])->assertSessionHas('error');
+    expect(WorkSchedule::query()->count())->toBe(0);
+    $this->actingAs($mod)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => $yesterday, 'entries' => entries([$pagi->id])])->assertSessionHasNoErrors()->assertSessionHas('success');
+    expect(WorkSchedule::query()->count())->toBe(1);
+
+    // the hours of a pattern already used in a past day cannot be rewritten
+    $this->actingAs($manager)->put("/schedule/types/{$pagi->id}", ['name' => 'Pagi', 'starts_at' => '07:00', 'ends_at' => '17:00', 'is_active' => true])->assertSessionHas('error');
+    expect(substr($pagi->fresh()->starts_at, 0, 5))->toBe('08:00');
+    // but a rename is fine, and so is a pattern used only from today on
+    $this->actingAs($manager)->put("/schedule/types/{$pagi->id}", ['name' => 'Shift 1', 'starts_at' => '08:00', 'ends_at' => '16:00', 'is_active' => true])->assertSessionHasNoErrors()->assertSessionHas('success');
+    $future = workType('Sore', '16:00', '20:00');
+    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => now()->addDays(2)->toDateString(), 'entries' => entries([$future->id])])->assertSessionHasNoErrors();
+    $this->actingAs($manager)->put("/schedule/types/{$future->id}", ['name' => 'Sore', 'starts_at' => '15:00', 'ends_at' => '20:00', 'is_active' => true])->assertSessionHas('success');
+    expect(substr($future->fresh()->starts_at, 0, 5))->toBe('15:00');
+});
+
+it('tells a worker when their upcoming schedule is changed, but not for the planner themselves or for history', function () {
+    setting('schedule.enabled', true);
+    $manager = userWithRole('manager');
+    $waiter = userWithRole('waiter');
+    $pagi = workType('Pagi', '08:00', '16:00');
+    $soon = now()->addDays(2)->toDateString();
+
+    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => $soon, 'entries' => entries([$pagi->id])])->assertSessionHasNoErrors();
+    $n = AppNotification::query()->where('kind', 'schedule.changed')->get();
+    expect($n)->toHaveCount(1)->and($n[0]->user_id)->toBe($waiter->id)->and($n[0]->body)->toContain('libur')->and($n[0]->body)->toContain('Pagi');
+
+    // saving the same plan again changes nothing: no second notice
+    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => $soon, 'entries' => entries([$pagi->id])])->assertSessionHasNoErrors();
+    expect(AppNotification::query()->where('kind', 'schedule.changed')->count())->toBe(1);
+
+    // planning your own day does not notify you
+    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $manager->id, 'date' => $soon, 'entries' => entries([$pagi->id])])->assertSessionHasNoErrors();
+    expect(AppNotification::query()->where('kind', 'schedule.changed')->where('user_id', $manager->id)->count())->toBe(0);
+});
+
+it('lets everyone download the team week and their own month as PDF or Excel', function () {
+    setting('schedule.enabled', true);
+    $waiter = userWithRole('waiter');
+    $pagi = workType('Pagi', '08:00', '16:00');
+    WorkSchedule::create(['outlet_id' => $pagi->outlet_id, 'user_id' => $waiter->id, 'work_date' => monday(), 'work_shift_type_id' => $pagi->id, 'position' => 'waiter']);
+
+    $week = monday();
+    $this->actingAs($waiter)->get("/schedule/export?scope=team&week={$week}&format=pdf")->assertOk();
+    $this->actingAs($waiter)->get("/schedule/export?scope=team&week={$week}&format=xlsx")->assertOk()->assertDownload();
+    $this->actingAs($waiter)->get('/schedule/export?scope=mine&month='.now()->format('Y-m').'&format=pdf')->assertOk();
+    $this->actingAs($waiter)->get('/schedule/export?scope=other')->assertSessionHasErrors('scope');
+    $this->actingAs(userWithRole('cashier'))->get('/schedule/export?scope=mine&month='.now()->format('Y-m').'&format=xlsx')->assertOk();
 });

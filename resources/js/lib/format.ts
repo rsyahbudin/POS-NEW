@@ -56,3 +56,15 @@ export function uuid(): string {
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
+
+/** Longshift hours the way HR counts them: every full standard shift of extra hours is one more shift. */
+export function longshiftText(hours: number, standard: number): string {
+    const std = Math.max(1, standard);
+    const shifts = Math.floor(hours / std);
+    const rest = hours % std;
+    if (shifts === 0) {
+        return `${hours} jam`;
+    }
+
+    return `${hours} jam (${shifts} shift${rest ? ` + ${rest} jam` : ''})`;
+}

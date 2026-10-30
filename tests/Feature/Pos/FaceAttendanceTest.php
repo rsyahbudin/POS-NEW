@@ -231,3 +231,15 @@ it('shows management everyone: who is at work, who is missing, a summary per per
     $this->actingAs($manager)->get("/attendance/export?from={$from}&to={$today}&format=xlsx")->assertOk()->assertDownload();
     $this->actingAs($waiter)->get('/attendance')->assertForbidden();
 });
+
+it('gives the calendar the month plan beside the real clock times', function () {
+    attendanceOn();
+    $waiter = userWithRole('waiter');
+    $type = WorkShiftType::create(['outlet_id' => $waiter->outlet_id, 'name' => 'Pagi', 'starts_at' => '08:00', 'ends_at' => '16:00', 'is_active' => true]);
+    $day = now()->startOfMonth()->addDays(4)->toDateString();
+    WorkSchedule::create(['outlet_id' => $waiter->outlet_id, 'user_id' => $waiter->id, 'work_date' => $day, 'work_shift_type_id' => $type->id, 'position' => 'waiter']);
+    Attendance::create(['outlet_id' => $waiter->outlet_id, 'user_id' => $waiter->id, 'work_date' => $day, 'clock_in_at' => "{$day} 08:10", 'clock_out_at' => "{$day} 16:05", 'method_in' => 'face', 'method_out' => 'face']);
+
+    $this->actingAs($waiter)->get('/attendance/mine')->assertInertia(fn ($p) => $p->where("planned.{$day}.0.name", 'Pagi')->where("planned.{$day}.0.positions.0", 'Waiter')
+        ->where('records.0.work_date', $day)->where('standard_hours', 9)->where('today', now()->toDateString()));
+});

@@ -30,6 +30,19 @@ class LongshiftService
         return max(0, intdiv($minutes - $this->standardMinutes(), 60));
     }
 
+    /**
+     * Longshift hours counted the way HR pays them: every full standard shift worth of extra hours (9 by default) is one more shift,
+     * the rest stays as hours. 3 h = 3 hours; 9 h = 1 shift; 11 h = 1 shift + 2 hours.
+     *
+     * @return array{shifts: int, hours: int}
+     */
+    public function breakdown(int $extraHours): array
+    {
+        $standard = max(1, intdiv($this->standardMinutes(), 60));
+
+        return ['shifts' => intdiv($extraHours, $standard), 'hours' => $extraHours % $standard];
+    }
+
     /** Re-checks the planned day of one person. Someone who may approve gets their own plan approved at once. */
     public function syncSchedule(int $outletId, int $userId, CarbonInterface $date, ?User $actor): void
     {

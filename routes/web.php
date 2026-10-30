@@ -39,6 +39,7 @@ use App\Http\Controllers\QrisWebhookController;
 use App\Http\Controllers\Receipt\ReceiptController;
 use App\Http\Controllers\Shift\ShiftController;
 use App\Http\Controllers\Staffing\AttendanceController;
+use App\Http\Controllers\Staffing\LongshiftController;
 use App\Http\Controllers\Staffing\ScheduleController;
 use App\Http\Controllers\Stock\StockController;
 use App\Http\Controllers\Stock\WasteController;
@@ -170,6 +171,15 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::put('records/{attendance}', [AttendanceController::class, 'saveRecord'])->name('records.update');
             Route::delete('records/{attendance}', [AttendanceController::class, 'deleteRecord'])->name('records.destroy');
         });
+    });
+
+    // Longshift approval: hours beyond the standard shift, decided by the manager on duty.
+    Route::prefix('longshift')->name('longshift.')->middleware('staffing')->group(function () {
+        Route::middleware('permission:approve-longshift|manage-schedule|manage-attendance')->group(function () {
+            Route::get('/', [LongshiftController::class, 'index'])->name('index');
+            Route::get('export', [LongshiftController::class, 'export'])->name('export');
+        });
+        Route::post('{approval}/decide', [LongshiftController::class, 'decide'])->middleware('permission:approve-longshift')->name('decide');
     });
 
     // Print station: a device that serves the queued print jobs of its printers

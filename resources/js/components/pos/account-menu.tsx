@@ -37,6 +37,7 @@ export function AccountMenu({
               inventory: boolean;
               schedule: boolean;
               attendance: boolean;
+              staffing: boolean;
           }
         | undefined;
     // The screens that have no sidebar still reach every page this person may use.

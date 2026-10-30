@@ -11,6 +11,7 @@ use App\Domain\Pricing\Models\TaxRule;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Shift\Actions\OpenShiftAction;
 use App\Domain\Shift\Models\Shift;
+use App\Domain\Staffing\Models\FaceTemplate;
 use App\Models\User;
 use Illuminate\Support\Str;
 
@@ -18,7 +19,7 @@ function userWithRole(string $role): User
 {
     return User::query()->where('email', match ($role) {
         'owner' => 'owner@pos.test', 'manager' => 'manager@pos.test', 'cashier' => 'kasir@pos.test',
-        'waiter' => 'waiter@pos.test', 'kitchen' => 'dapur@pos.test',
+        'waiter' => 'waiter@pos.test', 'kitchen' => 'dapur@pos.test', 'mod' => 'mod@pos.test',
     })->firstOrFail();
 }
 
@@ -83,4 +84,22 @@ function accountBalance(string $systemKey): int
     $row = DB::table('journal_lines')->where('account_id', $id)->selectRaw('COALESCE(SUM(debit),0) d, COALESCE(SUM(credit),0) c')->first();
 
     return (int) $row->d - (int) $row->c; // debit-positive
+}
+
+/** A fake 128-number face: a base direction per person, plus a little noise. */
+function face(int $seed, float $noise = 0.0): array
+{
+    $out = [];
+    for ($i = 0; $i < 128; $i++) {
+        $out[] = round(sin(($i + 1) * ($seed + 1) * 0.37) * 0.09 + $noise * cos($i * 1.3) * 0.02, 5);
+    }
+
+    return $out;
+}
+
+function enrolled(User $user, int $seed): void
+{
+    foreach ([0.0, 0.2, 0.4] as $noise) {
+        FaceTemplate::create(['outlet_id' => $user->outlet_id, 'user_id' => $user->id, 'descriptor' => face($seed, $noise), 'consented_at' => now()]);
+    }
 }

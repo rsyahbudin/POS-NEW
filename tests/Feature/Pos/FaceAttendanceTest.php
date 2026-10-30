@@ -6,25 +6,6 @@ use App\Domain\Staffing\Models\Attendance;
 use App\Domain\Staffing\Models\FaceTemplate;
 use App\Domain\Staffing\Models\WorkSchedule;
 use App\Domain\Staffing\Models\WorkShiftType;
-use App\Models\User;
-
-/** A fake 128-number face: a base direction per person, plus a little noise. */
-function face(int $seed, float $noise = 0.0): array
-{
-    $out = [];
-    for ($i = 0; $i < 128; $i++) {
-        $out[] = round(sin(($i + 1) * ($seed + 1) * 0.37) * 0.09 + $noise * cos($i * 1.3) * 0.02, 5);
-    }
-
-    return $out;
-}
-
-function enrolled(User $user, int $seed): void
-{
-    foreach ([0.0, 0.2, 0.4] as $noise) {
-        FaceTemplate::create(['outlet_id' => $user->outlet_id, 'user_id' => $user->id, 'descriptor' => face($seed, $noise), 'consented_at' => now()]);
-    }
-}
 
 function attendanceOn(): void
 {

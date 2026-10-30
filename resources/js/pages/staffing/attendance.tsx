@@ -24,6 +24,8 @@ type Rec = {
     note: string | null;
     hours: number | null;
     late: number | null;
+    role: string | null;
+    longshift: { hours: number; approved_hours: number; status: string } | null;
 };
 type Props = {
     filters: { from: string; to: string };
@@ -177,6 +179,9 @@ export default function Attendance({ filters, records, people, grace }: Props) {
                             : r.late > 0
                               ? `${r.late} menit`
                               : 'Tepat waktu',
+                        r.longshift
+                            ? `+${r.longshift.hours}j ${r.longshift.status === 'approved' ? `disetujui ${r.longshift.approved_hours}j` : r.longshift.status === 'rejected' ? 'ditolak' : 'menunggu MOD'}`
+                            : '-',
                         r.method_in === 'face' ? 'Wajah' : 'Manual',
                         r.note ?? '-',
                         <div key={r.id} className="flex gap-1">

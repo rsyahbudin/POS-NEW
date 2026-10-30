@@ -9,6 +9,12 @@ function workType(string $name, string $from, string $to): WorkShiftType
     return WorkShiftType::create(['outlet_id' => app(OutletContext::class)->id(), 'name' => $name, 'starts_at' => $from, 'ends_at' => $to, 'is_active' => true]);
 }
 
+/** @param  list<int>  $ids */
+function entries(array $ids): array
+{
+    return array_map(fn (int $id) => ['type_id' => $id], $ids);
+}
+
 function monday(): string
 {
     return now()->startOfWeek()->toDateString();
@@ -33,17 +39,17 @@ it('lets a manager give a person up to three shifts in one day, and a day off by
     $extra = workType('Tambahan', '23:30', '23:50');
     $day = monday();
 
-    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $cashier->id, 'date' => $day, 'type_ids' => [$pagi->id, $siang->id, $malam->id]])->assertSessionHasNoErrors()->assertSessionHas('success');
+    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $cashier->id, 'date' => $day, 'entries' => entries([$pagi->id, $siang->id, $malam->id])])->assertSessionHasNoErrors()->assertSessionHas('success');
     expect(WorkSchedule::query()->where('user_id', $cashier->id)->count())->toBe(3);
 
-    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $cashier->id, 'date' => $day, 'type_ids' => [$pagi->id, $siang->id, $malam->id, $extra->id]])->assertSessionHasErrors('type_ids');
+    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $cashier->id, 'date' => $day, 'entries' => entries([$pagi->id, $siang->id, $malam->id, $extra->id])])->assertSessionHasErrors('entries');
     expect(WorkSchedule::query()->where('user_id', $cashier->id)->count())->toBe(3);
 
     // saving again replaces, it does not pile up
-    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $cashier->id, 'date' => $day, 'type_ids' => [$malam->id]])->assertSessionHasNoErrors();
+    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $cashier->id, 'date' => $day, 'entries' => entries([$malam->id])])->assertSessionHasNoErrors();
     expect(WorkSchedule::query()->where('user_id', $cashier->id)->pluck('work_shift_type_id')->all())->toBe([$malam->id]);
 
-    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $cashier->id, 'date' => $day, 'type_ids' => []])->assertSessionHasNoErrors();
+    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $cashier->id, 'date' => $day, 'entries' => entries([])])->assertSessionHasNoErrors();
     expect(WorkSchedule::query()->count())->toBe(0);
 });
 
@@ -56,10 +62,10 @@ it('refuses two shifts that overlap, and counts the hours of a shift past midnig
     $late = workType('Malam', '22:00', '02:00');
     $ok = workType('Petang', '16:00', '20:00');
 
-    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => monday(), 'type_ids' => [$a->id, $b->id]])->assertSessionHas('error');
+    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => monday(), 'entries' => entries([$a->id, $b->id])])->assertSessionHas('error');
     expect(WorkSchedule::query()->count())->toBe(0);
 
-    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => monday(), 'type_ids' => [$a->id, $ok->id]])->assertSessionHasNoErrors();
+    $this->actingAs($manager)->post('/schedule/day', ['user_id' => $waiter->id, 'date' => monday(), 'entries' => entries([$a->id, $ok->id])])->assertSessionHasNoErrors();
     expect(WorkSchedule::query()->count())->toBe(2);
     expect($late->durationMinutes())->toBe(240);
 });
@@ -71,8 +77,8 @@ it('shows everyone the week, and lets only managers change it', function () {
     WorkSchedule::create(['outlet_id' => $pagi->outlet_id, 'user_id' => $cashier->id, 'work_date' => monday(), 'work_shift_type_id' => $pagi->id]);
 
     $this->actingAs($cashier)->get('/schedule')->assertOk()->assertInertia(fn ($p) => $p->where('can.manage', false)->where('me', $cashier->id)
-        ->where('people', fn ($people) => collect($people)->firstWhere('id', $cashier->id)['hours'] == 8)->where('coverage.'.monday(), 1));
-    $this->actingAs($cashier)->post('/schedule/day', ['user_id' => $cashier->id, 'date' => monday(), 'type_ids' => []])->assertForbidden();
+        ->where('people', fn ($people) => collect($people)->firstWhere('id', $cashier->id)['hours'] == 8)->where('coverage.'.monday().'.people', 1));
+    $this->actingAs($cashier)->post('/schedule/day', ['user_id' => $cashier->id, 'date' => monday(), 'entries' => entries([])])->assertForbidden();
     $this->actingAs($cashier)->post('/schedule/types', ['name' => 'X', 'starts_at' => '08:00', 'ends_at' => '09:00'])->assertForbidden();
     expect(WorkSchedule::query()->count())->toBe(1);
 });

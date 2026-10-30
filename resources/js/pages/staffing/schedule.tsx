@@ -1,4 +1,4 @@
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { ChevronLeft, ChevronRight, Copy, Plus, Settings2 } from 'lucide-react';
 import { useState } from 'react';
 import { Modal } from '@/components/pos/modal';
@@ -14,21 +14,26 @@ type ShiftType = {
     is_active: boolean;
     hours: number;
 };
+type Entry = { type_id: number; positions: string[] };
 type Person = {
     id: number;
     name: string;
     role: string | null;
+    default_position: string;
     hours: number;
-    shifts: Record<string, number[]>;
+    shifts: Record<string, Entry[]>;
+    longshift: Record<string, { hours: number; status: string }>;
 };
 type Props = {
     week: string;
     days: string[];
     types: ShiftType[];
     people: Person[];
-    coverage: Record<string, number>;
+    coverage: Record<string, Record<string, number>>;
+    positions: { key: string; label: string }[];
+    standard_hours: number;
     me: number | null;
-    can: { manage: boolean };
+    can: { manage: boolean; approve: boolean };
     max_per_day: number;
 };
 
@@ -61,6 +66,8 @@ export default function Schedule({
     types,
     people,
     coverage,
+    positions,
+    standard_hours,
     me,
     can,
     max_per_day,
@@ -68,10 +75,11 @@ export default function Schedule({
     const errors = usePage().props.errors as Record<string, string>;
     const active = types.filter((t) => t.is_active);
     const byId = Object.fromEntries(types.map((t) => [t.id, t]));
+    const label = Object.fromEntries(positions.map((p) => [p.key, p.label]));
     const [cell, setCell] = useState<{
         person: Person;
         date: string;
-        ids: number[];
+        entries: Entry[];
     } | null>(null);
     const [typeForm, setTypeForm] = useState<{
         id?: number;
@@ -86,6 +94,47 @@ export default function Schedule({
     const mine = people.find((p) => p.id === me);
     const firstError = Object.values(errors ?? {})[0];
 
+    const cellHours = cell
+        ? cell.entries.reduce((s, e) => s + (byId[e.type_id]?.hours ?? 0), 0)
+        : 0;
+    const extra = Math.max(0, Math.floor(cellHours - standard_hours));
+    const toggleType = (id: number) => {
+        if (!cell) {
+            return;
+        }
+        const on = cell.entries.some((e) => e.type_id === id);
+        const dp = cell.person.default_position;
+        setCell({
+            ...cell,
+            entries: on
+                ? cell.entries.filter((e) => e.type_id !== id)
+                : [
+                      ...cell.entries,
+                      { type_id: id, positions: dp === 'none' ? [] : [dp] },
+                  ],
+        });
+    };
+    const togglePosition = (id: number, pos: string) => {
+        if (!cell) {
+            return;
+        }
+        setCell({
+            ...cell,
+            entries: cell.entries.map((e) =>
+                e.type_id === id
+                    ? {
+                          ...e,
+                          positions: e.positions.includes(pos)
+                              ? e.positions.filter((x) => x !== pos)
+                              : [...e.positions, pos],
+                      }
+                    : e,
+            ),
+        });
+    };
+    const posText = (e: Entry) =>
+        e.positions.map((p) => label[p] ?? p).join(' + ');
+
     return (
         <>
             <Head title="Jadwal Kerja" />
@@ -94,37 +143,42 @@ export default function Schedule({
                     title="Jadwal kerja"
                     subtitle={
                         can.manage
-                            ? `Ketuk kotak untuk mengatur shift. Satu orang bisa sampai ${max_per_day} shift sehari.`
+                            ? `Ketuk kotak untuk mengatur shift dan posisi. Sampai ${max_per_day} shift sehari; lebih dari ${standard_hours} jam sehari = longshift (perlu persetujuan MOD).`
                             : 'Jadwal kerja minggu ini.'
                     }
                     actions={
-                        can.manage ? (
-                            <>
-                                <Button
-                                    variant="outline"
-                                    className="h-11"
-                                    onClick={() => setManageTypes(true)}
-                                >
-                                    <Settings2 /> Pola shift
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    className="h-11"
-                                    onClick={() =>
-                                        confirm(
-                                            'Salin jadwal minggu sebelumnya ke minggu ini? Yang sudah terisi tidak diubah.',
-                                        ) &&
-                                        router.post(
-                                            '/schedule/copy',
-                                            { week },
-                                            { preserveScroll: true },
-                                        )
-                                    }
-                                >
-                                    <Copy /> Salin minggu lalu
-                                </Button>
-                            </>
-                        ) : undefined
+                        <>
+                            <Button asChild variant="outline" className="h-11">
+                                <Link href="/longshift">Longshift</Link>
+                            </Button>
+                            {can.manage && (
+                                <>
+                                    <Button
+                                        variant="outline"
+                                        className="h-11"
+                                        onClick={() => setManageTypes(true)}
+                                    >
+                                        <Settings2 /> Pola shift
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        className="h-11"
+                                        onClick={() =>
+                                            confirm(
+                                                'Salin jadwal minggu sebelumnya ke minggu ini? Yang sudah terisi tidak diubah.',
+                                            ) &&
+                                            router.post(
+                                                '/schedule/copy',
+                                                { week },
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        <Copy /> Salin minggu lalu
+                                    </Button>
+                                </>
+                            )}
+                        </>
                     }
                 />
                 {firstError && (
@@ -180,8 +234,8 @@ export default function Schedule({
                 {active.length === 0 && (
                     <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
                         {can.manage
-                            ? 'Buat pola shift dulu (mis. Pagi 08:00–16:00, Malam 16:00–00:00) lewat tombol "Pola shift".'
-                            : 'Manager belum membuat pola shift.'}
+                            ? 'Buat pola shift dulu (mis. Shift 09:00–18:00, 9 jam) lewat tombol "Pola shift".'
+                            : 'MOD belum membuat pola shift.'}
                     </p>
                 )}
 
@@ -195,7 +249,7 @@ export default function Schedule({
                                     className="flex justify-between gap-3 border-t py-1 first:border-t-0"
                                 >
                                     <span>{dayLabel(d)}</span>
-                                    <span>
+                                    <span className="text-right">
                                         {(mine.shifts[d] ?? []).length === 0 ? (
                                             <span className="text-muted-foreground">
                                                 Libur
@@ -203,8 +257,8 @@ export default function Schedule({
                                         ) : (
                                             (mine.shifts[d] ?? [])
                                                 .map(
-                                                    (id) =>
-                                                        `${byId[id]?.name} ${byId[id]?.starts_at}–${byId[id]?.ends_at}`,
+                                                    (e) =>
+                                                        `${byId[e.type_id]?.name} ${byId[e.type_id]?.starts_at}–${byId[e.type_id]?.ends_at}${posText(e) ? ` (${posText(e)})` : ''}`,
                                                 )
                                                 .join(', ')
                                         )}
@@ -216,17 +270,28 @@ export default function Schedule({
                 )}
 
                 <div className="overflow-x-auto rounded-xl border bg-card">
-                    <table className="w-full min-w-[820px] border-collapse text-sm">
+                    <table className="w-full min-w-[900px] border-collapse text-sm">
                         <thead>
                             <tr className="border-b text-left">
                                 <th className="sticky left-0 z-10 bg-card p-3 font-medium">
                                     Karyawan
                                 </th>
                                 {days.map((d) => (
-                                    <th key={d} className="p-3 font-medium">
+                                    <th
+                                        key={d}
+                                        className="p-3 align-top font-medium"
+                                    >
                                         {dayLabel(d)}
-                                        <span className="block text-xs font-normal text-muted-foreground">
-                                            {coverage[d] ?? 0} orang
+                                        <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                                            {positions.map((p) => (
+                                                <span
+                                                    key={p.key}
+                                                    className={`mr-1 inline-block ${(coverage[d]?.[p.key] ?? 0) === 0 ? 'text-red-700 dark:text-red-400' : ''}`}
+                                                >
+                                                    {p.label.split(' ')[0]}{' '}
+                                                    {coverage[d]?.[p.key] ?? 0}
+                                                </span>
+                                            ))}
                                         </span>
                                     </th>
                                 ))}
@@ -250,7 +315,8 @@ export default function Schedule({
                                         )}
                                     </td>
                                     {days.map((d) => {
-                                        const ids = p.shifts[d] ?? [];
+                                        const entries = p.shifts[d] ?? [];
+                                        const ls = p.longshift[d];
 
                                         return (
                                             <td
@@ -267,33 +333,71 @@ export default function Schedule({
                                                         setCell({
                                                             person: p,
                                                             date: d,
-                                                            ids,
+                                                            entries,
                                                         })
                                                     }
                                                     aria-label={`${p.name}, ${dayLabel(d)}`}
                                                     className="grid min-h-12 w-full content-start gap-1 rounded-lg p-1 text-left enabled:hover:bg-accent disabled:cursor-default"
                                                 >
-                                                    {ids.length === 0 ? (
+                                                    {entries.length === 0 ? (
                                                         <span className="px-1 text-xs text-muted-foreground">
                                                             {can.manage
                                                                 ? '+'
                                                                 : '–'}
                                                         </span>
                                                     ) : (
-                                                        ids.map((id) => (
+                                                        entries.map((e) => (
                                                             <span
-                                                                key={id}
-                                                                className={`rounded-md border px-1.5 py-0.5 text-xs ${tone(id)}`}
+                                                                key={e.type_id}
+                                                                className={`rounded-md border px-1.5 py-0.5 text-xs ${tone(e.type_id)}`}
                                                             >
-                                                                {byId[id]?.name}{' '}
+                                                                {
+                                                                    byId[
+                                                                        e
+                                                                            .type_id
+                                                                    ]?.name
+                                                                }{' '}
                                                                 <span className="opacity-70">
                                                                     {
-                                                                        byId[id]
+                                                                        byId[
+                                                                            e
+                                                                                .type_id
+                                                                        ]
                                                                             ?.starts_at
                                                                     }
                                                                 </span>
+                                                                {posText(e) && (
+                                                                    <span className="block opacity-80">
+                                                                        {posText(
+                                                                            e,
+                                                                        )}
+                                                                    </span>
+                                                                )}
                                                             </span>
                                                         ))
+                                                    )}
+                                                    {ls && (
+                                                        <span
+                                                            className={`rounded-md border px-1.5 py-0.5 text-xs font-medium ${
+                                                                ls.status ===
+                                                                'approved'
+                                                                    ? 'border-emerald-600/40 text-emerald-700 dark:text-emerald-400'
+                                                                    : ls.status ===
+                                                                        'rejected'
+                                                                      ? 'border-red-600/40 text-red-700 line-through dark:text-red-400'
+                                                                      : 'border-amber-600/40 text-amber-700 dark:text-amber-400'
+                                                            }`}
+                                                        >
+                                                            Longshift +
+                                                            {ls.hours}j{' '}
+                                                            {ls.status ===
+                                                            'pending'
+                                                                ? '· menunggu MOD'
+                                                                : ls.status ===
+                                                                    'approved'
+                                                                  ? '· disetujui'
+                                                                  : '· ditolak'}
+                                                        </span>
                                                     )}
                                                 </button>
                                             </td>
@@ -316,45 +420,81 @@ export default function Schedule({
                     title={`${cell.person.name} · ${dayLabel(cell.date)}`}
                 >
                     <p className="text-sm text-muted-foreground">
-                        Pilih shift (maksimal {max_per_day}). Kosongkan semua
-                        untuk libur.
+                        Pilih shift (maksimal {max_per_day}) dan posisinya. Satu
+                        orang boleh memegang beberapa posisi, mis. Kasir + MOD.
+                        Kosongkan semua untuk libur.
                     </p>
                     <div className="grid gap-2">
                         {active.map((t) => {
-                            const on = cell.ids.includes(t.id);
-                            const full = !on && cell.ids.length >= max_per_day;
+                            const entry = cell.entries.find(
+                                (e) => e.type_id === t.id,
+                            );
+                            const full =
+                                !entry && cell.entries.length >= max_per_day;
 
                             return (
-                                <label
+                                <div
                                     key={t.id}
-                                    className={`flex min-h-12 items-center gap-3 rounded-xl border p-3 ${on ? tone(t.id) : ''} ${full ? 'opacity-50' : ''}`}
+                                    className={`grid gap-2 rounded-xl border p-3 ${entry ? tone(t.id) : ''} ${full ? 'opacity-50' : ''}`}
                                 >
-                                    <input
-                                        type="checkbox"
-                                        checked={on}
-                                        disabled={full}
-                                        onChange={() =>
-                                            setCell({
-                                                ...cell,
-                                                ids: on
-                                                    ? cell.ids.filter(
-                                                          (x) => x !== t.id,
-                                                      )
-                                                    : [...cell.ids, t.id],
-                                            })
-                                        }
-                                    />
-                                    <span className="font-medium">
-                                        {t.name}
-                                    </span>
-                                    <span className="ml-auto text-sm tabular-nums">
-                                        {t.starts_at}–{t.ends_at} · {t.hours}{' '}
-                                        jam
-                                    </span>
-                                </label>
+                                    <label className="flex min-h-10 items-center gap-3">
+                                        <input
+                                            type="checkbox"
+                                            checked={!!entry}
+                                            disabled={full}
+                                            onChange={() => toggleType(t.id)}
+                                        />
+                                        <span className="font-medium">
+                                            {t.name}
+                                        </span>
+                                        <span className="ml-auto text-sm tabular-nums">
+                                            {t.starts_at}–{t.ends_at} ·{' '}
+                                            {t.hours} jam
+                                        </span>
+                                    </label>
+                                    {entry && (
+                                        <div className="flex flex-wrap gap-2">
+                                            {positions.map((p) => (
+                                                <Button
+                                                    key={p.key}
+                                                    type="button"
+                                                    size="sm"
+                                                    className="h-10"
+                                                    aria-pressed={entry.positions.includes(
+                                                        p.key,
+                                                    )}
+                                                    variant={
+                                                        entry.positions.includes(
+                                                            p.key,
+                                                        )
+                                                            ? 'default'
+                                                            : 'outline'
+                                                    }
+                                                    onClick={() =>
+                                                        togglePosition(
+                                                            t.id,
+                                                            p.key,
+                                                        )
+                                                    }
+                                                >
+                                                    {p.label}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             );
                         })}
                     </div>
+                    <p
+                        className={`text-sm ${extra > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}`}
+                    >
+                        Total {cellHours} jam.
+                        {extra > 0 &&
+                            (can.approve
+                                ? ` Longshift +${extra} jam, langsung disetujui atas nama Anda.`
+                                : ` Longshift +${extra} jam, menunggu persetujuan MOD.`)}
+                    </p>
                     <Button
                         className="h-12"
                         onClick={() =>
@@ -363,7 +503,7 @@ export default function Schedule({
                                 {
                                     user_id: cell.person.id,
                                     date: cell.date,
-                                    type_ids: cell.ids,
+                                    entries: cell.entries,
                                 },
                                 {
                                     preserveScroll: true,
@@ -425,8 +565,8 @@ export default function Schedule({
                             onClick={() =>
                                 setTypeForm({
                                     name: '',
-                                    starts_at: '08:00',
-                                    ends_at: '16:00',
+                                    starts_at: '09:00',
+                                    ends_at: '18:00',
                                     is_active: true,
                                 })
                             }
@@ -447,7 +587,7 @@ export default function Schedule({
                         <Input
                             className="h-11"
                             value={typeForm.name}
-                            placeholder="mis. Pagi"
+                            placeholder="mis. Shift 1"
                             onChange={(e) =>
                                 setTypeForm({
                                     ...typeForm,

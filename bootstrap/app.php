@@ -4,6 +4,7 @@ use App\Http\Middleware\EnsureAttendanceEnabled;
 use App\Http\Middleware\EnsureKitchenEnabled;
 use App\Http\Middleware\EnsureScheduleEnabled;
 use App\Http\Middleware\EnsureStaffAccess;
+use App\Http\Middleware\EnsureStaffingEnabled;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
@@ -29,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'kitchen' => EnsureKitchenEnabled::class,
             'schedule' => EnsureScheduleEnabled::class,
             'attendance' => EnsureAttendanceEnabled::class,
+            'staffing' => EnsureStaffingEnabled::class,
         ]);
 
         $middleware->validateCsrfTokens(except: ['webhooks/*']);

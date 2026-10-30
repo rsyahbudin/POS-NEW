@@ -15,7 +15,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'open-close-shift', 'manage-shifts-any', 'update-kitchen-status', 'input-expense',
         'view-sales-reports', 'view-own-shift-recap', 'view-accounting', 'manage-accounting',
         'cancel-order', 'use-print-station', 'view-kitchen-report', 'view-margin-report', 'manage-printers',
-        'view-stock', 'count-stock', 'view-assets', 'manage-assets', 'import-data', 'record-purchase', 'view-activity-log', 'manage-suppliers', 'record-waste', 'view-waste-report', 'manage-online-payments', 'export-receipts', 'mark-sold-out', 'view-today-summary', 'reopen-shift', 'handle-calls', 'view-cash-ledger', 'manage-fixed-expenses', 'view-schedule', 'manage-schedule', 'manage-attendance', 'use-attendance-kiosk',
+        'view-stock', 'count-stock', 'view-assets', 'manage-assets', 'import-data', 'record-purchase', 'view-activity-log', 'manage-suppliers', 'record-waste', 'view-waste-report', 'manage-online-payments', 'export-receipts', 'mark-sold-out', 'view-today-summary', 'reopen-shift', 'handle-calls', 'view-cash-ledger', 'manage-fixed-expenses', 'view-schedule', 'manage-schedule', 'manage-attendance', 'use-attendance-kiosk', 'approve-longshift',
         'manage-menu', 'manage-inventory', 'manage-pricing', 'manage-discount-presets', 'manage-users', 'manage-settings', 'manage-tables', 'manage-roles',
     ];
 
@@ -29,6 +29,11 @@ class RolesAndPermissionsSeeder extends Seeder
         ],
         'cashier' => ['handle-calls', 'use-attendance-kiosk', 'view-schedule', 'reopen-shift', 'view-today-summary', 'create-order', 'receive-payment', 'discount-within-limit', 'open-close-shift', 'update-kitchen-status', 'view-own-shift-recap', 'cancel-order', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
         'waiter' => ['handle-calls', 'view-schedule', 'view-today-summary', 'create-order', 'cancel-order', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
+        'mod' => [
+            'handle-calls', 'view-today-summary', 'create-order', 'receive-payment', 'discount-within-limit', 'discount-custom', 'void', 'cancel-order',
+            'open-close-shift', 'manage-shifts-any', 'reopen-shift', 'update-kitchen-status', 'input-expense', 'use-print-station',
+            'view-stock', 'count-stock', 'view-assets', 'view-schedule', 'manage-schedule', 'approve-longshift', 'use-attendance-kiosk',
+        ],
         'kitchen' => ['handle-calls', 'view-schedule', 'view-today-summary', 'update-kitchen-status', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
     ];
 
@@ -47,7 +52,7 @@ class RolesAndPermissionsSeeder extends Seeder
             $model = Role::findOrCreate($role, 'web');
             if ($model->wasRecentlyCreated) {
                 $model->syncPermissions($permissions);
-                $model->forceFill(['allow_pin_login' => in_array($role, ['cashier', 'waiter', 'kitchen'], true)])->save();
+                $model->forceFill(['allow_pin_login' => in_array($role, ['cashier', 'waiter', 'kitchen', 'mod'], true)])->save();
             }
         }
     }

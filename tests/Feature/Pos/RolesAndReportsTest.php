@@ -27,7 +27,7 @@ it('lets only the owner edit role permissions and applies them immediately', fun
     expect($cashier->can('void'))->toBeFalse();
 
     $this->actingAs(userWithRole('manager'))->get('/admin/roles')->assertForbidden();
-    $this->actingAs(userWithRole('owner'))->get('/admin/roles')->assertOk()->assertInertia(fn ($p) => $p->component('admin/roles')->has('groups')->has('roles', 5));
+    $this->actingAs(userWithRole('owner'))->get('/admin/roles')->assertOk()->assertInertia(fn ($p) => $p->component('admin/roles')->has('groups')->has('roles', 6));
 
     $role = Role::findByName('cashier');
     $perms = [...$role->permissions->pluck('name')->all(), 'void'];

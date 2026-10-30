@@ -21,7 +21,7 @@ class AttendanceService
     /** An open record older than this was a forgotten clock-out: a new scan starts a new day instead of closing it. */
     public const STALE_HOURS = 18;
 
-    public function __construct(private FaceMatcher $matcher) {}
+    public function __construct(private FaceMatcher $matcher, private LongshiftService $longshift) {}
 
     /**
      * @param  list<float>  $descriptor
@@ -46,6 +46,7 @@ class AttendanceService
                 }
                 if ($latest->clock_out_at === null && $latest->clock_in_at->diffInHours($now, true) < self::STALE_HOURS) {
                     $latest->update(['clock_out_at' => $now, 'method_out' => 'face']);
+                    $this->longshift->syncAttendanceDay($outletId, $user->id, $latest->work_date);
 
                     return ['status' => 'out', 'attendance' => $latest, 'user' => $user];
                 }
@@ -72,12 +73,14 @@ class AttendanceService
             if ($action === 'in' && $a->clock_out_at === null && $a->clock_in_at->diffInSeconds($now, true) <= self::UNDO_SECONDS) {
                 Audit::log('attendance.undone', $a, ['user_id' => $a->user_id, 'action' => 'in']);
                 $a->delete();
+                $this->longshift->syncAttendanceDay($outletId, $a->user_id, $a->work_date);
 
                 return true;
             }
             if ($action === 'out' && $a->clock_out_at !== null && $a->method_out === 'face' && $a->clock_out_at->diffInSeconds($now, true) <= self::UNDO_SECONDS) {
                 Audit::log('attendance.undone', $a, ['user_id' => $a->user_id, 'action' => 'out']);
                 $a->update(['clock_out_at' => null, 'method_out' => null]);
+                $this->longshift->syncAttendanceDay($outletId, $a->user_id, $a->work_date);
 
                 return true;
             }

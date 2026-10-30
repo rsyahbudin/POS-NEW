@@ -6,8 +6,10 @@ use App\Domain\Settings\OutletContext;
 use App\Domain\Settings\SettingsRepository;
 use App\Domain\Staffing\AttendanceService;
 use App\Domain\Staffing\FaceMatcher;
+use App\Domain\Staffing\LongshiftService;
 use App\Domain\Staffing\Models\Attendance;
 use App\Domain\Staffing\Models\FaceTemplate;
+use App\Domain\Staffing\Models\LongshiftApproval;
 use App\Exports\ReportSheet;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -25,7 +27,7 @@ class AttendanceController extends Controller
 {
     public const MAX_SAMPLES = 5;
 
-    public function __construct(private OutletContext $outlet, private AttendanceService $service, private FaceMatcher $matcher, private SettingsRepository $settings) {}
+    public function __construct(private OutletContext $outlet, private AttendanceService $service, private FaceMatcher $matcher, private SettingsRepository $settings, private LongshiftService $longshift) {}
 
     public function kiosk(): Response
     {
@@ -79,11 +81,11 @@ class AttendanceController extends Controller
         $rows = $this->records($from, $to);
 
         return ReportFile::download((string) $request->input('format', 'xlsx'), "Absensi {$from} {$to}", [
-            new ReportSheet('Absensi', "Periode {$range}", ['Tanggal', 'Nama', 'Masuk', 'Pulang', 'Jam kerja', 'Terlambat (menit)', 'Sumber', 'Catatan'], array_map(fn (array $r) => [
-                CarbonImmutable::parse($r['work_date'])->translatedFormat('d M Y'), $r['name'], CarbonImmutable::parse($r['clock_in_at'])->format('H:i'),
-                $r['clock_out_at'] ? CarbonImmutable::parse($r['clock_out_at'])->format('H:i') : 'Belum pulang', $r['hours'] ?? '', $r['late'] ?? '',
+            new ReportSheet('Absensi', "Periode {$range}", ['Tanggal', 'Nama', 'Jabatan', 'Masuk', 'Pulang', 'Jam kerja', 'Terlambat (menit)', 'Longshift disetujui (jam)', 'Sumber', 'Catatan'], array_map(fn (array $r) => [
+                CarbonImmutable::parse($r['work_date'])->translatedFormat('d M Y'), $r['name'], $r['role'] ?? '', CarbonImmutable::parse($r['clock_in_at'])->format('H:i'),
+                $r['clock_out_at'] ? CarbonImmutable::parse($r['clock_out_at'])->format('H:i') : 'Belum pulang', $r['hours'] ?? '', $r['late'] ?? '', ($r['longshift']['status'] ?? '') === 'approved' ? $r['longshift']['approved_hours'] : '',
                 $r['method_in'] === 'face' ? 'Wajah' : 'Manual', $r['note'] ?? '',
-            ], $rows), ['Total jam', '', '', '', round(array_sum(array_column($rows, 'hours')), 1), '', '', '']),
+            ], $rows), ['Total jam', '', '', '', '', round(array_sum(array_column($rows, 'hours')), 1), '', '', '', '']),
         ]);
     }
 
@@ -149,10 +151,15 @@ class AttendanceController extends Controller
             $out = $out->addDay();     // shift past midnight
         }
         $fields = ['user_id' => $data['user_id'], 'work_date' => $in->toDateString(), 'clock_in_at' => $in, 'clock_out_at' => $out, 'note' => $data['note'], 'edited_by' => $request->user()?->id];
+        $was = $attendance === null ? null : [$attendance->user_id, $attendance->work_date->copy()];
         if ($attendance) {
             $attendance->update($fields + ['method_out' => $out ? ($attendance->method_out ?? 'manual') : null]);
         } else {
             $attendance = Attendance::create($fields + ['outlet_id' => $id, 'method_in' => 'manual', 'method_out' => $out ? 'manual' : null]);
+        }
+        $this->longshift->syncAttendanceDay($id, (int) $data['user_id'], $in);
+        if ($was !== null && ($was[0] !== (int) $data['user_id'] || ! $was[1]->isSameDay($in))) {
+            $this->longshift->syncAttendanceDay($id, $was[0], $was[1]);
         }
         Audit::log('attendance.corrected', $attendance, ['user_id' => $data['user_id'], 'date' => $data['date'], 'note' => $data['note']], $request->user());
 
@@ -164,6 +171,7 @@ class AttendanceController extends Controller
         abort_unless($attendance->outlet_id === $this->outlet->id(), 404);
         Audit::log('attendance.deleted', $attendance, ['user_id' => $attendance->user_id, 'date' => $attendance->work_date->toDateString()], $request->user());
         $attendance->delete();
+        $this->longshift->syncAttendanceDay($attendance->outlet_id, $attendance->user_id, $attendance->work_date);
 
         return back()->with('success', 'Absensi dihapus.');
     }
@@ -186,13 +194,19 @@ class AttendanceController extends Controller
     private function records(string $from, string $to): array
     {
         $grace = $this->grace();
+        $long = LongshiftApproval::query()->where('outlet_id', $this->outlet->id())->where('source', 'attendance')->whereBetween('work_date', [$from, $to])->get()
+            ->keyBy(fn (LongshiftApproval $l) => $l->user_id.'|'.$l->work_date->toDateString());
 
         return Attendance::query()->where('outlet_id', $this->outlet->id())->whereBetween('work_date', [$from, $to])->with('user:id,name')->orderByDesc('work_date')->orderBy('clock_in_at')->get()
-            ->map(fn (Attendance $a) => [
-                'id' => $a->id, 'user_id' => $a->user_id, 'name' => $a->user->name ?? '-', 'work_date' => $a->work_date->toDateString(), 'clock_in_at' => $a->clock_in_at->toIso8601String(),
-                'clock_out_at' => $a->clock_out_at?->toIso8601String(), 'method_in' => $a->method_in, 'note' => $a->note,
-                'hours' => $a->clock_out_at ? round($a->clock_in_at->diffInMinutes($a->clock_out_at, true) / 60, 1) : null,
-                'late' => $this->service->lateMinutes($a, $grace),
-            ])->values()->all();
+            ->map(function (Attendance $a) use ($grace, $long) {
+                $l = $long[$a->user_id.'|'.$a->work_date->toDateString()] ?? null;
+
+                return [
+                    'id' => $a->id, 'user_id' => $a->user_id, 'name' => $a->user->name ?? '-', 'role' => $a->user->getRoleNames()->first(), 'work_date' => $a->work_date->toDateString(),
+                    'clock_in_at' => $a->clock_in_at->toIso8601String(), 'clock_out_at' => $a->clock_out_at?->toIso8601String(), 'method_in' => $a->method_in, 'note' => $a->note,
+                    'hours' => $a->clock_out_at ? round($a->clock_in_at->diffInMinutes($a->clock_out_at, true) / 60, 1) : null, 'late' => $this->service->lateMinutes($a, $grace),
+                    'longshift' => $l === null ? null : ['hours' => $l->hours, 'approved_hours' => (int) $l->approved_hours, 'status' => $l->status],
+                ];
+            })->values()->all();
     }
 }

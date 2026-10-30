@@ -28,6 +28,7 @@ import {
     Wallet,
     CalendarClock,
     CalendarDays,
+    Hourglass,
     ScanFace,
     UserCheck,
 } from 'lucide-react';
@@ -36,7 +37,7 @@ import type { NavItem } from '@/types';
 
 export type Item = NavItem & {
     permission?: string | string[];
-    feature?: 'kds' | 'inventory' | 'schedule' | 'attendance';
+    feature?: 'kds' | 'inventory' | 'schedule' | 'attendance' | 'staffing';
 };
 
 export const top: Item[] = [
@@ -65,6 +66,13 @@ export const top: Item[] = [
         icon: CalendarDays,
         permission: 'view-schedule',
         feature: 'schedule',
+    },
+    {
+        title: 'Persetujuan Longshift',
+        href: '/longshift',
+        icon: Hourglass,
+        permission: 'approve-longshift',
+        feature: 'staffing',
     },
     {
         title: 'Kiosk Absensi',
@@ -297,6 +305,7 @@ type Features =
           inventory: boolean;
           schedule: boolean;
           attendance: boolean;
+          staffing: boolean;
       }
     | undefined;
 

@@ -34,6 +34,7 @@ final class PermissionCatalog
                 'manage-schedule' => ['label' => 'Atur jadwal kerja', 'hint' => 'Membuat pola shift, mengisi jadwal mingguan (sampai 3 shift per orang per hari), dan menyalin jadwal minggu lalu.'],
                 'manage-attendance' => ['label' => 'Kelola absensi & wajah karyawan', 'hint' => 'Melihat dan mengoreksi absensi, mengunduh laporan, mendaftarkan atau menghapus data wajah karyawan. Data wajah bersifat sensitif: batasi ke owner dan manager.'],
                 'use-attendance-kiosk' => ['label' => 'Pakai kiosk absensi', 'hint' => 'Membuka layar kamera absensi di tablet outlet. Disarankan satu akun khusus dengan izin ini saja.'],
+                'approve-longshift' => ['label' => 'Setujui longshift', 'hint' => 'Menyetujui atau menolak jam kerja di atas standar (longshift) dari jadwal dan absensi. Jam yang disetujui masuk laporan HR. Untuk MOD dan owner.'],
                 'input-expense' => ['label' => 'Input pengeluaran', 'hint' => 'Catat pengeluaran operasional.'],
             ]],
             'report' => ['label' => 'Laporan & akuntansi', 'items' => [
@@ -80,5 +81,5 @@ final class PermissionCatalog
     }
 
     /** Roles shipped with the app: cannot be deleted; owner cannot be edited. */
-    public const BUILT_IN = ['owner' => 'Owner', 'manager' => 'Manager / Supervisor', 'cashier' => 'Kasir', 'waiter' => 'Waiter', 'kitchen' => 'Dapur / Bar'];
+    public const BUILT_IN = ['owner' => 'Owner', 'manager' => 'Manager / Supervisor', 'cashier' => 'Kasir', 'waiter' => 'Waiter', 'kitchen' => 'Dapur / Bar', 'mod' => 'MOD (Manager on Duty)'];
 }

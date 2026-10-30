@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Accounting\Models\Account;
+use App\Domain\Accounting\SystemAccount;
 use App\Domain\Expense\Actions\RecordExpenseAction;
 use App\Domain\Expense\Models\Expense;
 use App\Domain\Expense\Models\ExpenseCategory;
@@ -34,10 +35,10 @@ class ExpenseController extends Controller
             'filters' => compact('from', 'to'),
             'expenses' => Expense::query()->where('outlet_id', $id)->whereBetween('date', [$from, $to])->with('category')->latest('date')->latest('id')->get()->map(fn ($e) => [
                 'id' => $e->id, 'date' => $e->date->format('Y-m-d'), 'category' => $e->category->name, 'amount' => $e->amount, 'note' => $e->note,
-                'receipt' => $e->receipt_path ? MediaUrl::public($e->receipt_path) : null,
+                'receipt' => $e->receipt_path ? MediaUrl::public($e->receipt_path) : null, 'from_drawer' => $e->cash_movement_id !== null,
             ]),
             'categories' => ExpenseCategory::query()->where('outlet_id', $id)->orderBy('name')->get(['id', 'name']),
-            'sources' => Account::query()->where('outlet_id', $id)->where('type', 'asset')->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
+            'sources' => Account::query()->where('outlet_id', $id)->where('type', 'asset')->where('is_active', true)->where(fn ($q) => $q->whereNull('system_key')->orWhere('system_key', '!=', SystemAccount::CashDrawer->value))->orderBy('code')->get(['id', 'code', 'name']),
             'today' => BusinessDate::for(),
         ]);
     }
@@ -66,6 +67,9 @@ class ExpenseController extends Controller
             'date' => 'required|date', 'category_id' => 'required|integer', 'amount' => 'required|integer|min:1',
             'source_account_id' => 'required|integer', 'note' => 'nullable|string|max:200', 'receipt' => 'nullable|image|max:8192',
         ]);
+        if (Account::query()->whereKey($data['source_account_id'])->where('system_key', SystemAccount::CashDrawer->value)->exists()) {
+            return back()->with('error', 'Uang laci dicatat kasir di halaman Shift (Belanja / uang keluar), supaya hitungan kas laci tetap cocok.');
+        }
         $receipt = $request->hasFile('receipt') ? $images->store($request->file('receipt'), 'receipts') : null;
         $action->handle($this->actor($request), $data['date'], (int) $data['category_id'], (int) $data['amount'], (int) $data['source_account_id'], $data['note'] ?? null, $receipt);
 

@@ -21,6 +21,7 @@ type Props = {
         amount: number;
         note: string | null;
         receipt: string | null;
+        from_drawer: boolean;
     }[];
     categories: { id: number; name: string }[];
     sources: { id: number; code: string; name: string }[];
@@ -91,6 +92,11 @@ export default function ExpensesPage({
 
                 <section className="grid max-w-2xl gap-3 rounded-xl border bg-card p-4">
                     <h2 className="font-semibold">Catat pengeluaran</h2>
+                    <p className="text-sm text-muted-foreground">
+                        Untuk uang yang bukan dari laci kasir (transfer, kartu,
+                        kas besar). Belanja dengan uang laci dicatat kasir di
+                        halaman Shift, supaya kas laci tetap cocok.
+                    </p>
                     <div className="grid gap-3 sm:grid-cols-2">
                         <Field label="Tanggal">
                             <Input
@@ -236,6 +242,7 @@ export default function ExpensesPage({
                         'Kategori',
                         'Nominal',
                         'Catatan',
+                        'Sumber',
                         'Nota',
                     ]}
                     numeric={[2]}
@@ -244,6 +251,7 @@ export default function ExpensesPage({
                         e.category,
                         rupiah(e.amount),
                         e.note ?? '-',
+                        e.from_drawer ? 'Kas laci' : 'Rekening',
                         e.receipt ? (
                             <a
                                 key={e.id}

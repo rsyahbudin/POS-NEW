@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
  * @property int $source_account_id
  * @property string|null $note
  * @property string|null $receipt_path
+ * @property int|null $cash_movement_id
  * @property int $created_by
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at

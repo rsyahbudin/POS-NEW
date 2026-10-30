@@ -25,6 +25,7 @@ import {
     Users,
     UtensilsCrossed,
     Wrench,
+    Wallet,
 } from 'lucide-react';
 import type { NavSection } from '@/components/nav-main';
 import type { NavItem } from '@/types';
@@ -193,6 +194,12 @@ export const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 href: '/shift',
                 icon: Coins,
                 permission: 'manage-shifts-any',
+            },
+            {
+                title: 'Laporan Kas Laci',
+                href: '/admin/cash-ledger',
+                icon: Wallet,
+                permission: 'view-cash-ledger',
             },
             {
                 title: 'Pengeluaran',

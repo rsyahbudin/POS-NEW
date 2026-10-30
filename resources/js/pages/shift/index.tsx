@@ -48,6 +48,7 @@ type ShiftData = {
         reason: string;
         created_at: string;
         by: string | null;
+        receipt: string | null;
     }[];
 };
 type Acc = { id: number; code: string; name: string };
@@ -56,6 +57,7 @@ type Props = {
     shift: ShiftData | null;
     suggestedOpening: number;
     accounts: { expense: Acc[]; other: Acc[]; bank: Acc[] };
+    categories: { id: number; name: string }[];
     recent: ShiftData[];
     transactions: {
         id: number;
@@ -81,6 +83,7 @@ export default function ShiftPage({
     shift,
     suggestedOpening,
     accounts,
+    categories,
     recent,
     unsettled,
     transactions,
@@ -117,6 +120,7 @@ export default function ShiftPage({
                     <Open
                         shift={shift}
                         accounts={accounts}
+                        categories={categories}
                         operate={can.operate}
                         unsettled={unsettled}
                     />
@@ -398,11 +402,13 @@ function SalesBreakdown({ shift }: { shift: ShiftData }) {
 function Open({
     shift,
     accounts,
+    categories,
     operate,
     unsettled,
 }: {
     shift: ShiftData;
     accounts: Props['accounts'];
+    categories: Props['categories'];
     operate: boolean;
     unsettled: Props['unsettled'];
 }) {
@@ -433,6 +439,7 @@ function Open({
             <SalesBreakdown shift={shift} />
             <Movement
                 accounts={accounts}
+                categories={categories}
                 movements={shift.movements}
                 operate={operate}
             />
@@ -449,10 +456,12 @@ function Open({
 
 function Movement({
     accounts,
+    categories,
     movements,
     operate,
 }: {
     accounts: Props['accounts'];
+    categories: Props['categories'];
     movements: ShiftData['movements'];
     operate: boolean;
 }) {
@@ -460,12 +469,27 @@ function Movement({
     const [amount, setAmount] = useState<number | ''>('');
     const [reason, setReason] = useState('');
     const [account, setAccount] = useState<number | ''>('');
-    const list = dir === 'out' ? accounts.expense : accounts.other;
+    const [category, setCategory] = useState<number | ''>('');
+    const [receipt, setReceipt] = useState<File | null>(null);
+    const fileRef = useRef<HTMLInputElement>(null);
+    const spending = dir === 'out' && categories.length > 0;
+    const ready =
+        !!amount && (spending ? !!category : !!reason.trim() && !!account);
+
+    const reset = () => {
+        setAmount('');
+        setReason('');
+        setCategory('');
+        setReceipt(null);
+        if (fileRef.current) {
+            fileRef.current.value = '';
+        }
+    };
 
     return (
         <section className="grid gap-3 rounded-xl border bg-card p-4">
             <h2 className="font-semibold">
-                {t('Kas masuk / keluar (non-penjualan)')}
+                {t('Uang laci: belanja & kas masuk')}
             </h2>
             {operate && (
                 <>
@@ -481,7 +505,7 @@ function Movement({
                                 setAccount('');
                             }}
                         >
-                            {t('Keluar')}
+                            {t('Belanja / uang keluar')}
                         </Button>
                         <Button
                             type="button"
@@ -494,40 +518,90 @@ function Movement({
                                 setAccount('');
                             }}
                         >
-                            {t('Masuk')}
+                            {t('Uang masuk')}
                         </Button>
                     </div>
+                    {spending && (
+                        <Field label={t('Untuk apa?')}>
+                            <div className="flex flex-wrap gap-2">
+                                {categories.map((c) => (
+                                    <Button
+                                        key={c.id}
+                                        type="button"
+                                        aria-pressed={category === c.id}
+                                        variant={
+                                            category === c.id
+                                                ? 'default'
+                                                : 'outline'
+                                        }
+                                        className="h-11"
+                                        onClick={() => setCategory(c.id)}
+                                    >
+                                        {c.name}
+                                    </Button>
+                                ))}
+                            </div>
+                        </Field>
+                    )}
                     <Field label={t('Nominal')}>
                         <MoneyInput value={amount} onChange={setAmount} />
                     </Field>
-                    <Field label={t('Alasan')}>
+                    <Field
+                        label={spending ? t('Catatan (opsional)') : t('Alasan')}
+                    >
                         <Input
                             className="h-11"
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
-                            placeholder={t('mis. beli es batu')}
+                            placeholder={
+                                spending
+                                    ? t('mis. galon 2 buah')
+                                    : t('mis. tambah uang kembalian')
+                            }
                         />
                     </Field>
-                    <Field
-                        label={
-                            dir === 'out' ? t('Akun beban') : t('Akun lawan')
-                        }
-                    >
-                        <Select
-                            value={account}
-                            onChange={(e) => setAccount(Number(e.target.value))}
+                    {!spending && (
+                        <Field
+                            label={
+                                dir === 'out'
+                                    ? t('Akun beban')
+                                    : t('Akun lawan')
+                            }
                         >
-                            <option value="">{t('— pilih —')}</option>
-                            {list.map((a) => (
-                                <option key={a.id} value={a.id}>
-                                    {a.name}
-                                </option>
-                            ))}
-                        </Select>
-                    </Field>
+                            <Select
+                                value={account}
+                                onChange={(e) =>
+                                    setAccount(Number(e.target.value))
+                                }
+                            >
+                                <option value="">{t('— pilih —')}</option>
+                                {(dir === 'out'
+                                    ? accounts.expense
+                                    : accounts.other
+                                ).map((a) => (
+                                    <option key={a.id} value={a.id}>
+                                        {a.name}
+                                    </option>
+                                ))}
+                            </Select>
+                        </Field>
+                    )}
+                    {spending && (
+                        <Field label={t('Foto nota (opsional)')}>
+                            <input
+                                ref={fileRef}
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                onChange={(e) =>
+                                    setReceipt(e.target.files?.[0] ?? null)
+                                }
+                            />
+                        </Field>
+                    )}
                     <Button
                         className="h-12"
-                        disabled={!amount || !reason.trim() || !account}
+                        disabled={!ready}
                         onClick={() =>
                             router.post(
                                 '/shift/movements',
@@ -535,14 +609,17 @@ function Movement({
                                     direction: dir,
                                     amount,
                                     reason,
-                                    account_id: account,
+                                    ...(spending
+                                        ? {
+                                              category_id: category,
+                                              receipt: receipt ?? undefined,
+                                          }
+                                        : { account_id: account }),
                                 },
                                 {
+                                    forceFormData: true,
                                     preserveScroll: true,
-                                    onSuccess: () => {
-                                        setAmount('');
-                                        setReason('');
-                                    },
+                                    onSuccess: reset,
                                 },
                             )
                         }
@@ -556,7 +633,7 @@ function Movement({
                     {movements.map((m, i) => (
                         <li
                             key={i}
-                            className="flex justify-between border-t py-1"
+                            className="flex justify-between gap-3 border-t py-1"
                         >
                             <span>
                                 {m.direction === 'in' ? '＋' : '－'} {m.reason}
@@ -565,6 +642,16 @@ function Movement({
                                         {' '}
                                         · {m.by}
                                     </span>
+                                )}
+                                {m.receipt && (
+                                    <a
+                                        className="ml-2 underline"
+                                        href={m.receipt}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                    >
+                                        {t('nota')}
+                                    </a>
                                 )}
                             </span>
                             <span className="tabular-nums">

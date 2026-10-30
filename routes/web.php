@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AccountingController;
 use App\Http\Controllers\Admin\ActivityController;
+use App\Http\Controllers\Admin\CashLedgerController;
 use App\Http\Controllers\Admin\DayCloseController;
 use App\Http\Controllers\Admin\DiscountController;
 use App\Http\Controllers\Admin\DiscountPresetController;
@@ -324,6 +325,11 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::get('expenses', [ExpenseController::class, 'index'])->name('expenses');
             Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store');
             Route::get('expenses/export', [ExpenseController::class, 'export'])->name('expenses.export');
+        });
+
+        Route::middleware('permission:view-cash-ledger')->group(function () {
+            Route::get('cash-ledger', [CashLedgerController::class, 'index'])->name('cash-ledger');
+            Route::get('cash-ledger/export', [CashLedgerController::class, 'export'])->name('cash-ledger.export');
         });
 
         Route::middleware('permission:view-activity-log')->group(function () {

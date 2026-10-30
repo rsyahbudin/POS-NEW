@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Shift;
 
 use App\Domain\Accounting\Models\Account;
+use App\Domain\Expense\Models\ExpenseCategory;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Ordering\Models\Order;
 use App\Domain\Settings\OutletContext;
@@ -14,6 +15,8 @@ use App\Domain\Shift\Models\Shift;
 use App\Domain\Shift\ShiftCash;
 use App\Domain\Shift\ShiftResolver;
 use App\Http\Controllers\Controller;
+use App\Support\ImageOptimizer;
+use App\Support\MediaUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +38,7 @@ class ShiftController extends Controller
             // One shift for the whole store: shown to every role, only people with the shift permission can act on it.
             'shift' => $shift ? $this->present($shift, $cash) : null,
             'suggestedOpening' => $open->suggestedOpeningCash(),
+            'categories' => $operate ? ExpenseCategory::query()->where('outlet_id', $outletId)->orderBy('name')->get(['id', 'name']) : [],
             'accounts' => $operate ? [
                 'expense' => Account::query()->where('outlet_id', $outletId)->whereIn('type', ['expense'])->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
                 'other' => Account::query()->where('outlet_id', $outletId)->whereIn('type', ['equity', 'revenue', 'liability'])->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
@@ -86,11 +90,19 @@ class ShiftController extends Controller
         return back()->with('success', 'Shift dibuka.');
     }
 
-    public function movement(Request $request, AddCashMovementAction $action): RedirectResponse
+    public function movement(Request $request, AddCashMovementAction $action, ImageOptimizer $images): RedirectResponse
     {
-        $data = $request->validate(['direction' => 'required|in:in,out', 'amount' => 'required|integer|min:1', 'reason' => 'required|string|max:200', 'account_id' => 'required|integer|exists:accounts,id']);
+        $data = $request->validate([
+            'direction' => 'required|in:in,out', 'amount' => 'required|integer|min:1', 'reason' => 'nullable|string|max:200',
+            'account_id' => 'nullable|integer|exists:accounts,id', 'category_id' => 'nullable|integer|exists:expense_categories,id',
+            'receipt' => 'nullable|image|max:8192',
+        ]);
         $shift = app(ShiftResolver::class)->current() ?? throw new OrderException('Belum ada shift terbuka.');
-        $action->handle($shift, $this->actor($request), $data['direction'], (int) $data['amount'], $data['reason'], (int) $data['account_id']);
+        $receipt = $request->hasFile('receipt') ? $images->store($request->file('receipt'), 'receipts') : null;
+        $action->handle(
+            $shift, $this->actor($request), $data['direction'], (int) $data['amount'], (string) ($data['reason'] ?? ''),
+            isset($data['account_id']) ? (int) $data['account_id'] : null, isset($data['category_id']) ? (int) $data['category_id'] : null, $receipt,
+        );
 
         return back()->with('success', 'Kas dicatat.');
     }
@@ -141,7 +153,7 @@ class ShiftController extends Controller
             'by_method' => $byMethod->map(fn ($r) => ['name' => $r->name, 'type' => $r->type, 'total' => (int) $r->total, 'count' => (int) $r->count])->all(),
             'orders' => $orders, 'voids' => $voids, 'discounts' => $discounts, 'comps' => $comps,
             'opened_by' => $shift->user?->name, 'closed_by' => $shift->closer?->name,
-            'movements' => $shift->movements()->with('creator:id,name')->latest()->get()->map(fn ($m) => ['direction' => $m->direction, 'amount' => $m->amount, 'reason' => $m->reason, 'created_at' => $m->created_at, 'by' => $m->creator?->name])->all(),
+            'movements' => $shift->movements()->with('creator:id,name')->latest()->get()->map(fn ($m) => ['direction' => $m->direction, 'amount' => $m->amount, 'reason' => $m->reason, 'created_at' => $m->created_at, 'by' => $m->creator?->name, 'receipt' => $m->receipt_path ? MediaUrl::public($m->receipt_path) : null])->all(),
         ];
     }
 }

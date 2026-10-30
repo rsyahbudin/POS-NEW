@@ -4,6 +4,8 @@ namespace App\Domain\Shift\Actions;
 
 use App\Domain\Accounting\Actions\PostJournalAction;
 use App\Domain\Accounting\SystemAccount;
+use App\Domain\Expense\Models\Expense;
+use App\Domain\Expense\Models\ExpenseCategory;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Shift\Models\CashMovement;
 use App\Domain\Shift\Models\Shift;
@@ -12,28 +14,52 @@ use App\Support\Audit;
 use App\Support\BusinessDate;
 use Illuminate\Support\Facades\DB;
 
-/** Non-sales cash in/out during a shift (e.g. buying ice). Journals against the chosen counter account. */
+/**
+ * Non-sales cash in/out during a shift. Cash spent on an expense category (galon, es batu ...) carries the category and
+ * an optional receipt photo, and shows up in the expense list as well; it is journalled once, here.
+ */
 class AddCashMovementAction
 {
     public function __construct(private PostJournalAction $journal) {}
 
-    public function handle(Shift $shift, User $user, string $direction, int $amount, string $reason, int $accountId): CashMovement
+    public function handle(Shift $shift, User $user, string $direction, int $amount, string $reason, ?int $accountId, ?int $categoryId = null, ?string $receiptPath = null): CashMovement
     {
-        if (! in_array($direction, ['in', 'out'], true) || $amount <= 0 || trim($reason) === '') {
-            throw new OrderException('Arah, nominal, dan alasan wajib diisi.');
+        if (! in_array($direction, ['in', 'out'], true) || $amount <= 0) {
+            throw new OrderException('Arah dan nominal wajib diisi.');
+        }
+        if ($categoryId !== null && $direction !== 'out') {
+            throw new OrderException('Kategori hanya untuk kas keluar.');
+        }
+        if ($categoryId === null && ($accountId === null || trim($reason) === '')) {
+            throw new OrderException('Alasan dan akun wajib diisi.');
         }
 
-        return DB::transaction(function () use ($shift, $user, $direction, $amount, $reason, $accountId) {
+        return DB::transaction(function () use ($shift, $user, $direction, $amount, $reason, $accountId, $categoryId, $receiptPath) {
             $shift = Shift::query()->lockForUpdate()->findOrFail($shift->id);
             if (! $shift->isOpen()) {
                 throw new OrderException('Shift sudah ditutup.');
             }
 
+            $category = $categoryId === null ? null : ExpenseCategory::query()->where('outlet_id', $shift->outlet_id)->findOrFail($categoryId);
+            if ($category !== null) {
+                $accountId = $category->account_id;
+                $reason = trim($reason) === '' ? $category->name : "{$category->name}: ".trim($reason);
+            }
+
             $move = $shift->movements()->create([
                 'direction' => $direction, 'amount' => $amount, 'reason' => $reason, 'account_id' => $accountId, 'created_by' => $user->id,
+                'expense_category_id' => $category?->id, 'receipt_path' => $receiptPath,
             ]);
 
             Audit::log('cash.movement', $move, ['direction' => $direction, 'amount' => $amount, 'reason' => $reason], $user);
+
+            if ($category !== null) {
+                Expense::create([
+                    'outlet_id' => $shift->outlet_id, 'date' => BusinessDate::for(), 'category_id' => $category->id, 'amount' => $amount,
+                    'source_account_id' => SystemAccount::CashDrawer->resolve($shift->outlet_id)->id, 'note' => $reason, 'receipt_path' => $receiptPath,
+                    'created_by' => $user->id, 'cash_movement_id' => $move->id,
+                ]);
+            }
 
             $cash = SystemAccount::CashDrawer->resolve($shift->outlet_id)->id;
             $lines = $direction === 'out'

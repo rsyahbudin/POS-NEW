@@ -28,6 +28,7 @@ final class PermissionCatalog
                 'open-close-shift' => ['label' => 'Buka / tutup shift sendiri', 'hint' => 'Wajib punya shift terbuka untuk menerima pembayaran.'],
                 'manage-shifts-any' => ['label' => 'Kelola shift orang lain & tutup hari', 'hint' => 'Tutup shift siapa pun, buka kembali shift, pindah/gabung meja.'],
                 'view-own-shift-recap' => ['label' => 'Lihat rekap shift sendiri', 'hint' => 'Rekap shift kasir.'],
+                'view-cash-ledger' => ['label' => 'Lihat laporan kas laci', 'hint' => 'Laporan per shift: modal, penjualan tunai, kas masuk/keluar, belanja tunai per kategori beserta foto nota, selisih, dan setoran. Bisa diunduh Excel/PDF.'],
                 'input-expense' => ['label' => 'Input pengeluaran', 'hint' => 'Catat pengeluaran operasional.'],
             ]],
             'report' => ['label' => 'Laporan & akuntansi', 'items' => [

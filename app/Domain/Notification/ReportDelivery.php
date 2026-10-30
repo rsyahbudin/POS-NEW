@@ -127,13 +127,13 @@ class ReportDelivery
         $to ??= $date;
         $outletId = app(OutletContext::class)->id();
         $items = [];
-        CashMovement::query()->where('direction', 'out')->whereHas('shift', fn ($q) => $q->where('outlet_id', $outletId)->whereBetween('business_date', [$date, $to]))->with(['creator:id,name', 'shift:id,business_date'])->oldest()->get()
+        CashMovement::query()->where('direction', 'out')->whereDoesntHave('expense')->whereHas('shift', fn ($q) => $q->where('outlet_id', $outletId)->whereBetween('business_date', [$date, $to]))->with(['creator:id,name', 'shift:id,business_date'])->oldest()->get()
             ->each(function (CashMovement $m) use (&$items, $date) {
                 $items[] = ['date' => $m->shift?->business_date?->toDateString() ?? $date, 'source' => 'Kas laci', 'label' => $m->reason, 'by' => $m->creator?->name, 'amount' => $m->amount];
             });
         Expense::query()->where('outlet_id', $outletId)->whereBetween('date', [$date, $to])->with(['category:id,name', 'creator:id,name'])->oldest('date')->oldest('id')->get()
             ->each(function (Expense $e) use (&$items) {
-                $items[] = ['date' => CarbonImmutable::parse($e->date)->toDateString(), 'source' => 'Pengeluaran', 'label' => trim($e->category->name.($e->note ? " · {$e->note}" : '')), 'by' => $e->creator?->name, 'amount' => $e->amount];
+                $items[] = ['date' => CarbonImmutable::parse($e->date)->toDateString(), 'source' => $e->cash_movement_id ? 'Kas laci' : 'Pengeluaran', 'label' => trim($e->category->name.($e->note ? " · {$e->note}" : '')), 'by' => $e->creator?->name, 'amount' => $e->amount];
             });
         usort($items, fn ($x, $y) => $x['date'] <=> $y['date']);
 

@@ -10,6 +10,7 @@ use App\Domain\Staffing\LongshiftService;
 use App\Domain\Staffing\Models\Attendance;
 use App\Domain\Staffing\Models\FaceTemplate;
 use App\Domain\Staffing\Models\LongshiftApproval;
+use App\Domain\Staffing\Models\WorkSchedule;
 use App\Exports\ReportSheet;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -62,15 +63,43 @@ class AttendanceController extends Controller
         return response()->json(['undone' => $this->service->undo($this->outlet->id(), (int) $data['attendance_id'], $data['action'])]);
     }
 
+    /** Everyone's attendance for the managers: who is at work now, who is late or missing, a summary per person, and the log. */
     public function index(Request $request): Response
     {
         [$from, $to] = $this->range($request);
+        $request->validate(['user_id' => 'nullable|integer']);
+        $all = $this->records($from, $to);
+        $userId = $request->filled('user_id') ? (int) $request->input('user_id') : null;
 
         return Inertia::render('staffing/attendance', [
-            'filters' => compact('from', 'to'),
-            'records' => $this->records($from, $to),
+            'filters' => ['from' => $from, 'to' => $to, 'user_id' => $userId],
+            'records' => $userId === null ? $all : array_values(array_filter($all, fn (array $r) => $r['user_id'] === $userId)),
+            'summary' => $this->summary($all),
+            'on_duty' => $this->onDuty(),
+            'absent' => $this->absent(),
             'people' => User::query()->where('outlet_id', $this->outlet->id())->where('is_active', true)->orderBy('name')->get(['id', 'name'])->all(),
             'grace' => $this->grace(),
+        ]);
+    }
+
+    /** One's own attendance: today's state and the month's history. */
+    public function mine(Request $request): Response
+    {
+        $request->validate(['month' => ['nullable', 'regex:/^\d{4}-\d{2}$/']]);
+        $user = $this->actor($request);
+        $month = CarbonImmutable::parse(((string) $request->input('month', now()->format('Y-m'))).'-01')->startOfDay();
+        $from = $month->toDateString();
+        $to = $month->endOfMonth()->toDateString();
+        $mine = array_values(array_filter($this->records($from, $to), fn (array $r) => $r['user_id'] === $user->id));
+        $open = Attendance::query()->where('user_id', $user->id)->whereNull('clock_out_at')->where('clock_in_at', '>', now()->subHours(AttendanceService::STALE_HOURS))->latest('clock_in_at')->first();
+
+        return Inertia::render('staffing/mine', [
+            'name' => $user->name,
+            'month' => $month->format('Y-m'),
+            'records' => $mine,
+            'totals' => $this->summary($mine)[0] ?? ['days' => 0, 'hours' => 0, 'late' => 0, 'long_hours' => 0, 'open' => 0],
+            'open_since' => $open?->clock_in_at->toIso8601String(),
+            'can' => ['kiosk' => (bool) $user->can('use-attendance-kiosk')],
         ]);
     }
 
@@ -80,7 +109,12 @@ class AttendanceController extends Controller
         $range = CarbonImmutable::parse($from)->translatedFormat('d M Y').' s/d '.CarbonImmutable::parse($to)->translatedFormat('d M Y');
         $rows = $this->records($from, $to);
 
+        $summary = $this->summary($rows);
+
         return ReportFile::download((string) $request->input('format', 'xlsx'), "Absensi {$from} {$to}", [
+            new ReportSheet('Ringkasan', "Periode {$range}", ['Nama', 'Jabatan', 'Hari hadir', 'Total jam kerja', 'Kali terlambat', 'Longshift disetujui (jam)', 'Belum pulang'], array_map(fn (array $p) => [
+                $p['name'], $p['role'] ?? '', $p['days'], $p['hours'], $p['late'], $p['long_hours'], $p['open'],
+            ], $summary), ['Total', '', array_sum(array_column($summary, 'days')), round(array_sum(array_column($summary, 'hours')), 1), array_sum(array_column($summary, 'late')), array_sum(array_column($summary, 'long_hours')), array_sum(array_column($summary, 'open'))]),
             new ReportSheet('Absensi', "Periode {$range}", ['Tanggal', 'Nama', 'Jabatan', 'Masuk', 'Pulang', 'Jam kerja', 'Terlambat (menit)', 'Longshift disetujui (jam)', 'Sumber', 'Catatan'], array_map(fn (array $r) => [
                 CarbonImmutable::parse($r['work_date'])->translatedFormat('d M Y'), $r['name'], $r['role'] ?? '', CarbonImmutable::parse($r['clock_in_at'])->format('H:i'),
                 $r['clock_out_at'] ? CarbonImmutable::parse($r['clock_out_at'])->format('H:i') : 'Belum pulang', $r['hours'] ?? '', $r['late'] ?? '', ($r['longshift']['status'] ?? '') === 'approved' ? $r['longshift']['approved_hours'] : '',
@@ -176,6 +210,59 @@ class AttendanceController extends Controller
         $this->longshift->syncAttendanceDay($attendance->outlet_id, $attendance->user_id, $attendance->work_date);
 
         return back()->with('success', 'Absensi dihapus.');
+    }
+
+    /**
+     * Per person: days present, hours worked, times late, approved longshift hours, records still open.
+     *
+     * @param  array<int, array<string, mixed>>  $records
+     * @return array<int, array<string, mixed>>
+     */
+    private function summary(array $records): array
+    {
+        $by = [];
+        foreach ($records as $r) {
+            $p = $by[$r['user_id']] ??= ['user_id' => $r['user_id'], 'name' => $r['name'], 'role' => $r['role'], 'dates' => [], 'hours' => 0.0, 'late' => 0, 'long_hours' => 0, 'long_dates' => [], 'open' => 0];
+            $p['dates'][$r['work_date']] = true;
+            $p['hours'] += (float) ($r['hours'] ?? 0);
+            $p['late'] += ($r['late'] ?? 0) > 0 ? 1 : 0;
+            $p['open'] += $r['clock_out_at'] === null ? 1 : 0;
+            if (($r['longshift']['status'] ?? '') === 'approved' && ! isset($p['long_dates'][$r['work_date']])) {
+                $p['long_dates'][$r['work_date']] = true;
+                $p['long_hours'] += $r['longshift']['approved_hours'];
+            }
+            $by[$r['user_id']] = $p;
+        }
+
+        return array_values(array_map(fn (array $p) => ['user_id' => $p['user_id'], 'name' => $p['name'], 'role' => $p['role'], 'days' => count($p['dates']), 'hours' => round($p['hours'], 1), 'late' => $p['late'], 'long_hours' => $p['long_hours'], 'open' => $p['open']], $by));
+    }
+
+    /** @return array<int, array{name: string, since: string}> */
+    private function onDuty(): array
+    {
+        return Attendance::query()->where('outlet_id', $this->outlet->id())->whereNull('clock_out_at')->where('clock_in_at', '>', now()->subHours(AttendanceService::STALE_HOURS))->with('user:id,name')->orderBy('clock_in_at')->get()
+            ->map(fn (Attendance $a) => ['name' => $a->user->name ?? '-', 'since' => $a->clock_in_at->toIso8601String()])->all();
+    }
+
+    /**
+     * Scheduled today, the shift started more than the grace ago, and not clocked in yet.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function absent(): array
+    {
+        $now = now();
+        $minute = (int) $now->format('G') * 60 + (int) $now->format('i');
+        $here = Attendance::query()->where('outlet_id', $this->outlet->id())->whereDate('work_date', $now->toDateString())->pluck('user_id')->all();
+        $out = [];
+        foreach (WorkSchedule::query()->where('outlet_id', $this->outlet->id())->whereDate('work_date', $now->toDateString())->whereNotIn('user_id', $here)->with(['type', 'user:id,name'])->get()->sortBy(fn (WorkSchedule $w) => $w->type->startMinute()) as $w) {
+            $late = $minute - $w->type->startMinute();
+            if ($late > $this->grace() && ! isset($out[$w->user_id])) {
+                $out[$w->user_id] = ['name' => $w->user->name ?? '-', 'shift' => $w->type->name, 'starts_at' => substr($w->type->starts_at, 0, 5), 'late' => $late];
+            }
+        }
+
+        return array_values($out);
     }
 
     /** @return array{0: string, 1: string} */

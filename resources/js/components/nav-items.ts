@@ -75,10 +75,10 @@ export const top: Item[] = [
         feature: 'staffing',
     },
     {
-        title: 'Kiosk Absensi',
-        href: '/attendance/kiosk',
+        title: 'Absensi',
+        href: '/attendance/mine',
         icon: ScanFace,
-        permission: 'use-attendance-kiosk',
+        permission: ['view-own-attendance', 'use-attendance-kiosk'],
         feature: 'attendance',
     },
     {
@@ -229,7 +229,7 @@ export const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 feature: 'attendance',
             },
             {
-                title: 'Absensi',
+                title: 'Rekap Absensi',
                 href: '/attendance',
                 icon: UserCheck,
                 permission: 'manage-attendance',

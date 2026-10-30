@@ -27,13 +27,39 @@ type Rec = {
     role: string | null;
     longshift: { hours: number; approved_hours: number; status: string } | null;
 };
+type Summary = {
+    user_id: number;
+    name: string;
+    role: string | null;
+    days: number;
+    hours: number;
+    late: number;
+    long_hours: number;
+    open: number;
+};
 type Props = {
-    filters: { from: string; to: string };
+    filters: { from: string; to: string; user_id: number | null };
     records: Rec[];
+    summary: Summary[];
+    on_duty: { name: string; since: string }[];
+    absent: { name: string; shift: string; starts_at: string; late: number }[];
     people: { id: number; name: string }[];
     grace: number;
 };
 
+const pad = (n: number) => String(n).padStart(2, '0');
+const ymd = (d: Date) =>
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const monthStart = (by: number) => {
+    const d = new Date();
+
+    return ymd(new Date(d.getFullYear(), d.getMonth() + by, 1));
+};
+const monthEnd = (by: number) => {
+    const d = new Date();
+
+    return ymd(new Date(d.getFullYear(), d.getMonth() + by + 1, 0));
+};
 const hm = (iso: string | null) =>
     iso
         ? new Date(iso).toLocaleTimeString('en-GB', {
@@ -43,9 +69,20 @@ const hm = (iso: string | null) =>
           })
         : '';
 
-export default function Attendance({ filters, records, people, grace }: Props) {
+export default function Attendance({
+    filters,
+    records,
+    summary,
+    on_duty,
+    absent,
+    people,
+    grace,
+}: Props) {
     const errors = usePage().props.errors as Record<string, string>;
-    const qs = new URLSearchParams(filters).toString();
+    const qs = new URLSearchParams({
+        from: filters.from,
+        to: filters.to,
+    }).toString();
     const [form, setForm] = useState<{
         id?: number;
         user_id: number | '';
@@ -64,7 +101,7 @@ export default function Attendance({ filters, records, people, grace }: Props) {
             <Head title="Absensi" />
             <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
                 <PageHeader
-                    title="Absensi karyawan"
+                    title="Rekap absensi"
                     subtitle={`Masuk sampai ${grace} menit setelah jam shift dianggap tepat waktu.`}
                     actions={
                         <>
@@ -115,6 +152,7 @@ export default function Attendance({ filters, records, people, grace }: Props) {
                         router.get('/attendance', {
                             from: d.get('from'),
                             to: d.get('to'),
+                            user_id: d.get('user_id') || undefined,
                         });
                     }}
                 >
@@ -134,10 +172,150 @@ export default function Attendance({ filters, records, people, grace }: Props) {
                             defaultValue={filters.to}
                         />
                     </Field>
+                    <Field label="Karyawan">
+                        <Select
+                            name="user_id"
+                            defaultValue={filters.user_id ?? ''}
+                        >
+                            <option value="">Semua karyawan</option>
+                            {people.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                    {p.name}
+                                </option>
+                            ))}
+                        </Select>
+                    </Field>
                     <Button className="h-11" type="submit">
                         Tampilkan
                     </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11"
+                        onClick={() =>
+                            router.get('/attendance', {
+                                from: monthStart(0),
+                                to: monthEnd(0),
+                                user_id: filters.user_id ?? undefined,
+                            })
+                        }
+                    >
+                        Bulan ini
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11"
+                        onClick={() =>
+                            router.get('/attendance', {
+                                from: monthStart(-1),
+                                to: monthEnd(-1),
+                                user_id: filters.user_id ?? undefined,
+                            })
+                        }
+                    >
+                        Bulan lalu
+                    </Button>
                 </form>
+
+                <div className="grid gap-3 lg:grid-cols-2">
+                    <section className="rounded-xl border bg-card p-4">
+                        <h2 className="mb-2 font-semibold">
+                            Sedang bekerja ({on_duty.length})
+                        </h2>
+                        {on_duty.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                                Belum ada yang masuk.
+                            </p>
+                        ) : (
+                            <ul className="grid gap-1 text-sm">
+                                {on_duty.map((o) => (
+                                    <li
+                                        key={o.name + o.since}
+                                        className="flex justify-between gap-3"
+                                    >
+                                        <span>{o.name}</span>
+                                        <span className="text-muted-foreground">
+                                            sejak {timeId(o.since)}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </section>
+                    <section className="rounded-xl border bg-card p-4">
+                        <h2 className="mb-2 font-semibold">
+                            Terjadwal tapi belum absen ({absent.length})
+                        </h2>
+                        {absent.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                                Semua yang terjadwal sudah absen.
+                            </p>
+                        ) : (
+                            <ul className="grid gap-1 text-sm">
+                                {absent.map((a) => (
+                                    <li
+                                        key={a.name + a.shift}
+                                        className="flex justify-between gap-3"
+                                    >
+                                        <span>{a.name}</span>
+                                        <span className="text-red-700 dark:text-red-400">
+                                            {a.shift} {a.starts_at} · telat{' '}
+                                            {a.late} menit
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </section>
+                </div>
+
+                <section className="grid gap-2">
+                    <h2 className="font-semibold">Ringkasan per karyawan</h2>
+                    <ResponsiveTable
+                        headers={[
+                            'Nama',
+                            'Hari hadir',
+                            'Total jam',
+                            'Terlambat',
+                            'Longshift',
+                            'Belum pulang',
+                            '',
+                        ]}
+                        numeric={[1, 2, 3, 4, 5]}
+                        empty="Tidak ada absensi pada periode ini."
+                        rows={summary.map((p) => [
+                            <span key={p.user_id} className="font-medium">
+                                {p.name}
+                                {p.role && (
+                                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                        {p.role}
+                                    </span>
+                                )}
+                            </span>,
+                            p.days,
+                            p.hours,
+                            p.late,
+                            p.long_hours ? `${p.long_hours} jam` : '-',
+                            p.open || '-',
+                            <Button
+                                key="f"
+                                size="sm"
+                                variant="ghost"
+                                className="h-10"
+                                onClick={() =>
+                                    router.get('/attendance', {
+                                        from: filters.from,
+                                        to: filters.to,
+                                        user_id: p.user_id,
+                                    })
+                                }
+                            >
+                                Lihat
+                            </Button>,
+                        ])}
+                    />
+                </section>
 
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                     <Stat label="Catatan" value={records.length} />
@@ -153,6 +331,24 @@ export default function Attendance({ filters, records, people, grace }: Props) {
                     />
                 </div>
 
+                <h2 className="font-semibold">
+                    Rincian
+                    {filters.user_id && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="ml-2 h-9"
+                            onClick={() =>
+                                router.get('/attendance', {
+                                    from: filters.from,
+                                    to: filters.to,
+                                })
+                            }
+                        >
+                            Tampilkan semua
+                        </Button>
+                    )}
+                </h2>
                 <ResponsiveTable
                     headers={[
                         'Tanggal',

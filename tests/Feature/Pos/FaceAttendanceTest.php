@@ -6,6 +6,7 @@ use App\Domain\Staffing\Models\Attendance;
 use App\Domain\Staffing\Models\FaceTemplate;
 use App\Domain\Staffing\Models\WorkSchedule;
 use App\Domain\Staffing\Models\WorkShiftType;
+use App\Models\User;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -185,4 +186,48 @@ it('shows face enrolment on the users page only to people who manage attendance,
     Role::findByName('manager')->revokePermissionTo('manage-attendance');
     app(PermissionRegistrar::class)->forgetCachedPermissions();
     $this->actingAs($hr->fresh())->get('/admin/users')->assertInertia(fn ($p) => $p->where('face', false)->where('users', fn ($u) => collect($u)->firstWhere('id', $budi->id)['face_samples'] === 0));
+});
+
+it('lets each person see only their own attendance for a month, with totals', function () {
+    attendanceOn();
+    $waiter = userWithRole('waiter');
+    $cashier = userWithRole('cashier');
+    $day = now()->startOfMonth()->addDays(2)->toDateString();
+    $mk = fn (User $u, string $date, string $in, string $out) => Attendance::create(['outlet_id' => $u->outlet_id, 'user_id' => $u->id, 'work_date' => $date, 'clock_in_at' => "{$date} {$in}", 'clock_out_at' => "{$date} {$out}", 'method_in' => 'face', 'method_out' => 'face']);
+    $mk($waiter, $day, '08:00', '17:00');
+    $mk($waiter, now()->startOfMonth()->addDays(3)->toDateString(), '09:00', '15:30');
+    $mk($cashier, $day, '08:00', '16:00');
+    $mk($waiter, now()->subMonthNoOverflow()->startOfMonth()->addDay()->toDateString(), '08:00', '12:00');
+
+    $this->actingAs($waiter)->get('/attendance/mine')->assertOk()->assertInertia(fn ($p) => $p->component('staffing/mine')->has('records', 2)->where('records.0.user_id', $waiter->id)
+        ->where('totals.days', 2)->where('totals.hours', 15.5)->where('can.kiosk', false));
+    $last = now()->subMonthNoOverflow()->format('Y-m');
+    $this->actingAs($waiter)->get("/attendance/mine?month={$last}")->assertInertia(fn ($p) => $p->has('records', 1)->where('totals.hours', 4));
+    $this->actingAs($waiter)->get('/attendance/mine?month=bad')->assertSessionHasErrors('month');
+    $this->actingAs(userWithRole('cashier'))->get('/attendance/mine')->assertInertia(fn ($p) => $p->where('can.kiosk', true)->has('records', 1));
+});
+
+it('shows management everyone: who is at work, who is missing, a summary per person, and a filter by person', function () {
+    attendanceOn();
+    $manager = userWithRole('manager');
+    $waiter = userWithRole('waiter');
+    $cashier = userWithRole('cashier');
+    $kitchen = userWithRole('kitchen');
+    $this->travelTo(now()->setTime(10, 0));
+    $today = now()->toDateString();
+    Attendance::create(['outlet_id' => $waiter->outlet_id, 'user_id' => $waiter->id, 'work_date' => $today, 'clock_in_at' => "{$today} 08:00", 'method_in' => 'face']);
+    Attendance::create(['outlet_id' => $cashier->outlet_id, 'user_id' => $cashier->id, 'work_date' => now()->subDay()->toDateString(), 'clock_in_at' => now()->subDay()->setTime(8, 0), 'clock_out_at' => now()->subDay()->setTime(16, 0), 'method_in' => 'face', 'method_out' => 'face']);
+    $type = WorkShiftType::create(['outlet_id' => $waiter->outlet_id, 'name' => 'Pagi', 'starts_at' => '08:00', 'ends_at' => '16:00', 'is_active' => true]);
+    foreach ([$waiter, $kitchen] as $u) {
+        WorkSchedule::create(['outlet_id' => $u->outlet_id, 'user_id' => $u->id, 'work_date' => $today, 'work_shift_type_id' => $type->id, 'position' => 'none']);
+    }
+
+    $from = now()->subDays(3)->toDateString();
+    $this->actingAs($manager)->get("/attendance?from={$from}&to={$today}")->assertOk()->assertInertia(fn ($p) => $p->component('staffing/attendance')
+        ->has('on_duty', 1)->where('on_duty.0.name', $waiter->name)
+        ->has('absent', 1)->where('absent.0.name', $kitchen->name)->where('absent.0.late', 120)
+        ->has('summary', 2)->has('records', 2));
+    $this->actingAs($manager)->get("/attendance?from={$from}&to={$today}&user_id={$cashier->id}")->assertInertia(fn ($p) => $p->has('records', 1)->has('summary', 2)->where('filters.user_id', $cashier->id));
+    $this->actingAs($manager)->get("/attendance/export?from={$from}&to={$today}&format=xlsx")->assertOk()->assertDownload();
+    $this->actingAs($waiter)->get('/attendance')->assertForbidden();
 });

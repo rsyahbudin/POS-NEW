@@ -28,6 +28,7 @@ import {
     Wallet,
     CalendarClock,
     CalendarDays,
+    Clock,
     Hourglass,
     ScanFace,
     UserCheck,
@@ -37,7 +38,13 @@ import type { NavItem } from '@/types';
 
 export type Item = NavItem & {
     permission?: string | string[];
-    feature?: 'kds' | 'inventory' | 'schedule' | 'attendance' | 'staffing';
+    feature?:
+        | 'kds'
+        | 'inventory'
+        | 'schedule'
+        | 'attendance'
+        | 'staffing'
+        | 'clock';
 };
 
 export const top: Item[] = [
@@ -73,6 +80,13 @@ export const top: Item[] = [
         icon: Hourglass,
         permission: 'approve-longshift',
         feature: 'staffing',
+    },
+    {
+        title: 'Absen Saya',
+        href: '/attendance/me',
+        icon: Clock,
+        permission: 'clock-own-attendance',
+        feature: 'clock',
     },
     {
         title: 'Kiosk Absensi',
@@ -222,6 +236,13 @@ export const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 permission: 'manage-shifts-any',
             },
             {
+                title: 'Wajah Karyawan',
+                href: '/attendance/faces',
+                icon: ScanFace,
+                permission: 'manage-attendance',
+                feature: 'attendance',
+            },
+            {
                 title: 'Absensi',
                 href: '/attendance',
                 icon: UserCheck,
@@ -306,6 +327,7 @@ type Features =
           schedule: boolean;
           attendance: boolean;
           staffing: boolean;
+          clock: boolean;
       }
     | undefined;
 

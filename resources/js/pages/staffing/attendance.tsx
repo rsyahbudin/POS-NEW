@@ -182,7 +182,11 @@ export default function Attendance({ filters, records, people, grace }: Props) {
                         r.longshift
                             ? `+${r.longshift.hours}j ${r.longshift.status === 'approved' ? `disetujui ${r.longshift.approved_hours}j` : r.longshift.status === 'rejected' ? 'ditolak' : 'menunggu MOD'}`
                             : '-',
-                        r.method_in === 'face' ? 'Wajah' : 'Manual',
+                        r.method_in === 'face'
+                            ? 'Wajah'
+                            : r.method_in === 'button'
+                              ? 'Tombol'
+                              : 'Manual',
                         r.note ?? '-',
                         <div key={r.id} className="flex gap-1">
                             <Button

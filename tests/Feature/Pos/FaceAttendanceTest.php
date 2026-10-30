@@ -147,3 +147,28 @@ it('counts lateness against the first planned shift, with a grace period', funct
     $other = userWithRole('kitchen');
     expect($service->lateMinutes(Attendance::create(['outlet_id' => $type->outlet_id, 'user_id' => $other->id, 'work_date' => $day, 'clock_in_at' => "{$day} 09:00", 'method_in' => 'face']), 10))->toBeNull();
 });
+
+it('lets a signed-in person clock themselves in and out with a button only when that is switched on', function () {
+    attendanceOn();
+    $waiter = userWithRole('waiter');
+
+    $this->actingAs($waiter)->get('/attendance/me')->assertNotFound();
+    $this->actingAs($waiter)->post('/attendance/me/clock')->assertNotFound();
+
+    setting('attendance.self_clock', true);
+    $this->travelTo(now()->setTime(9, 0));
+    $this->actingAs($waiter)->get('/attendance/me')->assertOk()->assertInertia(fn ($p) => $p->component('staffing/me')->where('open_since', null));
+    $this->actingAs($waiter)->post('/attendance/me/clock')->assertSessionHas('success');
+    $a = Attendance::query()->firstOrFail();
+    expect($a->method_in)->toBe('button')->and($a->clock_out_at)->toBeNull()->and($a->user_id)->toBe($waiter->id);
+    $this->actingAs($waiter)->get('/attendance/me')->assertInertia(fn ($p) => $p->where('open_since', fn ($v) => is_string($v)));
+
+    $this->actingAs($waiter)->post('/attendance/me/clock')->assertSessionHas('success');       // pressed again at once: ignored
+    expect(Attendance::query()->count())->toBe(1)->and($a->fresh()->clock_out_at)->toBeNull();
+
+    $this->travelTo(now()->setTime(17, 0));
+    $this->actingAs($waiter)->post('/attendance/me/clock')->assertSessionHas('success');
+    expect($a->fresh()->clock_out_at)->not->toBeNull()->and($a->fresh()->method_out)->toBe('button');
+    // a button record cannot be taken back through the face kiosk undo
+    $this->actingAs(userWithRole('manager'))->postJson('/attendance/kiosk/undo', ['attendance_id' => $a->id, 'action' => 'out'])->assertJsonPath('undone', false);
+});

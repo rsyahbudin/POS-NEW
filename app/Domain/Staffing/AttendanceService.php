@@ -6,6 +6,7 @@ use App\Domain\Staffing\Models\Attendance;
 use App\Domain\Staffing\Models\WorkSchedule;
 use App\Models\User;
 use App\Support\Audit;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -34,9 +35,24 @@ class AttendanceService
         if ($hit === null) {
             return ['status' => 'no_match'];
         }
-        $user = $hit['user'];
 
-        return DB::transaction(function () use ($outletId, $user, $hit, $now) {
+        return $this->punch($outletId, $hit['user'], 'face', $hit['distance'], $now);
+    }
+
+    /**
+     * A signed-in person clocks themselves in or out with a button (for outlets or people without the face camera).
+     *
+     * @return array{status: 'in'|'out'|'repeat', attendance: Attendance, user: User}
+     */
+    public function clockSelf(int $outletId, User $user, ?Carbon $now = null): array
+    {
+        return $this->punch($outletId, $user, 'button', null, $now ?? now());
+    }
+
+    /** @return array{status: 'in'|'out'|'repeat', attendance: Attendance, user: User} */
+    private function punch(int $outletId, User $user, string $method, ?float $distance, CarbonInterface $now): array
+    {
+        return DB::transaction(function () use ($outletId, $user, $method, $distance, $now) {
             $latest = Attendance::query()->where('outlet_id', $outletId)->where('user_id', $user->id)->lockForUpdate()->latest('clock_in_at')->first();
 
             if ($latest !== null) {
@@ -45,7 +61,7 @@ class AttendanceService
                     return ['status' => 'repeat', 'attendance' => $latest, 'user' => $user];
                 }
                 if ($latest->clock_out_at === null && $latest->clock_in_at->diffInHours($now, true) < self::STALE_HOURS) {
-                    $latest->update(['clock_out_at' => $now, 'method_out' => 'face']);
+                    $latest->update(['clock_out_at' => $now, 'method_out' => $method]);
                     $this->longshift->syncAttendanceDay($outletId, $user->id, $latest->work_date);
 
                     return ['status' => 'out', 'attendance' => $latest, 'user' => $user];
@@ -53,7 +69,7 @@ class AttendanceService
             }
 
             $in = Attendance::create([
-                'outlet_id' => $outletId, 'user_id' => $user->id, 'work_date' => $now->toDateString(), 'clock_in_at' => $now, 'method_in' => 'face', 'distance' => $hit['distance'],
+                'outlet_id' => $outletId, 'user_id' => $user->id, 'work_date' => $now->toDateString(), 'clock_in_at' => $now, 'method_in' => $method, 'distance' => $distance,
             ]);
 
             return ['status' => 'in', 'attendance' => $in, 'user' => $user];

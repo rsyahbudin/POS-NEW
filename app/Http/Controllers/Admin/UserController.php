@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Payment\Online\OnlineActor;
 use App\Domain\Settings\OutletContext;
+use App\Domain\Settings\SettingsRepository;
+use App\Domain\Staffing\Models\FaceTemplate;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Audit;
@@ -19,12 +21,17 @@ use Spatie\Permission\Models\Role;
 /** Users are deactivated, never deleted (their transactions must stay attributable). */
 class UserController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request, OutletContext $outlet, SettingsRepository $settings): Response
     {
+        // Face data is managed from here too, but only by people who may manage attendance, and only while attendance is switched on.
+        $face = (bool) $settings->get('attendance.enabled', false) && (bool) $request->user()?->can('manage-attendance');
+        $samples = $face ? FaceTemplate::query()->where('outlet_id', $outlet->id())->selectRaw('user_id, count(*) as n')->groupBy('user_id')->pluck('n', 'user_id') : collect();
+
         return Inertia::render('admin/users', [
+            'face' => $face,
             'users' => User::query()->where('email', '!=', OnlineActor::EMAIL)->orderBy('name')->get()->map(fn (User $u) => [
                 'pin_login' => $u->roles()->where('allow_pin_login', true)->exists(),
-                'id' => $u->id, 'name' => $u->name, 'email' => $u->email, 'is_active' => $u->is_active,
+                'id' => $u->id, 'name' => $u->name, 'email' => $u->email, 'is_active' => $u->is_active, 'face_samples' => (int) ($samples[$u->id] ?? 0),
                 'role' => $u->getRoleNames()->first(), 'has_pin' => $u->pin_hash !== null, 'has_2fa' => $u->two_factor_confirmed_at !== null,
             ]),
             'roles' => Role::query()->orderBy('id')->pluck('name')->map(fn (string $n) => ['name' => $n, 'label' => PermissionCatalog::BUILT_IN[$n] ?? $n])->all(),

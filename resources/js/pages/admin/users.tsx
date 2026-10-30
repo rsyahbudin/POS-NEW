@@ -1,6 +1,7 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
+import { FaceCapture } from '@/components/pos/face-capture';
 import { Modal } from '@/components/pos/modal';
 import {
     Field,
@@ -20,14 +21,17 @@ type U = {
     has_pin: boolean;
     pin_login: boolean;
     has_2fa: boolean;
+    face_samples: number;
 };
 
 export default function UsersPage({
     users,
     roles,
+    face,
 }: {
     users: U[];
     roles: { name: string; label: string }[];
+    face: boolean;
 }) {
     const errors = usePage().props.errors as Record<string, string>;
     const [form, setForm] = useState<{
@@ -38,6 +42,7 @@ export default function UsersPage({
         password: string;
         pin: string;
     } | null>(null);
+    const [faceOf, setFaceOf] = useState<U | null>(null);
     const [sec, setSec] = useState<{
         user: U;
         kind: 'password' | 'pin';
@@ -79,6 +84,7 @@ export default function UsersPage({
                         'Email',
                         'Peran',
                         'PIN',
+                        ...(face ? ['Wajah'] : []),
                         '2FA',
                         'Status',
                         'Aksi',
@@ -117,6 +123,25 @@ export default function UsersPage({
                         ) : (
                             '-'
                         ),
+                        ...(face
+                            ? [
+                                  u.face_samples > 0 ? (
+                                      <span
+                                          key="f"
+                                          className="text-emerald-700 dark:text-emerald-400"
+                                      >
+                                          Terdaftar
+                                      </span>
+                                  ) : (
+                                      <span
+                                          key="f"
+                                          className="text-muted-foreground"
+                                      >
+                                          Belum
+                                      </span>
+                                  ),
+                              ]
+                            : []),
                         u.has_2fa ? 'Aktif' : '-',
                         u.is_active ? (
                             <span
@@ -175,6 +200,36 @@ export default function UsersPage({
                             >
                                 PIN
                             </Button>
+                            {face && u.is_active && (
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-9"
+                                    onClick={() => setFaceOf(u)}
+                                >
+                                    {u.face_samples > 0
+                                        ? 'Daftar ulang wajah'
+                                        : 'Daftarkan wajah'}
+                                </Button>
+                            )}
+                            {face && u.face_samples > 0 && (
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-9"
+                                    onClick={() =>
+                                        confirm(
+                                            `Hapus data wajah ${u.name}?`,
+                                        ) &&
+                                        router.delete(
+                                            `/attendance/faces/${u.id}`,
+                                            { preserveScroll: true },
+                                        )
+                                    }
+                                >
+                                    Hapus wajah
+                                </Button>
+                            )}
                             <Button
                                 size="sm"
                                 variant="ghost"
@@ -193,6 +248,23 @@ export default function UsersPage({
                     ])}
                 />
             </div>
+
+            {faceOf && (
+                <FaceCapture
+                    person={faceOf}
+                    onClose={() => setFaceOf(null)}
+                    onDone={(samples) =>
+                        router.post(
+                            `/attendance/faces/${faceOf.id}`,
+                            { consent: true, samples },
+                            {
+                                preserveScroll: true,
+                                onFinish: () => setFaceOf(null),
+                            },
+                        )
+                    }
+                />
+            )}
 
             {form && (
                 <Modal

@@ -6,6 +6,8 @@ use App\Domain\Staffing\Models\Attendance;
 use App\Domain\Staffing\Models\FaceTemplate;
 use App\Domain\Staffing\Models\WorkSchedule;
 use App\Domain\Staffing\Models\WorkShiftType;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 function attendanceOn(): void
 {
@@ -171,4 +173,20 @@ it('lets a signed-in person clock themselves in and out with a button only when 
     expect($a->fresh()->clock_out_at)->not->toBeNull()->and($a->fresh()->method_out)->toBe('button');
     // a button record cannot be taken back through the face kiosk undo
     $this->actingAs(userWithRole('manager'))->postJson('/attendance/kiosk/undo', ['attendance_id' => $a->id, 'action' => 'out'])->assertJsonPath('undone', false);
+});
+
+it('shows face enrolment on the users page only to people who manage attendance, and only while attendance is on', function () {
+    $owner = userWithRole('owner');
+    $budi = userWithRole('waiter');
+    enrolled($budi, 3);
+
+    $this->actingAs($owner)->get('/admin/users')->assertInertia(fn ($p) => $p->where('face', false));
+    attendanceOn();
+    $this->actingAs($owner)->get('/admin/users')->assertInertia(fn ($p) => $p->where('face', true)->where('users', fn ($u) => collect($u)->firstWhere('id', $budi->id)['face_samples'] === 3));
+    // a user manager without the attendance permission sees no face column and no counts
+    $hr = userWithRole('manager');
+    $hr->givePermissionTo('manage-users');
+    Role::findByName('manager')->revokePermissionTo('manage-attendance');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+    $this->actingAs($hr->fresh())->get('/admin/users')->assertInertia(fn ($p) => $p->where('face', false)->where('users', fn ($u) => collect($u)->firstWhere('id', $budi->id)['face_samples'] === 0));
 });

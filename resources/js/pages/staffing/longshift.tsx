@@ -4,7 +4,7 @@ import { Field, PageHeader, ResponsiveTable } from '@/components/pos/ui';
 import { Modal } from '@/components/pos/modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { dateId, longshiftText } from '@/lib/format';
+import { dateId, longshiftText, timeId } from '@/lib/format';
 import { StaffingTabs } from '@/components/pos/section-tabs';
 
 type Row = {
@@ -20,19 +20,41 @@ type Row = {
     status: 'pending' | 'approved' | 'rejected';
     decided_by: string | null;
     note: string | null;
+    reasons: string[];
+};
+type Req = {
+    id: number;
+    name: string;
+    work_date: string;
+    kind: 'missing_out' | 'both';
+    clock_in: string | null;
+    clock_out: string | null;
+    reason: string;
+};
+type Review = {
+    id: number;
+    name: string;
+    work_date: string;
+    clock_in_at: string;
+    clock_out_at: string | null;
+    reason: string;
 };
 type Props = {
     filters: { from: string; to: string };
     pending: Row[];
     decided: Row[];
+    requests: Req[];
+    reviews: Review[];
     standard_hours: number;
-    can: { decide: boolean };
+    can: { decide: boolean; decide_attendance: boolean };
 };
 
 export default function Longshift({
     filters,
     pending,
     decided,
+    requests,
+    reviews,
     standard_hours,
     can,
 }: Props) {
@@ -44,6 +66,13 @@ export default function Longshift({
         hours: number;
         note: string;
     } | null>(null);
+    const [judge, setJudge] = useState<{
+        url: string;
+        title: string;
+        detail: string;
+        approve: boolean;
+        note: string;
+    } | null>(null);
     const firstError = Object.values(errors ?? {})[0];
 
     return (
@@ -52,8 +81,8 @@ export default function Longshift({
             <div className="mx-auto grid w-full max-w-[1200px] grid-cols-1 gap-5 p-4 md:p-6">
                 <StaffingTabs />
                 <PageHeader
-                    title="Persetujuan longshift"
-                    subtitle={`Jam kerja nyata melebihi jadwal hari itu (atau melebihi ${standard_hours} jam bila tidak ada jadwal), per jam penuh. Dua shift terjadwal dalam sehari bukan longshift. Jam yang disetujui masuk laporan HR.`}
+                    title="Persetujuan"
+                    subtitle={`Koreksi absen, absen di luar jadwal, dan longshift (jam kerja nyata melebihi jadwal hari itu, atau melebihi ${standard_hours} jam bila tidak ada jadwal, per jam penuh). Dua shift terjadwal dalam sehari bukan longshift. Yang disetujui masuk laporan HR.`}
                     actions={
                         <>
                             <Button asChild variant="outline" className="h-11">
@@ -75,9 +104,143 @@ export default function Longshift({
                     </p>
                 )}
 
+                {(requests.length > 0 || can.decide_attendance) && (
+                    <section className="grid gap-2">
+                        <h2 className="font-semibold">
+                            Pengajuan koreksi absen ({requests.length})
+                        </h2>
+                        {requests.length === 0 && (
+                            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                                Tidak ada pengajuan.
+                            </p>
+                        )}
+                        {requests.map((q) => (
+                            <div
+                                key={q.id}
+                                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3"
+                            >
+                                <div className="min-w-0">
+                                    <p className="font-medium">
+                                        {q.name} · {dateId(q.work_date)}
+                                    </p>
+                                    <p className="text-sm">
+                                        {q.kind === 'both'
+                                            ? `Lupa masuk dan pulang: masuk ${q.clock_in}, pulang ${q.clock_out}`
+                                            : `Lupa absen pulang: pulang ${q.clock_out}`}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                        Alasan: {q.reason}
+                                    </p>
+                                </div>
+                                {can.decide_attendance && (
+                                    <div className="flex gap-2">
+                                        <Button
+                                            className="h-11"
+                                            onClick={() =>
+                                                setJudge({
+                                                    url: `/attendance/requests/${q.id}/decide`,
+                                                    title: `Setujui koreksi ${q.name}`,
+                                                    detail: `${dateId(q.work_date)} · ${q.reason}`,
+                                                    approve: true,
+                                                    note: '',
+                                                })
+                                            }
+                                        >
+                                            Setujui
+                                        </Button>
+                                        <Button
+                                            className="h-11"
+                                            variant="outline"
+                                            onClick={() =>
+                                                setJudge({
+                                                    url: `/attendance/requests/${q.id}/decide`,
+                                                    title: `Tolak koreksi ${q.name}`,
+                                                    detail: `${dateId(q.work_date)} · ${q.reason}`,
+                                                    approve: false,
+                                                    note: '',
+                                                })
+                                            }
+                                        >
+                                            Tolak
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </section>
+                )}
+
+                {(reviews.length > 0 || can.decide_attendance) && (
+                    <section className="grid gap-2">
+                        <h2 className="font-semibold">
+                            Absen di luar jadwal ({reviews.length})
+                        </h2>
+                        {reviews.length === 0 && (
+                            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                                Tidak ada yang perlu ditinjau.
+                            </p>
+                        )}
+                        {reviews.map((v) => (
+                            <div
+                                key={v.id}
+                                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-600/40 bg-card p-3"
+                            >
+                                <div className="min-w-0">
+                                    <p className="font-medium">
+                                        {v.name} · {dateId(v.work_date)}
+                                    </p>
+                                    <p className="text-sm">
+                                        Masuk {timeId(v.clock_in_at)}, pulang{' '}
+                                        {v.clock_out_at
+                                            ? timeId(v.clock_out_at)
+                                            : 'belum'}{' '}
+                                        · tidak ada jadwal
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                        Alasan: {v.reason || '-'}
+                                    </p>
+                                </div>
+                                {can.decide_attendance && (
+                                    <div className="flex gap-2">
+                                        <Button
+                                            className="h-11"
+                                            onClick={() =>
+                                                setJudge({
+                                                    url: `/attendance/records/${v.id}/review`,
+                                                    title: `Terima absen ${v.name}`,
+                                                    detail: `${dateId(v.work_date)} · ${v.reason}`,
+                                                    approve: true,
+                                                    note: '',
+                                                })
+                                            }
+                                        >
+                                            Terima
+                                        </Button>
+                                        <Button
+                                            className="h-11"
+                                            variant="outline"
+                                            onClick={() =>
+                                                setJudge({
+                                                    url: `/attendance/records/${v.id}/review`,
+                                                    title: `Tolak absen ${v.name}`,
+                                                    detail: `${dateId(v.work_date)} · catatan dihapus, tidak dihitung`,
+                                                    approve: false,
+                                                    note: '',
+                                                })
+                                            }
+                                        >
+                                            Tolak
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </section>
+                )}
+
                 <section className="grid gap-2">
                     <h2 className="font-semibold">
-                        Menunggu persetujuan ({pending.length})
+                        Longshift menunggu persetujuan ({pending.length})
                     </h2>
                     {pending.length === 0 && (
                         <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -109,6 +272,11 @@ export default function Longshift({
                                         {longshiftText(r.hours, standard_hours)}
                                     </span>
                                 </p>
+                                {r.reasons.length > 0 && (
+                                    <p className="text-sm text-muted-foreground">
+                                        Alasan karyawan: {r.reasons.join(' · ')}
+                                    </p>
+                                )}
                             </div>
                             {can.decide && (
                                 <div className="flex gap-2">
@@ -262,6 +430,50 @@ export default function Longshift({
                         }
                     >
                         {ask.approve ? 'Setujui' : 'Tolak'}
+                    </Button>
+                </Modal>
+            )}
+
+            {judge && (
+                <Modal open onClose={() => setJudge(null)} title={judge.title}>
+                    <p className="text-sm text-muted-foreground">
+                        {judge.detail}
+                    </p>
+                    <Field
+                        label={
+                            judge.approve
+                                ? 'Catatan (opsional)'
+                                : 'Alasan penolakan (wajib)'
+                        }
+                    >
+                        <Input
+                            className="h-11"
+                            value={judge.note}
+                            onChange={(e) =>
+                                setJudge({ ...judge, note: e.target.value })
+                            }
+                        />
+                    </Field>
+                    <Button
+                        className="h-12"
+                        disabled={
+                            !judge.approve && judge.note.trim().length < 5
+                        }
+                        onClick={() =>
+                            router.post(
+                                judge.url,
+                                {
+                                    approve: judge.approve ? 1 : 0,
+                                    note: judge.note || undefined,
+                                },
+                                {
+                                    preserveScroll: true,
+                                    onSuccess: () => setJudge(null),
+                                },
+                            )
+                        }
+                    >
+                        {judge.approve ? 'Setujui' : 'Tolak'}
                     </Button>
                 </Modal>
             )}

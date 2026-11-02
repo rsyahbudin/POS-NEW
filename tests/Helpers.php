@@ -103,3 +103,15 @@ function enrolled(User $user, int $seed): void
         FaceTemplate::create(['outlet_id' => $user->outlet_id, 'user_id' => $user->id, 'descriptor' => face($seed, $noise), 'consented_at' => now()]);
     }
 }
+
+/** A kiosk scan the way a person does it: if the kiosk asks for a reason, give one and return the final answer. */
+function kioskScan($test, User $kiosk, array $body)
+{
+    $response = $test->actingAs($kiosk)->postJson('/attendance/kiosk/scan', $body);
+    $json = $response->json();
+    if (is_array($json) && ($json['status'] ?? null) === 'need_reason') {
+        return $test->actingAs($kiosk)->postJson('/attendance/kiosk/reason', ['ticket' => $json['ticket'], 'reason' => 'alasan uji coba']);
+    }
+
+    return $response;
+}

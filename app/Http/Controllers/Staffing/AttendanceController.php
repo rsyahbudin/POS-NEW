@@ -9,6 +9,7 @@ use App\Domain\Staffing\FaceMatcher;
 use App\Domain\Staffing\GeoFence;
 use App\Domain\Staffing\LongshiftService;
 use App\Domain\Staffing\Models\Attendance;
+use App\Domain\Staffing\Models\AttendanceRequest;
 use App\Domain\Staffing\Models\FaceTemplate;
 use App\Domain\Staffing\Models\LongshiftApproval;
 use App\Domain\Staffing\Models\WorkSchedule;
@@ -60,21 +61,44 @@ class AttendanceController extends Controller
             return response()->json(['status' => $place['reason'], 'distance' => $place['distance'], 'radius' => $this->geo->radius()]);
         }
         $result = $this->service->scan($this->outlet->id(), (int) $data['user_id'], array_values(array_map('floatval', $data['descriptor'])), $data['action'], null, ['lat' => $lat, 'lng' => $lng, 'distance' => $place['distance']]);
-        if ($result['status'] === 'unknown') {
-            return response()->json(['status' => 'unknown']);
+
+        return $this->present($result);
+    }
+
+    /** The reason for a clock-in or clock-out that did not fit the schedule; the face was checked a moment ago. */
+    public function reason(Request $request): JsonResponse
+    {
+        $data = $request->validate(['ticket' => 'required|string|max:80', 'reason' => 'required|string|min:5|max:200']);
+
+        return $this->present($this->service->confirm($this->outlet->id(), $data['ticket'], $data['reason']));
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     */
+    private function present(array $result): JsonResponse
+    {
+        $status = (string) $result['status'];
+        if (in_array($status, ['unknown', 'expired'], true)) {
+            return response()->json(['status' => $status]);
         }
-        if (in_array($result['status'], ['locked', 'mismatch', 'ambiguous', 'not_enrolled'], true)) {
+        $user = $result['user'];
+        if (in_array($status, ['locked', 'mismatch', 'ambiguous', 'not_enrolled'], true)) {
             // wrong face, locked, or nobody on file: nothing is booked, and nothing says whose face it looked like
-            return response()->json(['status' => $result['status'], 'name' => $result['user']->name, 'attempts_left' => $result['attempts_left'] ?? null]);
+            return response()->json(['status' => $status, 'name' => $user->name, 'attempts_left' => $result['attempts_left'] ?? null]);
         }
-        $a = $result['attendance'];
-        $at = $a === null ? null : ($result['status'] === 'out' ? $a->clock_out_at : $a->clock_in_at);
+        if ($status === 'need_reason') {
+            return response()->json(['status' => 'need_reason', 'name' => $user->name, 'flag' => $result['flag'], 'text' => $result['text'], 'ticket' => $result['ticket'] ?? null]);
+        }
+        $a = $result['attendance'] ?? null;
+        $at = $a === null ? null : ($status === 'out' ? $a->clock_out_at : $a->clock_in_at);
 
         return response()->json([
-            'status' => $result['status'], 'name' => $result['user']->name, 'at' => $at?->toIso8601String(), 'attendance_id' => $a?->id,
-            'late' => $result['status'] === 'in' && $a !== null ? $this->service->lateMinutes($a, $this->grace()) : null,
+            'status' => $status, 'name' => $user->name, 'at' => $at?->toIso8601String(), 'attendance_id' => $a?->id,
+            'late' => $status === 'in' && $a !== null ? $this->service->lateMinutes($a, $this->grace()) : null,
+            'flag' => $result['flag'] ?? null,
             // the station(s) the person is scheduled on today, so the kiosk can say "Dapur / Bar" next to the name
-            'stations' => WorkSchedule::query()->where('user_id', $result['user']->id)->whereDate('work_date', now()->toDateString())->pluck('position')->reject(fn ($p) => $p === 'none')->unique()->map(fn ($p) => Positions::ALL[$p] ?? $p)->values()->all(),
+            'stations' => WorkSchedule::query()->where('user_id', $user->id)->whereDate('work_date', now()->toDateString())->pluck('position')->reject(fn ($p) => $p === 'none')->unique()->map(fn ($p) => Positions::ALL[$p] ?? $p)->values()->all(),
         ]);
     }
 
@@ -130,6 +154,12 @@ class AttendanceController extends Controller
             )->all() ?: (object) [],
             'today' => now()->toDateString(),
             'standard_hours' => intdiv($this->longshift->standardMinutes(), 60),
+            'requests' => AttendanceRequest::query()->where('user_id', $user->id)->latest('id')->limit(10)->get()->map(fn (AttendanceRequest $q) => [
+                'id' => $q->id, 'work_date' => $q->work_date->toDateString(), 'kind' => $q->kind, 'clock_in' => $q->clock_in === null ? null : substr($q->clock_in, 0, 5), 'clock_out' => $q->clock_out === null ? null : substr($q->clock_out, 0, 5),
+                'reason' => $q->reason, 'status' => $q->status, 'decision_note' => $q->decision_note,
+            ])->all(),
+            'forgot' => Attendance::query()->where('user_id', $user->id)->whereNull('clock_out_at')->where('clock_in_at', '<=', now()->subHours(AttendanceService::STALE_HOURS))->orderByDesc('work_date')->limit(5)->pluck('work_date')->map(fn ($d) => $d->toDateString())->all(),
+            'reach_days' => AttendanceRequestController::REACH_DAYS,
             'open_since' => $open?->clock_in_at->toIso8601String(),
             'can' => ['kiosk' => (bool) $user->can('use-attendance-kiosk')],
         ]);
@@ -147,13 +177,14 @@ class AttendanceController extends Controller
             new ReportSheet('Ringkasan', "Periode {$range}", ['Nama', 'Jabatan', 'Hari hadir', 'Total jam kerja', 'Kali terlambat', 'Total menit terlambat', 'Longshift disetujui (jam)', 'Belum pulang'], array_map(fn (array $p) => [
                 $p['name'], $p['role'] ?? '', $p['days'], $p['hours'], $p['late'], $p['late_minutes'], $p['long_hours'], $p['open'],
             ], $summary), ['Total', '', array_sum(array_column($summary, 'days')), round(array_sum(array_column($summary, 'hours')), 1), array_sum(array_column($summary, 'late')), array_sum(array_column($summary, 'late_minutes')), array_sum(array_column($summary, 'long_hours')), array_sum(array_column($summary, 'open'))]),
-            new ReportSheet('Absensi', "Periode {$range}", ['Tanggal', 'Nama', 'Jabatan', 'Masuk', 'Pulang', 'Jam kerja', 'Terlambat (menit)', 'Longshift disetujui (jam)', 'Sumber', 'Catatan'], array_map(fn (array $r) => [
+            new ReportSheet('Absensi', "Periode {$range}", ['Tanggal', 'Nama', 'Jabatan', 'Masuk', 'Pulang', 'Jam kerja', 'Jam diakui', 'Terlambat (menit)', 'Longshift disetujui (jam)', 'Penanda', 'Alasan masuk', 'Alasan pulang', 'Sumber', 'Catatan'], array_map(fn (array $r) => [
                 CarbonImmutable::parse($r['work_date'])->translatedFormat('d M Y'), $r['name'], $r['role'] ?? '', CarbonImmutable::parse($r['clock_in_at'])->format('H:i'),
-                $r['clock_out_at'] ? CarbonImmutable::parse($r['clock_out_at'])->format('H:i') : 'Belum pulang', $r['hours'] ?? '', $r['late'] ?? '', ($r['longshift']['status'] ?? '') === 'approved' ? $r['longshift']['approved_hours'] : '',
+                $r['clock_out_at'] ? CarbonImmutable::parse($r['clock_out_at'])->format('H:i') : 'Belum pulang', $r['hours'] ?? '', $r['recognized_hours'] ?? '', $r['late'] ?? '', ($r['longshift']['status'] ?? '') === 'approved' ? $r['longshift']['approved_hours'] : '',
+                trim(($r['in_flag'] ?? '').' '.($r['out_flag'] ?? '').($r['review_status'] === 'pending' ? ' perlu-ditinjau' : '')), $r['in_reason'] ?? '', $r['out_reason'] ?? '',
                 match ($r['method_in']) {
                     'face' => 'Wajah', 'button' => 'Tombol', default => 'Manual'
                 }, $r['note'] ?? '',
-            ], $rows), ['Total jam', '', '', '', '', round(array_sum(array_column($rows, 'hours')), 1), '', '', '', '']),
+            ], $rows), ['Total jam', '', '', '', '', round(array_sum(array_column($rows, 'hours')), 1), round(array_sum(array_column($rows, 'recognized_hours')), 1), '', '', '', '', '', '', '']),
         ]);
     }
 
@@ -256,7 +287,7 @@ class AttendanceController extends Controller
         foreach ($records as $r) {
             $p = $by[$r['user_id']] ??= ['user_id' => $r['user_id'], 'name' => $r['name'], 'role' => $r['role'], 'dates' => [], 'hours' => 0.0, 'late' => 0, 'late_minutes' => 0, 'long_hours' => 0, 'long_dates' => [], 'open' => 0];
             $p['dates'][$r['work_date']] = true;
-            $p['hours'] += (float) ($r['hours'] ?? 0);
+            $p['hours'] += (float) ($r['recognized_hours'] ?? $r['hours'] ?? 0);
             $p['late'] += ($r['late'] ?? 0) > 0 ? 1 : 0;
             $p['late_minutes'] += max(0, (int) ($r['late'] ?? 0));
             $p['open'] += $r['clock_out_at'] === null ? 1 : 0;
@@ -319,16 +350,34 @@ class AttendanceController extends Controller
         $long = LongshiftApproval::query()->where('outlet_id', $this->outlet->id())->where('source', 'attendance')->whereBetween('work_date', [$from, $to])->get()
             ->keyBy(fn (LongshiftApproval $l) => $l->user_id.'|'.$l->work_date->toDateString());
 
-        return Attendance::query()->where('outlet_id', $this->outlet->id())->whereBetween('work_date', [$from, $to])->with('user:id,name')->orderByDesc('work_date')->orderBy('clock_in_at')->get()
+        $rows = Attendance::query()->where('outlet_id', $this->outlet->id())->whereBetween('work_date', [$from, $to])->with('user:id,name')->orderByDesc('work_date')->orderBy('clock_in_at')->get()
             ->map(function (Attendance $a) use ($grace, $long) {
                 $l = $long[$a->user_id.'|'.$a->work_date->toDateString()] ?? null;
+                $hours = $a->clock_out_at ? round($a->clock_in_at->diffInMinutes($a->clock_out_at, true) / 60, 1) : null;
 
                 return [
                     'id' => $a->id, 'user_id' => $a->user_id, 'name' => $a->user->name ?? '-', 'role' => $a->user->getRoleNames()->first(), 'work_date' => $a->work_date->toDateString(),
                     'clock_in_at' => $a->clock_in_at->toIso8601String(), 'clock_out_at' => $a->clock_out_at?->toIso8601String(), 'method_in' => $a->method_in, 'note' => $a->note,
-                    'hours' => $a->clock_out_at ? round($a->clock_in_at->diffInMinutes($a->clock_out_at, true) / 60, 1) : null, 'late' => $this->service->lateMinutes($a, $grace),
+                    'hours' => $hours, 'recognized_hours' => $hours, 'late' => $this->service->lateMinutes($a, $grace),
                     'longshift' => $l === null ? null : ['hours' => $l->hours, 'approved_hours' => (int) $l->approved_hours, 'status' => $l->status],
+                    'in_flag' => $a->in_flag, 'out_flag' => $a->out_flag, 'in_reason' => $a->in_reason, 'out_reason' => $a->out_reason, 'review_status' => $a->review_status,
                 ];
             })->values()->all();
+
+        // Hours beyond the schedule count only once the manager on duty has approved them: the last record of the day carries that difference.
+        $lastOfDay = [];
+        foreach ($rows as $i => $r) {
+            $lastOfDay[$r['user_id'].'|'.$r['work_date']] = $i;     // rows run oldest first inside a day
+        }
+        foreach ($lastOfDay as $i) {
+            $row = $rows[$i];
+            $hours = $row['hours'] ?? null;
+            $ls = $row['longshift'] ?? null;
+            if ($ls !== null && $hours !== null) {
+                $rows[$i]['recognized_hours'] = max(0, round($hours - $ls['hours'] + ($ls['status'] === 'approved' ? $ls['approved_hours'] : 0), 1));
+            }
+        }
+
+        return $rows;
     }
 }

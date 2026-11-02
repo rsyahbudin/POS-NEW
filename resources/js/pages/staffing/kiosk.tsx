@@ -19,6 +19,8 @@ type Result = {
         | 'already_in'
         | 'not_in'
         | 'unknown'
+        | 'need_reason'
+        | 'expired'
         | 'locked'
         | 'mismatch'
         | 'ambiguous'
@@ -35,6 +37,9 @@ type Result = {
     late?: number | null;
     stations?: string[];
     attempts_left?: number | null;
+    flag?: string | null;
+    text?: string;
+    ticket?: string | null;
 };
 
 const STEADY = 3; // consecutive sightings before a scan is sent
@@ -62,6 +67,86 @@ function whereAmI(): Promise<Where | null> {
             { enableHighAccuracy: true, maximumAge: 20000, timeout: 10000 },
         );
     });
+}
+
+const QUICK: Record<string, string[]> = {
+    unscheduled: [
+        'Diminta MOD',
+        'Menggantikan teman',
+        'Lembur atau acara khusus',
+    ],
+    late: ['Macet', 'Sakit atau berobat', 'Urusan keluarga'],
+    early: ['Diminta MOD', 'Persiapan buka'],
+    overstay: [
+        'Menyelesaikan pekerjaan',
+        'Diminta MOD',
+        'Menunggu serah terima',
+    ],
+    early_out: ['Diizinkan MOD', 'Sakit', 'Urusan keluarga'],
+};
+
+/** The clock-in or clock-out does not fit the schedule: a reason is needed before it is written down. */
+function ReasonForm({
+    result,
+    busy,
+    onSend,
+    onCancel,
+}: {
+    result: Result;
+    busy: boolean;
+    onSend: (reason: string) => void;
+    onCancel: () => void;
+}) {
+    const [reason, setReason] = useState('');
+    const quick = QUICK[result.flag ?? ''] ?? [];
+
+    return (
+        <div className="grid gap-3 text-left">
+            <p className="text-center text-xl font-semibold">{result.name}</p>
+            <p className="rounded-xl border border-amber-600/40 p-3 text-sm">
+                {result.text}
+            </p>
+            <p className="text-sm text-muted-foreground">
+                Tulis alasannya. Alasan dibaca MOD dan dicatat bersama absen
+                Anda.
+            </p>
+            {quick.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                    {quick.map((q) => (
+                        <Button
+                            key={q}
+                            type="button"
+                            size="sm"
+                            variant={reason === q ? 'default' : 'outline'}
+                            className="h-10"
+                            onClick={() => setReason(q)}
+                        >
+                            {q}
+                        </Button>
+                    ))}
+                </div>
+            )}
+            <textarea
+                className="min-h-24 w-full rounded-xl border border-input bg-card p-3 text-base outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                value={reason}
+                maxLength={200}
+                placeholder="Alasan (minimal 5 huruf)"
+                onChange={(e) => setReason(e.target.value)}
+            />
+            <div className="flex gap-2">
+                <Button
+                    className="h-12 flex-1"
+                    disabled={busy || reason.trim().length < 5}
+                    onClick={() => onSend(reason.trim())}
+                >
+                    Kirim dan absen
+                </Button>
+                <Button variant="outline" className="h-12" onClick={onCancel}>
+                    Batal
+                </Button>
+            </div>
+        </div>
+    );
 }
 
 function Scanner({
@@ -162,10 +247,35 @@ function Scanner({
         if (!result) {
             return;
         }
+        if (result.status === 'need_reason') {
+            return;
+        }
         const t = setTimeout(onDone, SHOW_MS);
 
         return () => clearTimeout(t);
     }, [result, onDone]);
+
+    const [sending, setSending] = useState(false);
+    const sendReason = async (reason: string) => {
+        if (!result?.ticket) {
+            return;
+        }
+        setSending(true);
+        try {
+            const r = await api<Result>('POST', '/attendance/kiosk/reason', {
+                ticket: result.ticket,
+                reason,
+            });
+            beep.current(
+                r.status === 'in' || r.status === 'out' ? 'ready' : 'alert',
+            );
+            setResult(r);
+        } catch {
+            setResult({ status: 'expired' });
+        } finally {
+            setSending(false);
+        }
+    };
 
     const retry = () => {
         setResult(null);
@@ -219,7 +329,16 @@ function Scanner({
                 )}
             </div>
 
-            {result ? (
+            {result?.status === 'need_reason' ? (
+                <div className="rounded-2xl border bg-card p-5">
+                    <ReasonForm
+                        result={result}
+                        busy={sending}
+                        onSend={sendReason}
+                        onCancel={onDone}
+                    />
+                </div>
+            ) : result ? (
                 <div
                     role="status"
                     className={`grid gap-2 rounded-2xl border bg-card p-5 text-center ${result.status === 'in' || result.status === 'out' ? 'border-emerald-600/40' : 'border-amber-600/40'}`}
@@ -307,6 +426,12 @@ function Scanner({
                         <p className="text-lg">
                             Lokasi perangkat tidak terbaca. Izinkan lokasi di
                             browser.
+                        </p>
+                    ) : result.status === 'expired' ||
+                      result.status === 'unknown' ? (
+                        <p className="text-lg">
+                            Waktu habis atau data tidak dikenal. Ulangi dari
+                            awal.
                         </p>
                     ) : result.status === 'already_in' ? (
                         <p className="text-lg">

@@ -38,6 +38,7 @@ final class PermissionCatalog
                 'view-own-attendance' => ['label' => 'Lihat absensi sendiri', 'hint' => 'Halaman Absensi: kapan masuk dan pulang sendiri, dan riwayat per bulan. Hanya tampil bila Absensi wajah aktif.'],
                 'manage-attendance' => ['label' => 'Kelola absensi & wajah karyawan', 'hint' => 'Melihat dan mengoreksi absensi, mengunduh laporan, mendaftarkan atau menghapus data wajah karyawan. Data wajah bersifat sensitif: batasi ke owner dan manager.'],
                 'use-attendance-kiosk' => ['label' => 'Pakai kiosk absensi', 'hint' => 'Membuka layar kamera absensi di tablet outlet. Disarankan satu akun khusus dengan izin ini saja.'],
+                'approve-attendance' => ['label' => 'Setujui koreksi & absen di luar jadwal', 'hint' => 'Memutuskan pengajuan koreksi absen (lupa masuk atau pulang) dan meninjau absen di luar jadwal beserta alasannya. Untuk MOD dan owner.'],
                 'approve-longshift' => ['label' => 'Setujui longshift', 'hint' => 'Menyetujui atau menolak jam kerja di atas standar (longshift) dari jadwal dan absensi. Jam yang disetujui masuk laporan HR. Untuk MOD dan owner.'],
                 'input-expense' => ['label' => 'Input pengeluaran', 'hint' => 'Catat pengeluaran operasional.'],
             ]],

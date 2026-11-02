@@ -40,6 +40,7 @@ use App\Http\Controllers\Receipt\ReceiptController;
 use App\Http\Controllers\SectionHomeController;
 use App\Http\Controllers\Shift\ShiftController;
 use App\Http\Controllers\Staffing\AttendanceController;
+use App\Http\Controllers\Staffing\AttendanceRequestController;
 use App\Http\Controllers\Staffing\LongshiftController;
 use App\Http\Controllers\Staffing\ScheduleController;
 use App\Http\Controllers\Stock\StockController;
@@ -158,8 +159,12 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::middleware('permission:use-attendance-kiosk')->group(function () {
             Route::get('kiosk', [AttendanceController::class, 'kiosk'])->name('kiosk');
             Route::post('kiosk/scan', [AttendanceController::class, 'scan'])->middleware('throttle:60,1')->name('scan');
+            Route::post('kiosk/reason', [AttendanceController::class, 'reason'])->middleware('throttle:60,1')->name('reason');
             Route::post('kiosk/undo', [AttendanceController::class, 'undo'])->name('undo');
         });
+        Route::post('requests', [AttendanceRequestController::class, 'store'])->middleware(['permission:view-own-attendance', 'throttle:20,1'])->name('requests.store');
+        Route::post('requests/{attendanceRequest}/decide', [AttendanceRequestController::class, 'decide'])->middleware('permission:approve-attendance')->name('requests.decide');
+        Route::post('records/{attendance}/review', [AttendanceRequestController::class, 'review'])->middleware('permission:approve-attendance')->name('records.review');
         Route::get('mine', [AttendanceController::class, 'mine'])->middleware('permission:view-own-attendance|use-attendance-kiosk')->name('mine');
         Route::middleware('permission:manage-attendance')->group(function () {
             Route::get('/', [AttendanceController::class, 'index'])->name('index');
@@ -175,7 +180,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
 
     // Longshift approval: hours beyond the standard shift, decided by the manager on duty.
     Route::prefix('longshift')->name('longshift.')->middleware('staffing')->group(function () {
-        Route::middleware('permission:approve-longshift|manage-schedule|manage-attendance')->group(function () {
+        Route::middleware('permission:approve-longshift|approve-attendance|manage-schedule|manage-attendance')->group(function () {
             Route::get('/', [LongshiftController::class, 'index'])->name('index');
             Route::get('export', [LongshiftController::class, 'export'])->name('export');
         });

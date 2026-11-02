@@ -117,11 +117,11 @@ it('hours really worked beyond nine become a longshift when the person clocks ou
         FaceTemplate::create(['outlet_id' => $budi->outlet_id, 'user_id' => $budi->id, 'descriptor' => face(3, $n), 'consented_at' => now()]);
     }
     $this->travelTo(now()->setTime(8, 0));
-    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'in', 'user_id' => $budi->id, 'descriptor' => face(3)])->assertJsonPath('status', 'in');
+    kioskScan($this, $kiosk, ['action' => 'in', 'user_id' => $budi->id, 'descriptor' => face(3)])->assertJsonPath('status', 'in');
     expect(LongshiftApproval::query()->count())->toBe(0);
 
     $this->travelTo(now()->setTime(20, 30));    // 12.5 h at work
-    $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'out', 'user_id' => $budi->id, 'descriptor' => face(3)])->assertJsonPath('status', 'out');
+    kioskScan($this, $kiosk, ['action' => 'out', 'user_id' => $budi->id, 'descriptor' => face(3)])->assertJsonPath('status', 'out');
     $row = LongshiftApproval::query()->firstOrFail();
     expect($row->source)->toBe('attendance')->and($row->hours)->toBe(3)->and($row->status)->toBe('pending');
 

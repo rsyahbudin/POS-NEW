@@ -27,6 +27,11 @@ type Rec = {
     late: number | null;
     role: string | null;
     longshift: { hours: number; approved_hours: number; status: string } | null;
+    in_reason: string | null;
+    out_reason: string | null;
+    in_flag: string | null;
+    out_flag: string | null;
+    review_status: string | null;
 };
 type Summary = {
     user_id: number;
@@ -397,7 +402,27 @@ export default function Attendance({
                             : r.method_in === 'button'
                               ? 'Tombol'
                               : 'Manual',
-                        r.note ?? '-',
+                        <span key={`n${r.id}`} className="grid gap-0.5 text-xs">
+                            {r.review_status === 'pending' && (
+                                <b className="text-amber-700 dark:text-amber-400">
+                                    Perlu ditinjau MOD
+                                </b>
+                            )}
+                            {r.in_reason && <span>Masuk: {r.in_reason}</span>}
+                            {r.out_reason && (
+                                <span>Pulang: {r.out_reason}</span>
+                            )}
+                            {r.note && (
+                                <span className="text-muted-foreground">
+                                    {r.note}
+                                </span>
+                            )}
+                            {!r.review_status &&
+                                !r.in_reason &&
+                                !r.out_reason &&
+                                !r.note &&
+                                '-'}
+                        </span>,
                         <div key={r.id} className="flex gap-1">
                             <Button
                                 size="sm"

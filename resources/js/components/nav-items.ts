@@ -75,6 +75,7 @@ export const top: Item[] = [
             'view-schedule',
             'manage-attendance',
             'approve-longshift',
+            'approve-attendance',
         ],
         feature: 'staffing',
         match: ['/schedule', '/attendance', '/longshift'],

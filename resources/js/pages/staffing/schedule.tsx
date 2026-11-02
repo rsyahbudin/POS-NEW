@@ -243,7 +243,7 @@ export default function Schedule({
                                     variant="outline"
                                     className="h-11"
                                 >
-                                    <Link href="/longshift">Longshift</Link>
+                                    <Link href="/longshift">Persetujuan</Link>
                                 </Button>
                             )}
                             {can.manage && (

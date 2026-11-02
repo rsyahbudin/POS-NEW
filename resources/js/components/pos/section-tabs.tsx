@@ -76,12 +76,13 @@ export function StaffingTabs() {
                     show: att && can('manage-attendance'),
                 },
                 {
-                    label: 'Longshift',
+                    label: 'Persetujuan',
                     href: '/longshift',
                     show:
                         !!features?.staffing &&
                         can(
                             'approve-longshift',
+                            'approve-attendance',
                             'manage-schedule',
                             'manage-attendance',
                         ),

@@ -15,7 +15,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'open-close-shift', 'manage-shifts-any', 'update-kitchen-status', 'input-expense',
         'view-sales-reports', 'view-own-shift-recap', 'view-accounting', 'manage-accounting',
         'cancel-order', 'use-print-station', 'view-kitchen-report', 'view-margin-report', 'manage-printers',
-        'view-stock', 'count-stock', 'view-assets', 'manage-assets', 'import-data', 'record-purchase', 'view-activity-log', 'manage-suppliers', 'record-waste', 'view-waste-report', 'manage-online-payments', 'export-receipts', 'mark-sold-out', 'view-today-summary', 'reopen-shift', 'handle-calls', 'view-cash-ledger', 'manage-fixed-expenses', 'view-schedule', 'manage-schedule', 'manage-attendance', 'use-attendance-kiosk', 'view-own-attendance', 'approve-longshift',
+        'view-stock', 'count-stock', 'view-assets', 'manage-assets', 'import-data', 'record-purchase', 'view-activity-log', 'manage-suppliers', 'record-waste', 'view-waste-report', 'manage-online-payments', 'export-receipts', 'mark-sold-out', 'view-today-summary', 'reopen-shift', 'handle-calls', 'view-cash-ledger', 'manage-fixed-expenses', 'view-schedule', 'manage-schedule', 'manage-attendance', 'use-attendance-kiosk', 'view-own-attendance', 'approve-longshift', 'approve-attendance',
         'manage-menu', 'manage-inventory', 'manage-pricing', 'manage-discount-presets', 'manage-users', 'manage-settings', 'manage-tables', 'manage-roles',
     ];
 
@@ -32,7 +32,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'mod' => [
             'handle-calls', 'view-today-summary', 'create-order', 'receive-payment', 'discount-within-limit', 'discount-custom', 'void', 'cancel-order',
             'open-close-shift', 'manage-shifts-any', 'reopen-shift', 'update-kitchen-status', 'input-expense', 'use-print-station',
-            'view-stock', 'count-stock', 'view-assets', 'view-schedule', 'manage-schedule', 'approve-longshift', 'use-attendance-kiosk', 'view-own-attendance',
+            'view-stock', 'count-stock', 'view-assets', 'view-schedule', 'manage-schedule', 'approve-longshift', 'approve-attendance', 'use-attendance-kiosk', 'view-own-attendance',
         ],
         'kitchen' => ['handle-calls', 'view-schedule', 'view-own-attendance', 'view-today-summary', 'update-kitchen-status', 'use-print-station', 'view-stock', 'count-stock', 'view-assets'],
     ];

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Staffing;
 
 use App\Domain\Settings\OutletContext;
 use App\Domain\Staffing\LongshiftService;
+use App\Domain\Staffing\Models\Attendance;
+use App\Domain\Staffing\Models\AttendanceRequest;
 use App\Domain\Staffing\Models\LongshiftApproval;
 use App\Exports\ReportSheet;
 use App\Http\Controllers\Controller;
@@ -28,8 +30,16 @@ class LongshiftController extends Controller
             'filters' => compact('from', 'to'),
             'pending' => $this->rows(LongshiftApproval::query()->where('status', 'pending')->orderBy('work_date')),
             'decided' => $this->rows(LongshiftApproval::query()->where('status', '!=', 'pending')->whereBetween('work_date', [$from, $to])->orderByDesc('work_date')),
+            'requests' => AttendanceRequest::query()->where('outlet_id', $this->outlet->id())->where('status', 'pending')->with('user:id,name')->oldest()->get()->map(fn (AttendanceRequest $q) => [
+                'id' => $q->id, 'name' => $q->user->name ?? '-', 'work_date' => $q->work_date->toDateString(), 'kind' => $q->kind, 'clock_in' => $q->clock_in === null ? null : substr($q->clock_in, 0, 5),
+                'clock_out' => $q->clock_out === null ? null : substr($q->clock_out, 0, 5), 'reason' => $q->reason, 'filed' => $q->created_at?->toIso8601String(),
+            ])->all(),
+            'reviews' => Attendance::query()->where('outlet_id', $this->outlet->id())->where('review_status', 'pending')->with('user:id,name')->oldest('clock_in_at')->get()->map(fn (Attendance $a) => [
+                'id' => $a->id, 'name' => $a->user->name ?? '-', 'work_date' => $a->work_date->toDateString(), 'clock_in_at' => $a->clock_in_at->toIso8601String(), 'clock_out_at' => $a->clock_out_at?->toIso8601String(),
+                'reason' => trim(($a->in_reason ?? '').' '.($a->out_reason ?? '')),
+            ])->all(),
             'standard_hours' => intdiv($this->service->standardMinutes(), 60),
-            'can' => ['decide' => (bool) $request->user()?->can('approve-longshift')],
+            'can' => ['decide' => (bool) $request->user()?->can('approve-longshift'), 'decide_attendance' => (bool) $request->user()?->can('approve-attendance')],
         ]);
     }
 
@@ -70,6 +80,7 @@ class LongshiftController extends Controller
     private function rows($query): array
     {
         return $query->where('outlet_id', $this->outlet->id())->with(['user:id,name', 'decider:id,name'])->get()->map(fn (LongshiftApproval $a) => [
+            'reasons' => Attendance::query()->where('user_id', $a->user_id)->whereDate('work_date', $a->work_date)->get()->flatMap(fn (Attendance $r) => [$r->in_reason, $r->out_reason])->filter()->values()->all(),
             'planned_hours' => round((int) $a->planned_minutes / 60, 1), 'worked_hours' => round((int) $a->worked_minutes / 60, 1),
             'shifts' => $this->service->breakdown($a->hours)['shifts'], 'rest' => $this->service->breakdown($a->hours)['hours'],
             'approved_shifts' => $this->service->breakdown((int) $a->approved_hours)['shifts'], 'approved_rest' => $this->service->breakdown((int) $a->approved_hours)['hours'],

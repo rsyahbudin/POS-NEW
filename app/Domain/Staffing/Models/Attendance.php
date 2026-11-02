@@ -24,6 +24,14 @@ use Illuminate\Support\Carbon;
  * @property float|null $lng
  * @property int|null $geo_distance_m
  * @property int|null $out_geo_distance_m
+ * @property string|null $in_flag
+ * @property string|null $out_flag
+ * @property string|null $in_reason
+ * @property string|null $out_reason
+ * @property string|null $review_status
+ * @property int|null $reviewed_by
+ * @property Carbon|null $reviewed_at
+ * @property string|null $review_note
  * @property int|null $edited_by
  * @property-read User $user
  */
@@ -33,7 +41,7 @@ class Attendance extends Model
 
     protected function casts(): array
     {
-        return ['work_date' => 'date', 'clock_in_at' => 'datetime', 'clock_out_at' => 'datetime', 'distance' => 'float'];
+        return ['work_date' => 'date', 'clock_in_at' => 'datetime', 'clock_out_at' => 'datetime', 'distance' => 'float', 'reviewed_at' => 'datetime'];
     }
 
     /** @return BelongsTo<User, $this> */

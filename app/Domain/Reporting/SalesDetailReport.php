@@ -17,11 +17,9 @@ use Carbon\CarbonInterface;
 class SalesDetailReport
 {
     public const HEADERS = [
-        'Sales Number', 'Bill Number', 'Sales Type', 'Batch Order', 'Table Section', 'Table Name', 'Sales Date', 'Sales Date In', 'Sales Date Out', 'Branch', 'Brand', 'City', 'Area',
-        'Visit Purpose', 'Regular Member Code', 'Regular Member Name', 'Loyalty Member Code', 'Loyalty Member Name', 'Loyalty Member Type', 'Employee Code', 'Employee Name',
-        'External Employee Code', 'External Employee Name', 'Customer Name', 'Payment Method', 'Menu Category', 'Menu Category Detail', 'Menu', 'Custom Menu Name', 'Menu Code',
-        'Menu Notes', 'Order Mode', 'Qty', 'Price', 'Subtotal', 'Discount', 'Service Charge', 'Tax', 'VAT', 'Total', 'Nett Sales', 'DPP', 'Bill Discount', 'Total After Bill Discount',
-        'Waiter', 'Order Time',
+        'Sales Number', 'Bill Number', 'Sales Type', 'Batch Order', 'Table Section', 'Table Name', 'Sales Date', 'Sales Date In', 'Sales Date Out', 'Branch', 'Visit Purpose',
+        'Customer Name', 'Payment Method', 'Received By', 'Menu Category', 'Menu', 'Menu Code', 'Menu Notes', 'Order Mode', 'Qty', 'Price', 'Subtotal', 'Discount',
+        'Service Charge', 'Tax', 'Total', 'Nett Sales', 'DPP', 'Bill Discount', 'Total After Bill Discount', 'Waiter', 'Order Time',
     ];
 
     private const VISIT = ['dine_in' => 'DINE IN', 'takeaway' => 'TAKE AWAY', 'online' => 'ONLINE'];
@@ -41,7 +39,7 @@ class SalesDetailReport
         $orders = 0;
 
         Order::query()->where('outlet_id', $outletId)->whereIn('status', ['paid', 'refunded'])->whereBetween('business_date', [$from, $to])
-            ->with(['table.area', 'charges', 'payments.method', 'items.round.creator', 'items.product.category'])
+            ->with(['table.area', 'charges', 'payments.method', 'payments.receiver', 'items.round.creator', 'items.product.category'])
             ->orderBy('business_date')->orderBy('closed_at')->orderBy('id')
             ->chunkById(200, function ($chunk) use (&$rows, &$rounding, &$refunds, &$orders, $name) {
                 foreach ($chunk as $order) {
@@ -78,6 +76,7 @@ class SalesDetailReport
         $rounds = $items->pluck('order_round_id')->unique()->values()->flip();
         $methods = $order->payments->map(fn ($p) => $p->method->name ?? null)->filter()->unique()->implode(', ');
         $in = $this->local($order->created_at);
+        $receivers = $order->payments->map(fn ($p) => $p->receiver->name ?? null)->filter()->unique()->implode(', ');
         $out = $this->local($order->closed_at);
         $out ??= $in;
         $type = self::VISIT[$order->type->value];
@@ -92,7 +91,9 @@ class SalesDetailReport
             $tx = (int) $taxShare[$n];
             $bill = (int) $billShare[$n];
             $total = $subtotal - $discount + ($serviceOnTop ? $sc : 0) + ($taxOnTop ? $tx : 0);
-            $nett = $subtotal - $discount;
+            // Net sales never holds tax or service: a charge already inside the menu price is taken back out, one added on top was never in it.
+            $inclusive = ($serviceOnTop ? 0 : $sc) + ($taxOnTop ? 0 : $tx);
+            $nett = $subtotal - $discount - $inclusive;
             $round = $item->round;
             $notes = collect($item->modifiers_snapshot ?? [])->pluck('name')->filter()->push($item->note)->filter()->implode(', ');
             $categoryName = strtoupper((string) ($item->product->category->name ?? ''));
@@ -100,11 +101,10 @@ class SalesDetailReport
             $out_rows[] = [
                 strtoupper((string) $order->public_id), $order->number, $sales, (int) ($rounds[$item->order_round_id] ?? 0) + 1,
                 $order->table->area->name ?? '', $order->table->name ?? ($order->call_number ?? ''),
-                CarbonImmutable::parse($order->business_date)->toDateString(), $in, $out, $branch, $branch, '', '',
-                $type, 'Non Member', 'Non Member', 'Non Member', 'Non Member', 'Non Member', '-', '-', '-', '-',
-                $order->customer_name ?: ($round->customer_name ?: '-'), $methods, $categoryName, '', $item->name_snapshot, '', (string) ($item->product->sku ?? ''),
-                $notes, $round->source->value === 'qr' ? 'QR' : 'POS', (int) $item->qty, (int) $item->unit_price, $subtotal, $discount, $sc, $tx, 0, $total, $nett,
-                $hasTax ? $nett : 0, $bill, $total - $bill, $round->source->value === 'qr' ? '' : ($round->creator->name ?? ''), $this->local($round->created_at ?? $order->created_at),
+                CarbonImmutable::parse($order->business_date)->toDateString(), $in, $out, $branch, $type,
+                $order->customer_name ?: ($round->customer_name ?: '-'), $methods, $receivers, $categoryName, $item->name_snapshot, (string) ($item->product->sku ?? ''),
+                $notes, $round->source->value === 'qr' ? 'QR' : 'POS', (int) $item->qty, (int) $item->unit_price, $subtotal, $discount, $sc, $tx, $total, $nett,
+                $hasTax ? max(0, $nett - $bill) : 0, $bill, $total - $bill, $round->source->value === 'qr' ? '' : ($round->creator->name ?? ''), $this->local($round->created_at ?? $order->created_at),
             ];
         }
 

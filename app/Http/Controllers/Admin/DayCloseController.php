@@ -72,12 +72,12 @@ class DayCloseController extends Controller
         $rows = [];
         foreach ($this->history($outlet->id(), $report, 90) as $h) {
             $z = ZReportSummary::fromArray($h['summary']);
-            $rows[] = [CarbonImmutable::parse($h['date'])->translatedFormat('D, d M Y'), $z->orders, $z->gross, $z->discounts, $z->refunds, $z->net, $z->voidItems, $z->compItems, $z->cashDifference];
+            $rows[] = [CarbonImmutable::parse($h['date'])->translatedFormat('D, d M Y'), $z->orders, $z->gross, $z->discounts, $z->refunds, $z->netSales, $z->net, $z->voidItems, $z->compItems, $z->cashDifference];
         }
 
         return ReportFile::download((string) $request->input('format', 'xlsx'), 'Rekap harian', [
-            new ReportSheet('Rekap harian', '90 hari terakhir yang ada penjualan', ['Tanggal', 'Order', 'Omzet kotor (Rp)', 'Diskon (Rp)', 'Refund (Rp)', 'Omzet bersih (Rp)', 'Dibatalkan (item)', 'Komplimen (item)', 'Selisih kas (Rp)'], $rows,
-                ['Total', array_sum(array_column($rows, 1)), array_sum(array_column($rows, 2)), array_sum(array_column($rows, 3)), array_sum(array_column($rows, 4)), array_sum(array_column($rows, 5)), array_sum(array_column($rows, 6)), array_sum(array_column($rows, 7)), array_sum(array_column($rows, 8))]),
+            new ReportSheet('Rekap harian', '90 hari terakhir yang ada penjualan', ['Tanggal', 'Order', 'Total ditagih (Rp)', 'Diskon (Rp)', 'Refund (Rp)', 'Net Sales (Rp)', 'Total diterima (Rp)', 'Dibatalkan (item)', 'Komplimen (item)', 'Selisih kas (Rp)'], $rows,
+                ['Total', array_sum(array_column($rows, 1)), array_sum(array_column($rows, 2)), array_sum(array_column($rows, 3)), array_sum(array_column($rows, 4)), array_sum(array_column($rows, 5)), array_sum(array_column($rows, 6)), array_sum(array_column($rows, 7)), array_sum(array_column($rows, 8)), array_sum(array_column($rows, 9))]),
         ]);
     }
 }

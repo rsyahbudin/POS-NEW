@@ -14,6 +14,9 @@ final readonly class ZReportSummary
         public int $discounts,
         public int $refunds,
         public int $net,
+        public int $netSales,
+        public int $tax,
+        public int $service,
         public array $byMethod,
         public int $voidItems,
         public int $voidValue,
@@ -36,6 +39,8 @@ final readonly class ZReportSummary
 
         return new self(
             $int($data['orders'] ?? 0), $int($data['gross'] ?? 0), $int($data['discounts'] ?? 0), $int($data['refunds'] ?? 0), $int($data['net'] ?? 0),
+            // Days closed before Net Sales existed only stored the total received; show that rather than nothing.
+            $int($data['net_sales'] ?? $data['net'] ?? 0), $int($data['tax'] ?? 0), $int($data['service'] ?? 0),
             $methods, $int($voids['items'] ?? 0), $int($voids['value'] ?? 0), $int($comps['items'] ?? 0), $int($comps['value'] ?? 0), $int($data['cash_difference'] ?? 0),
         );
     }

@@ -12,6 +12,7 @@ type Summary = {
     discounts: number;
     refunds: number;
     net: number;
+    net_sales?: number;
     by_method: Record<string, number>;
     voids: { items: number; value: number };
     comps: { items: number; value: number };
@@ -129,9 +130,9 @@ export default function DailyReport({
 
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                     <Stat
-                        label="Omzet bersih"
-                        value={rupiah(preview.net)}
-                        hint={`${preview.orders} order`}
+                        label="Net Sales"
+                        value={rupiah(preview.net_sales ?? preview.net)}
+                        hint={`${preview.orders} order · total diterima ${rupiah(preview.net)}`}
                     />
                     <Stat label="Diskon" value={rupiah(preview.discounts)} />
                     <Stat
@@ -209,12 +210,12 @@ export default function DailyReport({
                     />
                 </section>
 
-                <ChartCard title="Omzet bersih per hari (riwayat)">
+                <ChartCard title="Net Sales per hari (riwayat)">
                     <LineChart
-                        title="Omzet bersih per hari"
+                        title="Net Sales per hari"
                         data={[...history].reverse().map((h) => ({
                             label: h.date,
-                            value: h.summary.net,
+                            value: h.summary.net_sales ?? h.summary.net,
                         }))}
                     />
                 </ChartCard>
@@ -224,13 +225,15 @@ export default function DailyReport({
                         headers={[
                             'Tanggal',
                             'Order',
-                            'Omzet bersih',
+                            'Net Sales',
+                            'Total diterima',
                             'Selisih kas',
                         ]}
-                        numeric={[1, 2, 3]}
+                        numeric={[1, 2, 3, 4]}
                         rows={history.map((h) => [
                             dateId(h.date),
                             h.summary.orders,
+                            rupiah(h.summary.net_sales ?? h.summary.net),
                             rupiah(h.summary.net),
                             rupiah(h.summary.cash_difference),
                         ])}

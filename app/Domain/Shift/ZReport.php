@@ -3,6 +3,7 @@
 namespace App\Domain\Shift;
 
 use App\Domain\Payment\Models\Payment;
+use App\Domain\Reporting\SalesReports;
 use App\Domain\Settings\OutletContext;
 use App\Domain\Shift\Models\Shift;
 use Illuminate\Support\Facades\DB;
@@ -10,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 /** End-of-day summary: revenue, payment methods, void, discounts, comps, cash variance. */
 class ZReport
 {
-    public function __construct(private OutletContext $outlet) {}
+    public function __construct(private OutletContext $outlet, private SalesReports $sales) {}
 
     /** @return array<string, mixed> */
     public function build(string $date): array
@@ -37,6 +38,8 @@ class ZReport
             ->where('orders.outlet_id', $outletId)->where('orders.business_date', $date)->whereNotNull('order_items.comp_type')
             ->selectRaw('COUNT(*) as items, COALESCE(SUM(order_items.line_total),0) as value')->sole();
 
+        $money = $this->sales->summary($date, $date);
+
         $shifts = Shift::query()->where('outlet_id', $outletId)->where('business_date', $date)->get();
 
         return [
@@ -46,6 +49,9 @@ class ZReport
             'discounts' => (int) $orders->discounts,
             'refunds' => (int) $orders->refunds,
             'net' => (int) $orders->gross - (int) $orders->refunds,
+            'net_sales' => $money['net_sales'],
+            'tax' => $money['tax'],
+            'service' => $money['service'],
             'by_method' => $byMethod,
             'voids' => ['items' => (int) $voids->items, 'value' => (int) $voids->value],
             'comps' => ['items' => (int) $comps->items, 'value' => (int) $comps->value],

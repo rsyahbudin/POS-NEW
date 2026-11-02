@@ -168,7 +168,7 @@ it('shows the report of any day, lists its shifts, and sends it on request', fun
     setUpChannels(true, false, false);
     Http::fake(['*' => Http::response(['ok' => true])]);
     $this->actingAs($manager)->post('/admin/day-close/send', ['date' => $d])->assertSessionHas('success');
-    Http::assertSent(fn ($r) => isset($r['text']) && str_contains($r['text'], 'Omzet bersih: Rp44.000'));
+    Http::assertSent(fn ($r) => isset($r['text']) && str_contains($r['text'], 'Net Sales: Rp44.000'));
     $this->actingAs($cashier)->post('/admin/day-close/send', ['date' => $d])->assertForbidden();
 });
 
@@ -184,8 +184,8 @@ it('emails the daily report as a short note with the designed report attached as
     $delivery->deliver('Laporan harian', $delivery->dailyTextFor($date, $summary, $date), null, $delivery->dailyHtml($date, $summary));
     $message = app('mailer')->getSymfonyTransport()->messages()[0]->getOriginalMessage();
 
-    expect($message->getHtmlBody())->toContain('Penjualan bersih')->toContain('Rp44.000')->toContain('PDF terlampir')->not->toContain('Menu terlaris')->not->toContain('<table')
-        ->and($message->getTextBody())->toContain('Omzet bersih')->toContain('Penjualan per jam:')->toContain('1 order');
+    expect($message->getHtmlBody())->toContain('Net Sales')->toContain('Rp44.000')->toContain('PDF terlampir')->not->toContain('Menu terlaris')->not->toContain('<table')
+        ->and($message->getTextBody())->toContain('Net Sales')->toContain('Total diterima')->toContain('Penjualan per jam:')->toContain('1 order');
 
     // the designed report (charts and all) is what the PDF is made from
     $full = view('emails.daily-report', ['pdf' => true] + $delivery->dailyData($date, $summary))->render();

@@ -8,7 +8,7 @@
 <p style="margin:0 0 14px;">Halo,</p>
 <p style="margin:0 0 14px;">Berikut ringkasan penjualan <strong>{{ $outlet }}</strong> untuk {{ $dateLabel }}.</p>
 <ul style="margin:0 0 14px;padding-left:20px;">
-    <li>Penjualan bersih: <strong>{{ $m($s->net) }}</strong>@if ($change !== null) ({{ $change >= 0 ? 'naik' : 'turun' }} {{ abs($change) }}% dari hari yang sama minggu lalu)@endif</li>
+    <li>Net Sales: <strong>{{ $m($s->netSales) }}</strong> (total diterima {{ $m($s->net) }})@if ($change !== null) ({{ $change >= 0 ? 'naik' : 'turun' }} {{ abs($change) }}% dari hari yang sama minggu lalu)@endif</li>
     <li>Jumlah order: {{ $s->orders }} (rata-rata {{ $m($average) }} per order)</li>
     @if ($s->byMethod !== [])
         <li>Metode bayar: @foreach ($s->byMethod as $name => $total){{ $name }} {{ $m($total) }}{{ $loop->last ? '' : ', ' }}@endforeach</li>

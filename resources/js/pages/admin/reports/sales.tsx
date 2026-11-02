@@ -38,6 +38,7 @@ type Row = {
     rounding: number;
     refunds: number;
     average: number;
+    net_sales: number;
 };
 
 type Props = {
@@ -52,6 +53,11 @@ type Props = {
         refunds: number;
         net: number;
         average: number;
+        gross_sales: number;
+        tax: number;
+        service: number;
+        net_sales: number;
+        items: number;
     };
     rows: Row[];
     detailed: boolean;
@@ -83,7 +89,7 @@ export default function SalesReport({
             <Head title="Laporan Penjualan" />
             <div className="mx-auto grid w-full max-w-[1400px] gap-5 p-4 md:p-6">
                 <PageHeader
-                    title="Laporan penjualan"
+                    title="Sales Recapitulation"
                     actions={
                         <>
                             {canReceipts && (
@@ -101,21 +107,21 @@ export default function SalesReport({
                                 <a
                                     href={`/admin/reports/export?${qs({ format: 'xlsx' })}`}
                                 >
-                                    Unduh Excel
+                                    Sales Recapitulation (Excel)
                                 </a>
                             </Button>
                             <Button asChild variant="outline" className="h-11">
                                 <a
                                     href={`/admin/reports/detail-export?from=${filters.from}&to=${filters.to}`}
                                 >
-                                    Rekap detail per item (Excel)
+                                    Sales Recapitulation Detail (Excel)
                                 </a>
                             </Button>
                             <Button asChild variant="outline" className="h-11">
                                 <a
                                     href={`/admin/reports/export?${qs({ format: 'pdf' })}`}
                                 >
-                                    Unduh PDF
+                                    Sales Recapitulation (PDF)
                                 </a>
                             </Button>
                         </>
@@ -166,14 +172,18 @@ export default function SalesReport({
                     </Button>
                 </form>
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    <Stat label="Order" value={summary.orders} />
                     <Stat
-                        label="Penjualan bersih"
-                        value={rupiah(summary.net)}
-                        hint="Setelah diskon dan refund"
+                        label="Net Sales"
+                        value={rupiah(summary.net_sales)}
+                        hint="Setelah diskon, tanpa pajak & service"
                     />
                     <Stat
-                        label="Rata-rata per order"
+                        label="Gross Sales"
+                        value={rupiah(summary.gross_sales)}
+                    />
+                    <Stat label="Order" value={summary.orders} />
+                    <Stat
+                        label="Net Sales per order"
                         value={rupiah(summary.average)}
                     />
                     <Stat
@@ -183,22 +193,20 @@ export default function SalesReport({
                 </div>
                 <section className="rounded-xl border bg-card p-4">
                     <h2 className="mb-2 text-sm font-semibold">
-                        Dari subtotal ke penjualan bersih
+                        Dari Gross Sales ke Total diterima
                     </h2>
                     <dl className="grid gap-1 text-sm sm:max-w-md">
                         {(
                             [
-                                ['Subtotal menu', summary.subtotal, false],
+                                ['Gross Sales', summary.gross_sales, false],
                                 ['Diskon', -summary.discounts, false],
-                                [
-                                    'Pajak & biaya layanan',
-                                    summary.charges,
-                                    false,
-                                ],
+                                ['Net Sales', summary.net_sales, true],
+                                ['Pajak', summary.tax, false],
+                                ['Service charge', summary.service, false],
                                 ['Pembulatan', summary.rounding, false],
                                 ['Total ditagih', summary.gross, true],
                                 ['Refund', -summary.refunds, false],
-                                ['Penjualan bersih', summary.net, true],
+                                ['Total diterima', summary.net, true],
                             ] as [string, number, boolean][]
                         ).map(([k, v, strong]) => (
                             <div
@@ -228,7 +236,7 @@ export default function SalesReport({
                             title="Penjualan per hari"
                             data={rows.map((r) => ({
                                 label: r.label,
-                                value: r.total,
+                                value: detailed ? r.net_sales : r.total,
                             }))}
                         />
                     ) : filters.dimension === 'hour' ? (
@@ -236,7 +244,7 @@ export default function SalesReport({
                             title="Penjualan per jam"
                             data={rows.map((r) => ({
                                 label: r.label.slice(0, 2),
-                                value: r.total,
+                                value: detailed ? r.net_sales : r.total,
                             }))}
                         />
                     ) : (
@@ -244,7 +252,7 @@ export default function SalesReport({
                             title={`Penjualan ${LABELS[filters.dimension].toLowerCase()}`}
                             data={rows.map((r) => ({
                                 label: r.display,
-                                value: r.total,
+                                value: detailed ? r.net_sales : r.total,
                             }))}
                         />
                     )}
@@ -254,20 +262,22 @@ export default function SalesReport({
                         headers={[
                             LABELS[filters.dimension],
                             'Order',
-                            'Subtotal menu',
+                            'Gross Sales',
                             'Diskon',
-                            'Pajak & biaya',
+                            'Net Sales',
+                            'Pajak & service',
                             'Pembulatan',
                             'Refund',
-                            'Penjualan bersih',
-                            'Rata-rata/order',
+                            'Total diterima',
+                            'Net Sales/order',
                         ]}
-                        numeric={[1, 2, 3, 4, 5, 6, 7, 8]}
+                        numeric={[1, 2, 3, 4, 5, 6, 7, 8, 9]}
                         rows={rows.map((r) => [
                             r.display,
                             r.orders,
                             rupiah(r.subtotal),
                             rupiah(r.discount),
+                            rupiah(r.net_sales),
                             rupiah(r.charges),
                             rupiah(r.rounding),
                             rupiah(r.refunds),
@@ -279,13 +289,14 @@ export default function SalesReport({
                             totalOrders,
                             rupiah(sum('subtotal')),
                             rupiah(sum('discount')),
+                            rupiah(sum('net_sales')),
                             rupiah(sum('charges')),
                             rupiah(sum('rounding')),
                             rupiah(sum('refunds')),
                             rupiah(sum('total')),
                             rupiah(
                                 totalOrders > 0
-                                    ? Math.floor(sum('total') / totalOrders)
+                                    ? Math.floor(sum('net_sales') / totalOrders)
                                     : 0,
                             ),
                         ]}

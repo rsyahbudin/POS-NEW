@@ -27,8 +27,9 @@
         <div style="font-size:20px;font-weight:700;color:#ffffff;margin-top:2px;">Laporan harian · {{ $dateLabel }}</div>
     </td></tr>
     <tr><td style="background:{{ $tint }};padding:18px 24px;">
-        <div style="font-size:13px;color:{{ $ink }};">Penjualan bersih</div>
-        <div style="font-size:34px;font-weight:800;letter-spacing:-0.5px;color:{{ $ink }};">{{ $m($s->net) }}</div>
+        <div style="font-size:13px;color:{{ $ink }};">Net Sales</div>
+        <div style="font-size:34px;font-weight:800;letter-spacing:-0.5px;color:{{ $ink }};">{{ $m($s->netSales) }}</div>
+        <div style="font-size:12px;color:#475569;margin-top:2px;">Setelah diskon, tanpa pajak dan service. Total diterima {{ $m($s->net) }}.</div>
         <div style="margin-top:6px;">
         @if ($change === null)
             <span style="font-size:12px;color:#475569;">Belum ada pembanding minggu lalu</span>

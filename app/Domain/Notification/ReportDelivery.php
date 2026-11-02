@@ -96,7 +96,7 @@ class ReportDelivery
             'outlet' => (string) Outlet::query()->find(app(OutletContext::class)->id())?->name,
             'dateLabel' => $day->translatedFormat('l, d F Y'),
             's' => $s,
-            'average' => $s->orders > 0 ? intdiv($s->net, $s->orders) : 0,
+            'average' => $s->orders > 0 ? intdiv($s->netSales, $s->orders) : 0,
             'compare' => $sales->dashboard($date),
             'top' => $sales->by('product', $date, $date)->take(5)->map(fn ($r) => ['name' => $r->label, 'qty' => $r->orders, 'total' => $r->total])->values()->all(),
             'hours' => $this->hourly($sales->by('hour', $date, $date)),
@@ -220,7 +220,7 @@ class ReportDelivery
     public function dailyTextFor(string $label, ZReportSummary $s, ?string $date = null): string
     {
         $m = fn (int $v) => Money::formatRupiah($v);
-        $lines = ["Laporan harian {$label}", "Order: {$s->orders}", "Omzet kotor: {$m($s->gross)}", "Diskon: {$m($s->discounts)}", "Refund: {$m($s->refunds)}", "Omzet bersih: {$m($s->net)}"];
+        $lines = ["Laporan harian {$label}", "Order: {$s->orders}", "Net Sales: {$m($s->netSales)}", "Pajak: {$m($s->tax)}", "Service: {$m($s->service)}", "Diskon: {$m($s->discounts)}", "Refund: {$m($s->refunds)}", "Total diterima: {$m($s->net)}"];
         foreach ($s->byMethod as $name => $total) {
             $lines[] = "  {$name}: {$m($total)}";
         }

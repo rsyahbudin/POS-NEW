@@ -12,7 +12,7 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
-/** Writes the "Sales Recapitulation Detail Report" sheet: a title block, the 46 column header, the item rows and the totals underneath. */
+/** Writes the "Sales Recapitulation Detail Report" sheet: a title block, the 32 column header, the item rows and the totals underneath. */
 class SalesDetailWorkbook
 {
     private const HEADER_ROW = 10;
@@ -68,20 +68,18 @@ class SalesDetailWorkbook
 
         // dates are real dates, money and quantities are real numbers (Excel can sum and pivot them)
         $sheet->getStyle('G'.self::FIRST_ROW.':G'.$end)->getNumberFormat()->setFormatCode('yyyy-mm-dd');
-        foreach (['H', 'I', 'AT'] as $c) {
+        foreach (['H', 'I', 'AF'] as $c) {
             $sheet->getStyle($c.self::FIRST_ROW.':'.$c.$end)->getNumberFormat()->setFormatCode('yyyy-mm-dd hh:mm:ss');
         }
-        $sheet->getStyle('AG'.self::FIRST_ROW.':AG'.$end)->getNumberFormat()->setFormatCode('#,##0');
-        $sheet->getStyle('AH'.self::FIRST_ROW.':AR'.$end)->getNumberFormat()->setFormatCode('#,##0');
+        $sheet->getStyle('T'.self::FIRST_ROW.':T'.$end)->getNumberFormat()->setFormatCode('#,##0');
+        $sheet->getStyle('U'.self::FIRST_ROW.':AD'.$end)->getNumberFormat()->setFormatCode('#,##0');
 
         $totals = $row + 1;
-        foreach ([['Rounding Total', $data['rounding']], ['Voucher Purchase Total', 0], ['Platform Fee Total', null], ['Delivery Fee Total', 0], ['Order Fee Total', 0], ['Refund Total', $data['refunds']]] as $i => [$label, $value]) {
-            $sheet->setCellValue('AB'.($totals + $i), $label);
-            if ($value !== null) {
-                $sheet->setCellValue('AR'.($totals + $i), $value);
-                $sheet->getStyle('AR'.($totals + $i))->getNumberFormat()->setFormatCode('#,##0');
-            }
-            $sheet->getStyle('AB'.($totals + $i))->getFont()->setBold(true);
+        foreach ([['Rounding Total', $data['rounding']], ['Refund Total', $data['refunds']]] as $i => [$label, $value]) {
+            $sheet->setCellValue('P'.($totals + $i), $label);
+            $sheet->setCellValue('AD'.($totals + $i), $value);
+            $sheet->getStyle('AD'.($totals + $i))->getNumberFormat()->setFormatCode('#,##0');
+            $sheet->getStyle('P'.($totals + $i))->getFont()->setBold(true);
         }
 
         foreach (range(1, count(SalesDetailReport::HEADERS)) as $i) {

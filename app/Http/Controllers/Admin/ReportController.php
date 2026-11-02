@@ -27,16 +27,31 @@ class ReportController extends Controller
 
     public function __construct(private SalesReports $reports) {}
 
-    public function dashboard(): Response
+    public function dashboard(Request $request): Response
     {
-        $today = BusinessDate::for();
+        $request->validate(['period' => 'nullable|in:today,yesterday,week,month,last_month,custom', 'from' => 'nullable|date', 'to' => 'nullable|date|after_or_equal:from']);
+        $today = CarbonImmutable::parse(BusinessDate::for());
+        $period = (string) $request->input('period', 'today');
+        [$from, $to] = match ($period) {
+            'yesterday' => [$today->subDay(), $today->subDay()],
+            'week' => [$today->subDays(6), $today],
+            'month' => [$today->startOfMonth(), $today],
+            'last_month' => [$today->subMonthNoOverflow()->startOfMonth(), $today->subMonthNoOverflow()->endOfMonth()],
+            'custom' => [CarbonImmutable::parse((string) $request->input('from', $today->toDateString())), CarbonImmutable::parse((string) $request->input('to', $today->toDateString()))],
+            default => [$today, $today],
+        };
+        [$f, $t] = [$from->toDateString(), $to->toDateString()];
+        $single = $f === $t;
 
         return Inertia::render('dashboard', [
-            'date' => $today,
-            'metrics' => $this->reports->dashboard($today),
-            'hourly' => $this->reports->by('hour', $today, $today),
-            'daily' => $this->reports->by('day', CarbonImmutable::parse($today)->subDays(13)->toDateString(), $today),
-            'topProducts' => $this->reports->by('product', $today, $today)->take(5)->values(),
+            'period' => $period,
+            'filters' => ['from' => $f, 'to' => $t],
+            'overview' => $this->reports->overview($f, $t),
+            'hourly' => $single ? $this->reports->by('hour', $f, $t) : [],
+            'daily' => $this->reports->by('day', $single ? $from->subDays(13)->toDateString() : $f, $t),
+            'topProducts' => $this->reports->by('product', $f, $t)->take(5)->values(),
+            'methods' => $this->reports->by('method', $f, $t)->values(),
+            'types' => $this->reports->by('type', $f, $t)->values(),
         ]);
     }
 
@@ -194,11 +209,11 @@ class ReportController extends Controller
         }
 
         $label = self::DIMENSION_LABELS[$dimension];
-        $title = "Laporan penjualan per {$label}";
+        $title = "Sales Recapitulation per {$label}";
 
         // The PDF follows the screen (one grouping); Excel is the whole pack so nothing needs a second download.
         if ($format === 'pdf') {
-            return ReportFile::download($format, "Laporan penjualan {$label} {$from} {$to}", [$this->salesSheet($dimension, $from, $to, $range), $this->summarySheet($from, $to, $range)], $title);
+            return ReportFile::download($format, "Sales Recapitulation {$label} {$from} {$to}", [$this->salesSheet($dimension, $from, $to, $range), $this->summarySheet($from, $to, $range)], $title);
         }
 
         $sheets = [$this->summarySheet($from, $to, $range)];
@@ -209,7 +224,7 @@ class ReportController extends Controller
         array_push($sheets, ...$this->adjustmentSheets($from, $to, "Periode {$range}"));
         $sheets[] = $this->expenseSheet($from, $to, $range);
 
-        return ReportFile::download($format, "Laporan penjualan lengkap {$from} {$to}", $sheets, 'Laporan penjualan lengkap');
+        return ReportFile::download($format, "Sales Recapitulation {$from} {$to}", $sheets, 'Sales Recapitulation');
     }
 
     private function salesSheet(string $dimension, string $from, string $to, string $range): ReportSheet
@@ -220,10 +235,10 @@ class ReportController extends Controller
         $orders = (int) $rows->sum('orders');
 
         if (in_array($dimension, SalesReports::ORDER_DIMENSIONS, true)) {
-            return new ReportSheet("Per {$label}", "Periode {$range}", [$label, 'Order', 'Subtotal menu', 'Diskon', 'Pajak & biaya', 'Pembulatan', 'Refund', 'Penjualan bersih', 'Rata-rata/order'],
-                $rows->map(fn ($r) => [$r->display, $r->orders, $r->subtotal, $r->discount, $r->charges, $r->rounding, $r->refunds, $r->total, $r->average])->all(),
-                ['Total', $orders, (int) $rows->sum('subtotal'), (int) $rows->sum('discount'), (int) $rows->sum('charges'), (int) $rows->sum('rounding'), (int) $rows->sum('refunds'), (int) $rows->sum('total'),
-                    $orders > 0 ? intdiv((int) $rows->sum('total'), $orders) : 0]);
+            return new ReportSheet("Per {$label}", "Periode {$range}", [$label, 'Order', 'Gross Sales', 'Diskon', 'Net Sales', 'Pajak & service', 'Pembulatan', 'Refund', 'Total diterima', 'Net Sales/order'],
+                $rows->map(fn ($r) => [$r->display, $r->orders, $r->subtotal, $r->discount, $r->net_sales, $r->charges, $r->rounding, $r->refunds, $r->total, $r->average])->all(),
+                ['Total', $orders, (int) $rows->sum('subtotal'), (int) $rows->sum('discount'), (int) $rows->sum('net_sales'), (int) $rows->sum('charges'), (int) $rows->sum('rounding'), (int) $rows->sum('refunds'), (int) $rows->sum('total'),
+                    $orders > 0 ? intdiv((int) $rows->sum('net_sales'), $orders) : 0]);
         }
 
         $net = (int) $rows->sum('total');
@@ -256,7 +271,7 @@ class ReportController extends Controller
         $types = ['dine_in' => 'Dine-in', 'takeaway' => 'Takeaway', 'online' => 'Online / Ojol'];
         $net = fn ($r) => (int) $r->grand_total - (int) $r->refunded_total;
 
-        return new ReportSheet('Transaksi', "Periode {$range}", ['Tanggal', 'Jam', 'No. order', 'Tipe', 'Meja', 'Atas nama', 'Menu', 'Dicatat oleh', 'Diterima oleh', 'Metode bayar', 'Subtotal menu', 'Diskon', 'Pajak & biaya', 'Pembulatan', 'Total ditagih', 'Refund', 'Penjualan bersih', 'Status'],
+        return new ReportSheet('Transaksi', "Periode {$range}", ['Tanggal', 'Jam', 'No. order', 'Tipe', 'Meja', 'Atas nama', 'Menu', 'Dicatat oleh', 'Diterima oleh', 'Metode bayar', 'Gross Sales', 'Diskon', 'Pajak & service', 'Pembulatan', 'Total ditagih', 'Refund', 'Total diterima', 'Status'],
             $rows->map(fn ($r) => [
                 CarbonImmutable::parse($r->business_date)->translatedFormat('d M Y'),
                 $r->closed_at ? CarbonImmutable::parse($r->closed_at)->setTimezone('Asia/Jakarta')->format('H:i') : '-',
@@ -277,21 +292,24 @@ class ReportController extends Controller
         $expenses = app(ReportDelivery::class)->expenses($from, $to);
         $methods = $this->reports->by('method', $from, $to);
         $hours = $this->reports->by('hour', $from, $to)->sortByDesc('orders')->first();
-        $best = $this->reports->by('day', $from, $to)->sortByDesc('total')->first();
+        $best = $this->reports->by('day', $from, $to)->sortByDesc('net_sales')->first();
         $top = $this->reports->by('product', $from, $to)->take(5);
 
+        $perDay = intdiv($summary['net_sales'], max(1, (int) $days));
         $rows = [
             ['RINGKASAN', ''], ['Periode', $range], ['Jumlah hari', $days],
-            ['Jumlah order', $summary['orders']], ['Penjualan bersih (Rp)', $summary['net']], ['Rata-rata per order (Rp)', $summary['average']],
-            ['Rata-rata penjualan per hari (Rp)', intdiv($summary['net'], max(1, (int) $days))],
-            ['', ''], ['DARI SUBTOTAL KE PENJUALAN BERSIH', ''],
-            ['Subtotal menu (Rp)', $summary['subtotal']], ['Diskon (Rp)', -$summary['discounts']], ['Pajak & biaya layanan (Rp)', $summary['charges']],
-            ['Pembulatan (Rp)', $summary['rounding']], ['Total ditagih (Rp)', $summary['gross']], ['Refund (Rp)', -$summary['refunds']], ['Penjualan bersih (Rp)', $summary['net']],
+            ['Jumlah order', $summary['orders']], ['Net Sales (Rp)', $summary['net_sales']], ['Gross Sales (Rp)', $summary['gross_sales']],
+            ['Item terjual', $summary['items']], ['Net Sales per order (Rp)', $summary['average']], ['Net Sales rata-rata per hari (Rp)', $perDay],
+            ['', ''], ['DARI GROSS SALES KE TOTAL DITERIMA', ''],
+            ['Gross Sales (Rp)', $summary['gross_sales']], ['Diskon (Rp)', -$summary['discounts']], ['Net Sales (Rp)', $summary['net_sales']],
+            ['Pajak (Rp)', $summary['tax']], ['Service charge (Rp)', $summary['service']], ['Pembulatan (Rp)', $summary['rounding']],
+            ['Total ditagih (Rp)', $summary['gross']], ['Refund (Rp)', -$summary['refunds']], ['Total diterima (Rp)', $summary['net']],
             ['', ''], ['DIBANDINGKAN '.$days.' HARI SEBELUMNYA', ''],
-            ['Penjualan bersih periode sebelumnya (Rp)', $prev['net']], ['Perubahan penjualan (%)', $change($summary['net'], $prev['net'])],
-            ['Order periode sebelumnya', $prev['orders']], ['Perubahan order (%)', $change($summary['orders'], $prev['orders'])],
+            ['Net Sales periode sebelumnya (Rp)', $prev['net_sales']], ['Growth Net Sales (%)', $change($summary['net_sales'], $prev['net_sales'])],
+            ['Gross Sales periode sebelumnya (Rp)', $prev['gross_sales']], ['Growth Gross Sales (%)', $change($summary['gross_sales'], $prev['gross_sales'])],
+            ['Order periode sebelumnya', $prev['orders']], ['Growth order (%)', $change($summary['orders'], $prev['orders'])],
             ['', ''], ['SOROTAN', ''],
-            ['Hari terbaik', $best ? "{$best->display} · Rp ".number_format($best->total, 0, ',', '.') : '-'],
+            ['Hari terbaik', $best ? "{$best->display} · Rp ".number_format($best->net_sales, 0, ',', '.') : '-'],
             ['Jam tersibuk', $hours ? "{$hours->label} · {$hours->orders} order" : '-'],
         ];
         foreach ($top->values() as $i => $p) {

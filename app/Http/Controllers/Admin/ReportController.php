@@ -8,11 +8,8 @@ use App\Domain\Reporting\MarginReports;
 use App\Domain\Reporting\SalesDetailReport;
 use App\Domain\Reporting\SalesReports;
 use App\Domain\Reporting\WasteReports;
-use App\Domain\Settings\Models\Outlet;
-use App\Domain\Settings\OutletContext;
 use App\Domain\Settings\SettingsRepository;
 use App\Exports\ReportSheet;
-use App\Exports\SalesDetailWorkbook;
 use App\Http\Controllers\Controller;
 use App\Support\BusinessDate;
 use App\Support\ReportFile;
@@ -236,6 +233,7 @@ class ReportController extends Controller
         foreach (array_keys(self::DIMENSION_LABELS) as $dim) {
             $sheets[] = $this->salesSheet($dim, $from, $to, $range);
         }
+        $sheets[] = $this->detailSheet($from, $to, $range);
         $sheets[] = $this->transactionSheet($from, $to, $range);
         array_push($sheets, ...$this->adjustmentSheets($from, $to, "Periode {$range}"));
         $sheets[] = $this->expenseSheet($from, $to, $range);
@@ -264,21 +262,21 @@ class ReportController extends Controller
             ['Total', $orders, $net, $net > 0 ? 100 : 0]);
     }
 
-    /** One row per sold item in the layout of the previous POS ("Sales Recapitulation Detail Report"), for any date range. */
-    public function detailExport(Request $request, SalesDetailReport $report): \Symfony\Component\HttpFoundation\Response
+    /** One row per sold item, so the whole recap (summary, groupings and per-item detail) lives in one Excel file. */
+    private function detailSheet(string $from, string $to, string $range): ReportSheet
     {
-        $data = $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date|after_or_equal:from']);
-        $from = (string) ($data['from'] ?? date('Y-m-01'));
-        $to = (string) ($data['to'] ?? BusinessDate::for());
-        $user = $request->user();
-        $stamp = CarbonImmutable::now('Asia/Jakarta')->format('YmdHis');
-        $reportName = "Sales Recapitulation Detail Report - {$stamp}";
-        $outlet = (string) Outlet::query()->whereKey(app(OutletContext::class)->id())->value('name');
-        $path = tempnam(sys_get_temp_dir(), 'detail');
+        $data = app(SalesDetailReport::class)->build($from, $to);
+        $rows = array_map(fn (array $line) => array_map(fn ($v) => $v instanceof CarbonImmutable ? $v->format('Y-m-d H:i:s') : $v, $line), $data['rows']);
+        $heads = SalesDetailReport::HEADERS;
+        $totals = array_fill(0, count($heads), '');
+        $totals[0] = 'Total';
+        foreach ($heads as $i => $head) {
+            if (in_array($head, ['Qty', 'Subtotal', 'Discount', 'Service Charge', 'Tax', 'Total', 'Nett Sales', 'DPP', 'Bill Discount', 'Total After Bill Discount'], true)) {
+                $totals[$i] = (int) array_sum(array_column($rows, $i));
+            }
+        }
 
-        (new SalesDetailWorkbook)->write($report->build($from, $to), $outlet, $from, $to, (string) $user?->name, $reportName, $path);
-
-        return response()->download($path, "Sales Recapitulation Detail Report_{$stamp}.xlsx", ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
+        return new ReportSheet('Detail per item', "Periode {$range}", $heads, $rows, $totals);
     }
 
     private function transactionSheet(string $from, string $to, string $range): ReportSheet

@@ -112,13 +112,6 @@ export default function SalesReport({
                             </Button>
                             <Button asChild variant="outline" className="h-11">
                                 <a
-                                    href={`/admin/reports/detail-export?from=${filters.from}&to=${filters.to}`}
-                                >
-                                    Sales Recapitulation Detail (Excel)
-                                </a>
-                            </Button>
-                            <Button asChild variant="outline" className="h-11">
-                                <a
                                     href={`/admin/reports/export?${qs({ format: 'pdf' })}`}
                                 >
                                     Sales Recapitulation (PDF)

@@ -411,7 +411,6 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::get('reports/sales', [ReportController::class, 'sales'])->name('reports.sales');
             Route::get('reports/adjustments', [ReportController::class, 'adjustments'])->name('reports.adjustments');
             Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
-            Route::get('reports/detail-export', [ReportController::class, 'detailExport'])->name('reports.detail-export');
         });
 
         Route::middleware('permission:manage-shifts-any')->group(function () {

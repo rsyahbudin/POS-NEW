@@ -48,11 +48,27 @@ class ReportController extends Controller
             'filters' => ['from' => $f, 'to' => $t],
             'overview' => $this->reports->overview($f, $t),
             'hourly' => $single ? $this->reports->by('hour', $f, $t) : [],
-            'daily' => $this->reports->by('day', $single ? $from->subDays(13)->toDateString() : $f, $t),
+            'daily' => $this->dailySeries($single ? $from->subDays(13) : $from, $to),
             'topProducts' => $this->reports->by('product', $f, $t)->take(5)->values(),
             'methods' => $this->reports->by('method', $f, $t)->values(),
             'types' => $this->reports->by('type', $f, $t)->values(),
         ]);
+    }
+
+    /**
+     * Net Sales for every day of the range, days without sales as 0, so a bar chart shows the real shape.
+     *
+     * @return list<array{label: string, display: string, net_sales: int}>
+     */
+    private function dailySeries(CarbonImmutable $from, CarbonImmutable $to): array
+    {
+        $sold = $this->reports->by('day', $from->toDateString(), $to->toDateString())->keyBy('label');
+        $series = [];
+        for ($d = $from; $d <= $to; $d = $d->addDay()) {
+            $series[] = ['label' => $d->toDateString(), 'display' => $d->translatedFormat('j M'), 'net_sales' => (int) ($sold[$d->toDateString()]->net_sales ?? 0)];
+        }
+
+        return $series;
     }
 
     public function sales(Request $request): Response

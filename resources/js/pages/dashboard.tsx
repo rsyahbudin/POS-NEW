@@ -1,11 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 import { TrendingDown, TrendingUp } from 'lucide-react';
-import {
-    BarList,
-    ChartCard,
-    ColumnChart,
-    LineChart,
-} from '@/components/pos/charts';
+import { BarList, ChartCard, ColumnChart } from '@/components/pos/charts';
 import { Field, PageHeader, ResponsiveTable, Stat } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +14,7 @@ type Row = {
     total: number;
     net_sales: number;
 };
+type Day = { label: string; display: string; net_sales: number };
 type Sum = {
     orders: number;
     gross_sales: number;
@@ -41,7 +38,7 @@ type Props = {
         previous_to: string;
     };
     hourly: Row[];
-    daily: Row[];
+    daily: Day[];
     topProducts: Row[];
     methods: Row[];
     types: Row[];
@@ -96,7 +93,17 @@ export default function Dashboard({
     const single = filters.from === filters.to;
     const vs = `vs ${dateId(overview.previous_from)}${single ? '' : ` – ${dateId(overview.previous_to)}`}`;
     const go = (q: Record<string, string>) =>
-        router.get('/dashboard', q, { preserveState: true });
+        router.get('/dashboard', q, {
+            preserveState: true,
+            preserveScroll: true,
+        });
+    // The date fields follow the page: pressing a shortcut moves both of them, not only the end date.
+    const [range, setRange] = useState({ key: '', from: '', to: '' });
+    const key = `${filters.from}|${filters.to}`;
+    if (range.key !== key) {
+        setRange({ key, from: filters.from, to: filters.to });
+    }
+    const dirty = range.from !== filters.from || range.to !== filters.to;
 
     return (
         <>
@@ -120,56 +127,71 @@ export default function Dashboard({
                     }
                 />
 
-                <div className="flex flex-wrap items-end gap-2">
-                    {PERIODS.map(([key, label]) => (
-                        <Button
-                            key={key}
-                            variant={period === key ? 'default' : 'outline'}
-                            className="h-11"
-                            onClick={() => go({ period: key })}
-                        >
-                            {label}
-                        </Button>
-                    ))}
+                <section className="grid gap-3 rounded-xl border bg-card p-3 md:p-4">
+                    <div
+                        role="group"
+                        aria-label="Periode"
+                        className="-mx-1 flex [scrollbar-width:none] gap-2 overflow-x-auto px-1 [&::-webkit-scrollbar]:hidden"
+                    >
+                        {PERIODS.map(([k, label]) => (
+                            <Button
+                                key={k}
+                                variant={period === k ? 'default' : 'outline'}
+                                className="h-11 shrink-0 rounded-full px-4"
+                                aria-pressed={period === k}
+                                onClick={() => go({ period: k })}
+                            >
+                                {label}
+                            </Button>
+                        ))}
+                    </div>
                     <form
-                        className="flex flex-wrap items-end gap-2"
+                        className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
                         onSubmit={(e) => {
                             e.preventDefault();
-                            const d = new FormData(e.currentTarget);
                             go({
                                 period: 'custom',
-                                from: d.get('from') as string,
-                                to: d.get('to') as string,
+                                from: range.from,
+                                to: range.to,
                             });
                         }}
                     >
-                        <Field label="Dari">
+                        <Field label="Dari tanggal">
                             <Input
-                                className="h-11"
+                                className="h-11 w-full min-w-0"
                                 type="date"
-                                name="from"
-                                defaultValue={filters.from}
+                                value={range.from}
+                                max={range.to || undefined}
+                                onChange={(e) =>
+                                    setRange({ ...range, from: e.target.value })
+                                }
                             />
                         </Field>
-                        <Field label="Sampai">
+                        <Field label="Sampai tanggal">
                             <Input
-                                className="h-11"
+                                className="h-11 w-full min-w-0"
                                 type="date"
-                                name="to"
-                                defaultValue={filters.to}
+                                value={range.to}
+                                min={range.from || undefined}
+                                onChange={(e) =>
+                                    setRange({ ...range, to: e.target.value })
+                                }
                             />
                         </Field>
                         <Button
                             type="submit"
-                            variant={
-                                period === 'custom' ? 'default' : 'outline'
-                            }
                             className="h-11"
+                            variant={
+                                period === 'custom' || dirty
+                                    ? 'default'
+                                    : 'outline'
+                            }
+                            disabled={!range.from || !range.to}
                         >
-                            Tampilkan
+                            Terapkan
                         </Button>
                     </form>
-                </div>
+                </section>
 
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                     <Stat
@@ -240,10 +262,10 @@ export default function Dashboard({
                                 : 'Net Sales per hari'
                         }
                     >
-                        <LineChart
+                        <ColumnChart
                             title="Net Sales per hari"
                             data={daily.map((d) => ({
-                                label: d.label,
+                                label: d.display,
                                 value: d.net_sales,
                             }))}
                         />

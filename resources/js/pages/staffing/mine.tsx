@@ -1,6 +1,8 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { ChevronLeft, ChevronRight, ScanFace } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { FaceClock } from '@/components/pos/face-clock';
+import type { Action } from '@/components/pos/face-clock';
 import { Modal } from '@/components/pos/modal';
 import { MonthCalendar } from '@/components/pos/month-calendar';
 import { Field, PageHeader, Stat } from '@/components/pos/ui';
@@ -57,6 +59,12 @@ type Props = {
     reach_days: number;
     open_since: string | null;
     can: { kiosk: boolean };
+    clock: {
+        allowed: boolean;
+        enrolled: boolean;
+        geofence: boolean;
+        radius: number;
+    };
 };
 
 const shiftMonth = (m: string, by: number) => {
@@ -90,10 +98,12 @@ export default function Mine({
     reach_days,
     open_since,
     can,
+    clock,
 }: Props) {
     const [now, setNow] = useState(Date.now());
     const [picked, setPicked] = useState<string | null>(null);
     const errors = usePage().props.errors as Record<string, string>;
+    const [clocking, setClocking] = useState<Action | null>(null);
     const [ask, setAsk] = useState<{
         kind: 'missing_out' | 'both';
         work_date: string;
@@ -156,8 +166,29 @@ export default function Mine({
                     ) : (
                         <p className="text-xl font-semibold">Belum masuk</p>
                     )}
+                    {clock.allowed && clock.enrolled && (
+                        <Button
+                            className="mx-auto mt-3 h-14 w-full max-w-xs text-lg"
+                            variant={open_since ? 'outline' : 'default'}
+                            onClick={() =>
+                                setClocking(open_since ? 'out' : 'in')
+                            }
+                        >
+                            {open_since ? 'Absen Pulang' : 'Absen Masuk'}
+                        </Button>
+                    )}
+                    {clock.allowed && !clock.enrolled && (
+                        <p className="mt-2 text-sm text-amber-700 dark:text-amber-400">
+                            Wajah Anda belum terdaftar. Minta manager
+                            mendaftarkannya, lalu tombol absen muncul di sini.
+                        </p>
+                    )}
                     <p className="text-xs text-muted-foreground">
-                        Absen masuk dan pulang lewat layar absen di outlet.
+                        Absen memakai akun yang sedang login ({name}). Kamera
+                        memeriksa bahwa wajahnya benar milik akun ini.
+                        {clock.geofence
+                            ? ` Harus berada dalam ${clock.radius} m dari kafe.`
+                            : ''}
                     </p>
                 </section>
 
@@ -443,6 +474,24 @@ export default function Mine({
                     </span>
                 </div>
             </div>
+
+            {clocking && (
+                <div className="fixed inset-0 z-50 overflow-y-auto bg-background p-4">
+                    <div className="mx-auto max-w-xl">
+                        <FaceClock
+                            action={clocking}
+                            title={`Absen ${clocking === 'in' ? 'Masuk' : 'Pulang'} · ${name}`}
+                            scanUrl="/attendance/me/scan"
+                            reasonUrl="/attendance/me/reason"
+                            geofence={clock.geofence}
+                            onDone={() => {
+                                setClocking(null);
+                                router.reload();
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
 
             {ask && (
                 <Modal

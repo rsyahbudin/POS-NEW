@@ -19,6 +19,7 @@ function staffingOn(): void
 {
     setting('schedule.enabled', true);
     setting('attendance.enabled', true);
+    setting('attendance.shared_kiosk', true);
 }
 
 it('has a MOD role that can plan the schedule, approve longshift and cover any station', function () {

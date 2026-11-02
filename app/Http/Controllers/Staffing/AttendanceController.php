@@ -35,6 +35,7 @@ class AttendanceController extends Controller
 
     public function kiosk(): Response
     {
+        $this->assertKioskOn();
         $id = $this->outlet->id();
 
         return Inertia::render('staffing/kiosk', [
@@ -47,30 +48,59 @@ class AttendanceController extends Controller
         ]);
     }
 
+    /** The shared kiosk: the person picks their name, then the camera checks the face is theirs. */
     public function scan(Request $request): JsonResponse
     {
+        $this->assertKioskOn();
+        $request->validate(['user_id' => 'required|integer']);
+
+        return $this->handleScan($request, (int) $request->input('user_id'));
+    }
+
+    /** The person is signed in: the account is who they are, nobody picks a name. */
+    public function meScan(Request $request): JsonResponse
+    {
+        return $this->handleScan($request, $this->actor($request)->id);
+    }
+
+    private function handleScan(Request $request, int $userId): JsonResponse
+    {
         $data = $request->validate([
-            'user_id' => 'required|integer', 'action' => 'required|in:in,out', 'descriptor' => 'required|array|size:128', 'descriptor.*' => 'required|numeric',
+            'action' => 'required|in:in,out', 'descriptor' => 'required|array|size:128', 'descriptor.*' => 'required|numeric',
             'lat' => 'nullable|numeric|between:-90,90', 'lng' => 'nullable|numeric|between:-180,180', 'accuracy' => 'nullable|numeric|min:0',
         ]);
         $lat = isset($data['lat']) ? (float) $data['lat'] : null;
         $lng = isset($data['lng']) ? (float) $data['lng'] : null;
-        // Where the kiosk is comes first: a scan from outside the radius never reaches the face match.
+        // Where the device is comes first: a scan from outside the radius never reaches the face match.
         $place = $this->geo->check($this->outlet->id(), $lat, $lng, isset($data['accuracy']) ? (float) $data['accuracy'] : null);
         if (! $place['ok']) {
             return response()->json(['status' => $place['reason'], 'distance' => $place['distance'], 'radius' => $this->geo->radius()]);
         }
-        $result = $this->service->scan($this->outlet->id(), (int) $data['user_id'], array_values(array_map('floatval', $data['descriptor'])), $data['action'], null, ['lat' => $lat, 'lng' => $lng, 'distance' => $place['distance']]);
+        $result = $this->service->scan($this->outlet->id(), $userId, array_values(array_map('floatval', $data['descriptor'])), $data['action'], null, ['lat' => $lat, 'lng' => $lng, 'distance' => $place['distance']]);
 
         return $this->present($result);
+    }
+
+    private function assertKioskOn(): void
+    {
+        abort_unless((bool) $this->settings->get('attendance.shared_kiosk', false), 404);
     }
 
     /** The reason for a clock-in or clock-out that did not fit the schedule; the face was checked a moment ago. */
     public function reason(Request $request): JsonResponse
     {
+        $this->assertKioskOn();
         $data = $request->validate(['ticket' => 'required|string|max:80', 'reason' => 'required|string|min:5|max:200']);
 
         return $this->present($this->service->confirm($this->outlet->id(), $data['ticket'], $data['reason']));
+    }
+
+    /** The reason for the signed-in person's own clock-in or clock-out; the ticket is theirs only. */
+    public function meReason(Request $request): JsonResponse
+    {
+        $data = $request->validate(['ticket' => 'required|string|max:80', 'reason' => 'required|string|min:5|max:200']);
+
+        return $this->present($this->service->confirm($this->outlet->id(), $data['ticket'], $data['reason'], null, $this->actor($request)->id));
     }
 
     /**
@@ -104,6 +134,7 @@ class AttendanceController extends Controller
 
     public function undo(Request $request): JsonResponse
     {
+        $this->assertKioskOn();
         $data = $request->validate(['attendance_id' => 'required|integer', 'action' => 'required|in:in,out']);
 
         return response()->json(['undone' => $this->service->undo($this->outlet->id(), (int) $data['attendance_id'], $data['action'])]);
@@ -161,7 +192,14 @@ class AttendanceController extends Controller
             'forgot' => Attendance::query()->where('user_id', $user->id)->whereNull('clock_out_at')->where('clock_in_at', '<=', now()->subHours(AttendanceService::STALE_HOURS))->orderByDesc('work_date')->limit(5)->pluck('work_date')->map(fn ($d) => $d->toDateString())->all(),
             'reach_days' => AttendanceRequestController::REACH_DAYS,
             'open_since' => $open?->clock_in_at->toIso8601String(),
-            'can' => ['kiosk' => (bool) $user->can('use-attendance-kiosk')],
+            'can' => ['kiosk' => (bool) $user->can('use-attendance-kiosk') && (bool) $this->settings->get('attendance.shared_kiosk', false)],
+            // clocking with one's own account: the face must be the face of this account
+            'clock' => [
+                'allowed' => (bool) $user->can('clock-own-attendance'),
+                'enrolled' => FaceTemplate::query()->where('user_id', $user->id)->exists(),
+                'geofence' => $this->geo->enabled(),
+                'radius' => $this->geo->radius(),
+            ],
         ]);
     }
 

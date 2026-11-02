@@ -165,6 +165,10 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::post('requests', [AttendanceRequestController::class, 'store'])->middleware(['permission:view-own-attendance', 'throttle:20,1'])->name('requests.store');
         Route::post('requests/{attendanceRequest}/decide', [AttendanceRequestController::class, 'decide'])->middleware('permission:approve-attendance')->name('requests.decide');
         Route::post('records/{attendance}/review', [AttendanceRequestController::class, 'review'])->middleware('permission:approve-attendance')->name('records.review');
+        Route::middleware('permission:clock-own-attendance')->group(function () {
+            Route::post('me/scan', [AttendanceController::class, 'meScan'])->middleware('throttle:60,1')->name('me.scan');
+            Route::post('me/reason', [AttendanceController::class, 'meReason'])->middleware('throttle:60,1')->name('me.reason');
+        });
         Route::get('mine', [AttendanceController::class, 'mine'])->middleware('permission:view-own-attendance|use-attendance-kiosk')->name('mine');
         Route::middleware('permission:manage-attendance')->group(function () {
             Route::get('/', [AttendanceController::class, 'index'])->name('index');

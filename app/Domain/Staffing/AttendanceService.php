@@ -106,11 +106,11 @@ class AttendanceService
      *
      * @return array{status: 'expired'}|array<string, mixed>
      */
-    public function confirm(int $outletId, string $ticket, string $reason, ?CarbonInterface $now = null): array
+    public function confirm(int $outletId, string $ticket, string $reason, ?CarbonInterface $now = null, ?int $onlyUser = null): array
     {
         $now ??= now();
         $data = Cache::pull("attendance.ticket.{$ticket}");
-        if (! is_array($data) || ($data['outlet'] ?? null) !== $outletId) {
+        if (! is_array($data) || ($data['outlet'] ?? null) !== $outletId || ($onlyUser !== null && (int) $data['user'] !== $onlyUser)) {
             return ['status' => 'expired'];
         }
         $user = User::query()->where('outlet_id', $outletId)->where('is_active', true)->whereKey((int) $data['user'])->first();

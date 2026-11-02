@@ -8,10 +8,13 @@ use App\Domain\Staffing\Models\LongshiftApproval;
 use App\Domain\Staffing\Models\WorkSchedule;
 use App\Domain\Staffing\Models\WorkShiftType;
 use App\Models\User;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 function reasonSetup(bool $schedule = true): array
 {
     setting('attendance.enabled', true);
+    setting('attendance.shared_kiosk', true);
     $waiter = userWithRole('waiter');
     foreach ([0.0, 0.2, 0.4] as $n) {
         FaceTemplate::create(['outlet_id' => $waiter->outlet_id, 'user_id' => $waiter->id, 'descriptor' => face(3, $n), 'consented_at' => now()]);
@@ -219,4 +222,62 @@ it('tells a person who left a record open since yesterday, so they can ask for t
     Attendance::create(['outlet_id' => $waiter->outlet_id, 'user_id' => $waiter->id, 'work_date' => $old, 'clock_in_at' => "{$old} 09:00", 'method_in' => 'face']);
 
     $this->actingAs($waiter)->get('/attendance/mine')->assertInertia(fn ($p) => $p->where('forgot', [$old]));
+});
+
+it('clocks the signed-in account by its own face, with no name to pick: another face books nobody', function () {
+    setting('attendance.enabled', true);
+    $anto = userWithRole('cashier');
+    $budi = userWithRole('waiter');
+    foreach ([[$anto, 5], [$budi, 3]] as [$u, $seed]) {
+        foreach ([0.0, 0.2, 0.4] as $n) {
+            FaceTemplate::create(['outlet_id' => $u->outlet_id, 'user_id' => $u->id, 'descriptor' => face($seed, $n), 'consented_at' => now()]);
+        }
+    }
+    $mine = fn (User $who, array $face, array $extra = []) => test()->actingAs($who)->postJson('/attendance/me/scan', ['action' => 'in', 'descriptor' => $face] + $extra)->assertOk()->json();
+
+    // Anto is signed in and shows Budi's face; even claiming to be Budi in the request changes nothing
+    expect($mine($anto, face(3))['status'])->toBe('mismatch');
+    expect($mine($anto, face(3), ['user_id' => $budi->id])['status'])->toBe('mismatch');
+    expect(Attendance::query()->count())->toBe(0);
+
+    // Anto's own face works (no schedule today: the kiosk asks why, and the record is Anto's)
+    $this->travelTo(now()->addMinutes(11));
+    $r = $mine($anto, face(5, 0.1));
+    expect($r['status'])->toBe('need_reason');
+    $this->actingAs($anto)->postJson('/attendance/me/reason', ['ticket' => $r['ticket'], 'reason' => 'Menggantikan teman'])->assertJsonPath('status', 'in');
+    expect(Attendance::query()->pluck('user_id')->all())->toBe([$anto->id]);
+
+    // a ticket made for Anto is no use to Budi
+    $this->travelTo(now()->addMinutes(2));
+    $second = $this->actingAs($budi)->postJson('/attendance/me/scan', ['action' => 'in', 'descriptor' => face(3)])->json();
+    $this->actingAs($anto)->postJson('/attendance/me/reason', ['ticket' => $second['ticket'], 'reason' => 'Mencoba pakai tiket orang'])->assertJsonPath('status', 'expired');
+    expect(Attendance::query()->where('user_id', $budi->id)->count())->toBe(0);
+});
+
+it('needs the permission to clock with an account, and keeps the shared kiosk shut unless it is switched on', function () {
+    setting('attendance.enabled', true);
+    $waiter = userWithRole('waiter');
+    $body = ['action' => 'in', 'descriptor' => face(3)];
+
+    $this->postJson('/attendance/me/scan', $body)->assertUnauthorized();
+    Role::findByName('waiter')->revokePermissionTo('clock-own-attendance');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+    $this->actingAs(userWithRole('waiter')->fresh())->postJson('/attendance/me/scan', $body)->assertForbidden();
+
+    // the shared kiosk (pick a name) is off until the owner turns it on
+    $manager = userWithRole('manager');
+    $this->actingAs($manager)->get('/attendance/kiosk')->assertNotFound();
+    $this->actingAs($manager)->postJson('/attendance/kiosk/scan', $body + ['user_id' => $waiter->id])->assertNotFound();
+    setting('attendance.shared_kiosk', true);
+    $this->actingAs($manager)->get('/attendance/kiosk')->assertOk();
+});
+
+it('shows the Absen button only to someone with a face on file, and hides the kiosk button unless the shared kiosk is on', function () {
+    setting('attendance.enabled', true);
+    $cashier = userWithRole('cashier');
+
+    $this->actingAs($cashier)->get('/attendance/mine')->assertInertia(fn ($p) => $p->where('clock.allowed', true)->where('clock.enrolled', false)->where('can.kiosk', false));
+    FaceTemplate::create(['outlet_id' => $cashier->outlet_id, 'user_id' => $cashier->id, 'descriptor' => face(5), 'consented_at' => now()]);
+    setting('attendance.shared_kiosk', true);
+    $this->actingAs($cashier)->get('/attendance/mine')->assertInertia(fn ($p) => $p->where('clock.enrolled', true)->where('can.kiosk', true));
 });

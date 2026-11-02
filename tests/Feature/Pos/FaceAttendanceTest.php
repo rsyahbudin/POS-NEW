@@ -15,6 +15,7 @@ use Spatie\Permission\PermissionRegistrar;
 function attendanceOn(): void
 {
     setting('attendance.enabled', true);
+    setting('attendance.shared_kiosk', true);
 }
 
 it('stays closed until attendance is switched on', function () {

@@ -30,7 +30,7 @@ class PrintStationController extends Controller
 
         return Inertia::render('print-station', [
             'outletId' => $this->outlet->id(),
-            'printers' => Printer::query()->where('outlet_id', $this->outlet->id())->where('is_active', true)->orderBy('id')->get()->map(fn (Printer $p) => [
+            'printers' => Printer::query()->where('outlet_id', $this->outlet->id())->where('is_active', true)->whereNull('host')->orderBy('id')->get()->map(fn (Printer $p) => [
                 'id' => $p->id, 'name' => $p->name, 'kind' => $p->kind, 'paper_width' => $p->paper_width,
                 'station' => $p->station_id ? Station::query()->whereKey($p->station_id)->value('name') : null,
             ])->all(),
@@ -41,7 +41,8 @@ class PrintStationController extends Controller
     {
         $this->authorizeStation($request);
         $ids = array_values(array_filter(array_map('intval', explode(',', (string) $request->query('printers', '')))));
-        $base = PrintJob::query()->where('outlet_id', $this->outlet->id())->whereIn('printer_id', $ids);
+        // network printers belong to the print bridge, never to a device
+        $base = PrintJob::query()->where('outlet_id', $this->outlet->id())->whereIn('printer_id', Printer::query()->whereIn('id', $ids)->whereNull('host')->pluck('id'));
 
         return response()->json([
             'pending' => (clone $base)->where('status', 'pending')->orderBy('id')->limit(20)->get()

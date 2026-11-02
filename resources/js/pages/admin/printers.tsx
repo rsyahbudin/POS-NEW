@@ -1,5 +1,5 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { Plus, Printer } from 'lucide-react';
+import { Copy, Plus, Printer } from 'lucide-react';
 import { useState } from 'react';
 import { Modal } from '@/components/pos/modal';
 import {
@@ -9,6 +9,8 @@ import {
     Select,
 } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
+import { api } from '@/lib/api';
+import { dateId, timeId } from '@/lib/format';
 import { Input } from '@/components/ui/input';
 
 type PrinterRow = {
@@ -19,6 +21,22 @@ type PrinterRow = {
     paper_width: number;
     copies: number;
     is_active: boolean;
+    host: string | null;
+    port: number;
+};
+type Bridge = {
+    has_token: boolean;
+    online: boolean;
+    last_seen: string | null;
+    url: string;
+};
+type Failed = {
+    id: number;
+    printer: string | null;
+    kind: string;
+    reference: string | null;
+    error: string | null;
+    at: string | null;
 };
 type Form = Omit<PrinterRow, 'id'> & { id?: number };
 
@@ -29,21 +47,47 @@ const empty: Form = {
     paper_width: 58,
     copies: 1,
     is_active: true,
+    host: null,
+    port: 9100,
 };
 
 export default function PrintersPage({
     printers,
     stations,
     kinds,
+    bridge,
+    failed,
 }: {
     printers: PrinterRow[];
     stations: { id: number; name: string }[];
     kinds: { key: string; label: string }[];
+    bridge: Bridge;
+    failed: Failed[];
 }) {
+    const [token, setToken] = useState<string | null>(null);
     const [form, setForm] = useState<Form | null>(null);
     const label = (k: string) => kinds.find((x) => x.key === k)?.label ?? k;
     const stationName = (id: number | null) =>
         id ? (stations.find((s) => s.id === id)?.name ?? '') : '';
+
+    const makeToken = async () => {
+        if (
+            bridge.has_token &&
+            !confirm(
+                'Token lama berhenti berlaku. Jembatan cetak yang sedang jalan harus diberi token baru. Lanjutkan?',
+            )
+        ) {
+            return;
+        }
+
+        const res = await api<{ token: string }>(
+            'POST',
+            '/admin/printers/bridge-token',
+        );
+        setToken(res.token);
+        router.reload({ only: ['bridge'] });
+    };
+    const command = `node print-bridge.mjs --url ${bridge.url} --token ${token ?? 'TOKEN'}`;
 
     const save = () => {
         if (!form) {
@@ -85,7 +129,11 @@ export default function PrintersPage({
                     Belum ada printer di sini = struk dicetak langsung dari
                     perangkat kasir (pengaturan printer di layar kasir). Setelah
                     ada printer, pesanan, bill, dan struk masuk antrean cetak
-                    dan dicetak oleh perangkat yang membuka Stasiun Cetak.
+                    dan dicetak oleh perangkat yang membuka Stasiun Cetak, atau
+                    oleh jembatan cetak bila printernya punya alamat IP. Printer
+                    Bluetooth waiter jangan didaftarkan di sini: pairing di
+                    tablet masing-masing agar pre-bill keluar dari printer
+                    waiter yang menekannya.
                 </p>
 
                 <ResponsiveTable
@@ -93,12 +141,13 @@ export default function PrintersPage({
                         'Printer',
                         'Mencetak',
                         'Station',
+                        'Koneksi',
                         'Kertas',
                         'Salinan',
                         'Status',
                         'Aksi',
                     ]}
-                    numeric={[4]}
+                    numeric={[5]}
                     empty="Belum ada printer."
                     rows={printers.map((p) => [
                         <span key={p.id} className="font-medium">
@@ -108,6 +157,7 @@ export default function PrintersPage({
                         p.kind === 'ticket'
                             ? stationName(p.station_id) || 'Semua station'
                             : '-',
+                        p.host ? `LAN ${p.host}:${p.port}` : 'Perangkat',
                         `${p.paper_width} mm`,
                         `${p.copies}×`,
                         p.is_active ? (
@@ -134,6 +184,114 @@ export default function PrintersPage({
                         </span>,
                     ])}
                 />
+
+                <section className="grid gap-3 rounded-xl border bg-card p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h2 className="font-semibold">
+                                Jembatan cetak (printer LAN)
+                            </h2>
+                            <p className="text-sm text-muted-foreground">
+                                iPad dan tablet Android tidak bisa mencetak ke
+                                printer LAN. Jalankan jembatan di satu perangkat
+                                yang selalu menyala di cafe (mini PC, Raspberry
+                                Pi, laptop); ia mengambil antrean dari server
+                                dan mengirimnya ke printer lewat IP.
+                            </p>
+                        </div>
+                        <span
+                            className={`rounded-full border px-3 py-1 text-sm font-medium ${bridge.online ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'}`}
+                        >
+                            {bridge.online
+                                ? 'Terhubung'
+                                : bridge.last_seen
+                                  ? `Terakhir aktif ${dateId(bridge.last_seen)} ${timeId(bridge.last_seen)}`
+                                  : bridge.has_token
+                                    ? 'Belum pernah terhubung'
+                                    : 'Belum disiapkan'}
+                        </span>
+                    </div>
+                    <ol className="grid list-decimal gap-1 pl-5 text-sm">
+                        <li>
+                            Pasang Node.js 18 atau lebih baru di perangkat itu,
+                            lalu unduh{' '}
+                            <a
+                                className="underline"
+                                href="/print-bridge/print-bridge.mjs"
+                                download
+                            >
+                                print-bridge.mjs
+                            </a>
+                            .
+                        </li>
+                        <li>
+                            Beri IP tetap ke tiap printer LAN, tambahkan di
+                            tabel di atas dengan alamat IP dan port 9100.
+                        </li>
+                        <li>Buat token, lalu jalankan perintah di bawah.</li>
+                    </ol>
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            className="h-11"
+                            onClick={() => void makeToken()}
+                        >
+                            {bridge.has_token
+                                ? 'Buat token baru'
+                                : 'Buat token'}
+                        </Button>
+                    </div>
+                    {token && (
+                        <div className="grid gap-2 rounded-lg bg-muted p-3">
+                            <p className="text-xs text-muted-foreground">
+                                Token hanya tampil sekali. Salin sekarang.
+                            </p>
+                            <code className="text-sm break-all">{command}</code>
+                            <Button
+                                variant="outline"
+                                className="h-10 w-fit"
+                                onClick={() =>
+                                    void navigator.clipboard.writeText(command)
+                                }
+                            >
+                                <Copy /> Salin perintah
+                            </Button>
+                        </div>
+                    )}
+                </section>
+
+                {failed.length > 0 && (
+                    <section className="grid gap-2">
+                        <h2 className="font-semibold">
+                            Gagal dicetak lewat jembatan
+                        </h2>
+                        <ResponsiveTable
+                            headers={['Printer', 'Cetakan', 'Sebab', 'Aksi']}
+                            numeric={[]}
+                            empty=""
+                            rows={failed.map((j) => [
+                                j.printer ?? '-',
+                                `${j.kind} ${j.reference ?? ''}`,
+                                j.error ?? '-',
+                                <span key={j.id} className="flex justify-end">
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-9"
+                                        onClick={() =>
+                                            router.post(
+                                                `/admin/printers/jobs/${j.id}/retry`,
+                                                {},
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        Cetak ulang
+                                    </Button>
+                                </span>,
+                            ])}
+                        />
+                    </section>
+                )}
             </div>
 
             {form && (
@@ -223,6 +381,40 @@ export default function PrintersPage({
                                                 Number(e.target.value) || 1,
                                             ),
                                         ),
+                                    })
+                                }
+                            />
+                        </Field>
+                    </div>
+                    <div className="grid grid-cols-[1fr_6rem] gap-2">
+                        <Field
+                            label="Alamat IP printer LAN (opsional)"
+                            hint="Isi untuk printer jaringan yang dilayani jembatan cetak. Kosongkan untuk printer yang tersambung ke perangkat (Bluetooth, USB, QZ Tray)."
+                        >
+                            <Input
+                                className="h-11"
+                                inputMode="decimal"
+                                value={form.host ?? ''}
+                                placeholder="192.168.1.50"
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        host: e.target.value.trim() || null,
+                                    })
+                                }
+                            />
+                        </Field>
+                        <Field label="Port">
+                            <Input
+                                className="h-11"
+                                type="number"
+                                min={1}
+                                max={65535}
+                                value={form.port}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        port: Number(e.target.value) || 9100,
                                     })
                                 }
                             />

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AuthenticatePrintBridge;
 use App\Http\Middleware\EnsureAttendanceEnabled;
 use App\Http\Middleware\EnsureKitchenEnabled;
 use App\Http\Middleware\EnsureScheduleEnabled;
@@ -31,9 +32,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'schedule' => EnsureScheduleEnabled::class,
             'attendance' => EnsureAttendanceEnabled::class,
             'staffing' => EnsureStaffingEnabled::class,
+            'print.bridge' => AuthenticatePrintBridge::class,
         ]);
 
-        $middleware->validateCsrfTokens(except: ['webhooks/*']);
+        $middleware->validateCsrfTokens(except: ['webhooks/*', 'bridge/*']);
 
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 

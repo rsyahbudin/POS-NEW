@@ -7,7 +7,7 @@ use Illuminate\Support\Carbon;
 
 /**
  * A physical printer, defined by what it prints: receipts, bills for the waiter, or kitchen/bar tickets
- * of one station. Which device it is connected to is decided on the print station page.
+ * of one station. A printer with a LAN address is served by the print bridge; any other one is connected to a device on the print station page.
  *
  * @property int $id
  * @property int $outlet_id
@@ -16,6 +16,8 @@ use Illuminate\Support\Carbon;
  * @property int|null $station_id
  * @property int $paper_width
  * @property int $copies
+ * @property string|null $host
+ * @property int $port
  * @property bool $is_active
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at

@@ -9,7 +9,8 @@
         "check": "vp check",
         "check:fix": "vp check --fix",
         "types:check": "tsc --noEmit",
-        "e2e": "playwright test"
+        "e2e": "playwright test",
+        "build:bridge": "node bridge/build.mjs"
     },
     "dependencies": {
         "@inertiajs/react": "^3.0.0",

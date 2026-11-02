@@ -32,6 +32,7 @@ use App\Http\Controllers\Pos\QzTrayController;
 use App\Http\Controllers\Pos\ServiceCallController;
 use App\Http\Controllers\Pos\SoldOutController;
 use App\Http\Controllers\Pos\TodayController;
+use App\Http\Controllers\Print\PrintBridgeController;
 use App\Http\Controllers\Print\PrintStationController;
 use App\Http\Controllers\Qr\QrMenuController;
 use App\Http\Controllers\Qr\QrPaymentController;
@@ -61,6 +62,10 @@ Route::prefix('m/{token}')->middleware('throttle:qr')->group(function () {
     Route::post('pay', [QrPaymentController::class, 'start'])->middleware('throttle:qr-submit')->name('qr.pay');
     Route::get('pay/{publicId}', [QrPaymentController::class, 'status'])->name('qr.pay.status');
     Route::post('pay/{publicId}/simulate', [QrPaymentController::class, 'simulate'])->middleware('throttle:qr-submit')->name('qr.pay.simulate');
+});
+Route::prefix('bridge/print')->name('bridge.print.')->middleware(['print.bridge', 'throttle:120,1'])->group(function () {
+    Route::get('jobs', [PrintBridgeController::class, 'jobs'])->name('jobs');
+    Route::post('jobs/{job}/done', [PrintBridgeController::class, 'done'])->name('done');
 });
 Route::post('webhooks/qris/{provider}', QrisWebhookController::class)->middleware('throttle:120,1')->name('webhooks.qris');
 Route::get('r/{publicId}', [ReceiptController::class, 'show'])->middleware('throttle:60,1')->name('receipt.show');
@@ -347,6 +352,8 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::post('printers', [PrinterController::class, 'store'])->name('printers.store');
             Route::put('printers/{printer}', [PrinterController::class, 'update'])->name('printers.update');
             Route::delete('printers/{printer}', [PrinterController::class, 'destroy'])->name('printers.destroy');
+            Route::post('printers/jobs/{job}/retry', [PrinterController::class, 'retryJob'])->name('printers.jobs.retry');
+            Route::post('printers/bridge-token', [PrinterController::class, 'bridgeToken'])->name('printers.bridge-token');
         });
 
         Route::middleware('permission:manage-discount-presets')->group(function () {

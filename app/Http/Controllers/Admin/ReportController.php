@@ -5,10 +5,14 @@ namespace App\Http\Controllers\Admin;
 use App\Domain\Notification\ReportDelivery;
 use App\Domain\Reporting\KitchenReports;
 use App\Domain\Reporting\MarginReports;
+use App\Domain\Reporting\SalesDetailReport;
 use App\Domain\Reporting\SalesReports;
 use App\Domain\Reporting\WasteReports;
+use App\Domain\Settings\Models\Outlet;
+use App\Domain\Settings\OutletContext;
 use App\Domain\Settings\SettingsRepository;
 use App\Exports\ReportSheet;
+use App\Exports\SalesDetailWorkbook;
 use App\Http\Controllers\Controller;
 use App\Support\BusinessDate;
 use App\Support\ReportFile;
@@ -227,6 +231,23 @@ class ReportController extends Controller
         return new ReportSheet("Per {$label}", "Periode {$range}", [$label, $qtyDim ? 'Qty' : 'Jumlah transaksi', 'Total (Rp)', '% dari total'],
             $rows->map(fn ($r) => [$r->display, $r->orders, $r->total, $net > 0 ? round($r->total / $net * 100, 1) : 0])->all(),
             ['Total', $orders, $net, $net > 0 ? 100 : 0]);
+    }
+
+    /** One row per sold item in the layout of the previous POS ("Sales Recapitulation Detail Report"), for any date range. */
+    public function detailExport(Request $request, SalesDetailReport $report): \Symfony\Component\HttpFoundation\Response
+    {
+        $data = $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date|after_or_equal:from']);
+        $from = (string) ($data['from'] ?? date('Y-m-01'));
+        $to = (string) ($data['to'] ?? BusinessDate::for());
+        $user = $request->user();
+        $stamp = CarbonImmutable::now('Asia/Jakarta')->format('YmdHis');
+        $reportName = "Sales Recapitulation Detail Report - {$stamp}";
+        $outlet = (string) Outlet::query()->whereKey(app(OutletContext::class)->id())->value('name');
+        $path = tempnam(sys_get_temp_dir(), 'detail');
+
+        (new SalesDetailWorkbook)->write($report->build($from, $to), $outlet, $from, $to, (string) $user?->name, $reportName, $path);
+
+        return response()->download($path, "Sales Recapitulation Detail Report_{$stamp}.xlsx", ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
     }
 
     private function transactionSheet(string $from, string $to, string $range): ReportSheet

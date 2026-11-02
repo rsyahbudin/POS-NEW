@@ -229,11 +229,10 @@ class ReportController extends Controller
             return ReportFile::download($format, "Sales Recapitulation {$label} {$from} {$to}", [$this->salesSheet($dimension, $from, $to, $range), $this->summarySheet($from, $to, $range)], $title);
         }
 
-        $sheets = [$this->summarySheet($from, $to, $range)];
+        $sheets = [$this->summarySheet($from, $to, $range), $this->detailSheet($from, $to, $range)];
         foreach (array_keys(self::DIMENSION_LABELS) as $dim) {
             $sheets[] = $this->salesSheet($dim, $from, $to, $range);
         }
-        $sheets[] = $this->detailSheet($from, $to, $range);
         $sheets[] = $this->transactionSheet($from, $to, $range);
         array_push($sheets, ...$this->adjustmentSheets($from, $to, "Periode {$range}"));
         $sheets[] = $this->expenseSheet($from, $to, $range);
@@ -276,7 +275,7 @@ class ReportController extends Controller
             }
         }
 
-        return new ReportSheet('Detail per item', "Periode {$range}", $heads, $rows, $totals);
+        return new ReportSheet('Report', "Periode {$range}", $heads, $rows, $totals);
     }
 
     private function transactionSheet(string $from, string $to, string $range): ReportSheet

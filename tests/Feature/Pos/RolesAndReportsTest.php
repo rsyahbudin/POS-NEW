@@ -92,7 +92,7 @@ it('builds styled Excel files with real numbers, totals and a frozen header', fu
     $book = IOFactory::load($path);
     $sheet = $book->getSheetByName('Per Produk');
 
-    expect($book->getSheetNames())->toBe(['Ringkasan', 'Per Hari', 'Per Jam', 'Per Produk', 'Per Kategori', 'Per Metode bayar', 'Per Pencatat order', 'Per Penerima pembayaran', 'Per Tipe order', 'Detail per item', 'Transaksi', 'Diskon', 'Pembatalan', 'Refund', 'Komplimen', 'Pengeluaran kas'])   // one workbook with everything, the summary first
+    expect($book->getSheetNames())->toBe(['Ringkasan', 'Report', 'Per Hari', 'Per Jam', 'Per Produk', 'Per Kategori', 'Per Metode bayar', 'Per Pencatat order', 'Per Penerima pembayaran', 'Per Tipe order', 'Transaksi', 'Diskon', 'Pembatalan', 'Refund', 'Komplimen', 'Pengeluaran kas'])   // one workbook with everything, the summary first
         ->and($sheet->getCell('A1')->getValue())->toBe('Per Produk')
         ->and($sheet->getCell('A2')->getValue())->toContain('Periode')
         ->and($sheet->getCell('A3')->getValue())->toStartWith('Dicetak')

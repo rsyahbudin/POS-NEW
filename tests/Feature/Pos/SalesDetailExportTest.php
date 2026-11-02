@@ -7,7 +7,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 function readDetail($response): array
 {
     $file = $response->baseResponse->getFile()->getPathname();
-    $sheet = IOFactory::load($file)->getSheetByName('Detail per item');
+    $sheet = IOFactory::load($file)->getSheetByName('Report');
 
     return ['sheet' => $sheet, 'rows' => $sheet->toArray(null, true, false, true)];
 }
@@ -22,7 +22,7 @@ it('puts one row per sold item in the Sales Recapitulation Excel, next to the su
     $r = $this->actingAs($manager)->get("/admin/reports/export?format=xlsx&from={$today}&to={$today}")->assertOk();
     expect($r->headers->get('content-disposition'))->toContain('sales-recapitulation');
     ['sheet' => $sheet, 'rows' => $rows] = readDetail($r);
-    expect(IOFactory::load($r->baseResponse->getFile()->getPathname())->getSheetNames())->toContain('Ringkasan', 'Detail per item');
+    expect(array_slice(IOFactory::load($r->baseResponse->getFile()->getPathname())->getSheetNames(), 0, 2))->toBe(['Ringkasan', 'Report']);
 
     expect(array_values(array_filter($rows[5])))->toBe(SalesDetailReport::HEADERS)->and(count(SalesDetailReport::HEADERS))->toBe(32);
 

@@ -83,9 +83,9 @@ class AttendanceController extends Controller
             return response()->json(['status' => $status]);
         }
         $user = $result['user'];
-        if (in_array($status, ['locked', 'mismatch', 'ambiguous', 'not_enrolled'], true)) {
-            // wrong face, locked, or nobody on file: nothing is booked, and nothing says whose face it looked like
-            return response()->json(['status' => $status, 'name' => $user->name, 'attempts_left' => $result['attempts_left'] ?? null]);
+        if (in_array($status, ['wait', 'mismatch', 'ambiguous', 'not_enrolled'], true)) {
+            // wrong face, too fast, or nobody on file: nothing is booked, and nothing says whose face it looked like
+            return response()->json(['status' => $status, 'name' => $user->name, 'retry_after' => $result['retry_after'] ?? null]);
         }
         if ($status === 'need_reason') {
             return response()->json(['status' => 'need_reason', 'name' => $user->name, 'flag' => $result['flag'], 'text' => $result['text'], 'ticket' => $result['ticket'] ?? null]);

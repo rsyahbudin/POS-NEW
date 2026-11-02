@@ -21,7 +21,7 @@ type Result = {
         | 'unknown'
         | 'need_reason'
         | 'expired'
-        | 'locked'
+        | 'wait'
         | 'mismatch'
         | 'ambiguous'
         | 'not_enrolled'
@@ -36,7 +36,7 @@ type Result = {
     attendance_id?: number;
     late?: number | null;
     stations?: string[];
-    attempts_left?: number | null;
+    retry_after?: number | null;
     flag?: string | null;
     text?: string;
     ticket?: string | null;
@@ -382,9 +382,6 @@ function Scanner({
                                 ada absen yang dicatat.
                             </p>
                             <p className="text-sm text-muted-foreground">
-                                {result.attempts_left
-                                    ? `Sisa percobaan: ${result.attempts_left}. `
-                                    : ''}
                                 Pastikan Anda memilih nama sendiri, hadap kamera
                                 lurus dengan cahaya cukup.
                             </p>
@@ -392,11 +389,16 @@ function Scanner({
                                 Coba lagi
                             </Button>
                         </>
-                    ) : result.status === 'locked' ? (
-                        <p className="text-lg">
-                            Terlalu banyak percobaan untuk {result.name}. Tunggu
-                            beberapa menit atau minta manager mengoreksi.
-                        </p>
+                    ) : result.status === 'wait' ? (
+                        <>
+                            <p className="text-lg">
+                                Terlalu cepat. Tunggu {result.retry_after ?? 10}{' '}
+                                detik lalu coba lagi.
+                            </p>
+                            <Button className="mx-auto h-11" onClick={retry}>
+                                Coba lagi
+                            </Button>
+                        </>
                     ) : result.status === 'not_enrolled' ? (
                         <p className="text-lg">
                             Wajah {result.name} belum terdaftar. Minta manager

@@ -110,33 +110,57 @@ it('refuses a face that is just as close to somebody else, so look-alikes cannot
     expect(Attendance::query()->count())->toBe(0);
 });
 
-it('stops trying for a person after five wrong faces, warns the managers from the third, and records each', function () {
+it('slows down after five wrong faces for a name but never locks the real person out, warns the managers from the third, and records each', function () {
     attendanceOn();
     $kiosk = userWithRole('manager');
     $budi = userWithRole('waiter');
     $siti = userWithRole('kitchen');
     enrolled($budi, 3);
     enrolled($siti, 5);
-    $scan = fn (array $face) => kioskScan($this, $kiosk, ['action' => 'in', 'user_id' => $budi->id, 'descriptor' => $face])->assertOk()->json();
+    $scan = fn (array $face) => $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'in', 'user_id' => $budi->id, 'descriptor' => $face])->assertOk()->json();
+    $this->travelTo(now()->setTime(9, 0));
 
-    expect($scan(face(5))['attempts_left'])->toBe(4);
+    // a prankster picks Budi's name and shows other faces
+    expect($scan(face(5))['status'])->toBe('mismatch');
     $scan(face(5));
     expect(AppNotification::query()->where('kind', 'attendance.face_rejected')->count())->toBe(0);
     $scan(face(5));
     $n = AppNotification::query()->where('kind', 'attendance.face_rejected')->get();
     expect($n)->toHaveCount(1)->and($n[0]->title)->toContain($budi->name)->and($n[0]->permissions)->toContain('manage-attendance');
     $scan(face(5));
-    expect($scan(face(5))['attempts_left'])->toBe(0);
+    $scan(face(5));
     expect(AppNotification::query()->where('kind', 'attendance.face_rejected')->count())->toBe(1);     // one alert a day, not one per try
     expect(Activity::query()->where('event', 'attendance.face_rejected')->count())->toBe(5);
 
-    // locked: even Budi's own face is not tried now
-    expect($scan(face(3))['status'])->toBe('locked');
+    // from now on one try every few seconds: trying again at once is told to wait, even with the right face, and nothing is written
+    $slow = $scan(face(3));
+    expect($slow['status'])->toBe('wait')->and($slow['retry_after'])->toBe(AttendanceService::SLOW_SECONDS);
     expect(Attendance::query()->count())->toBe(0);
 
-    // after the lock runs out the right face works again
-    $this->travelTo(now()->addMinutes(AttendanceService::LOCK_MINUTES + 1));
-    expect($scan(face(3))['status'])->toBe('in');
+    // Budi himself only waits a moment: no lock for minutes, his own face goes through
+    $this->travelTo(now()->addSeconds(AttendanceService::SLOW_SECONDS + 1));
+    $ok = $scan(face(3));
+    expect($ok['status'])->toBe('need_reason');                            // the face was accepted; Budi has no schedule today, so the kiosk asks why
+    $this->actingAs($kiosk)->postJson('/attendance/kiosk/reason', ['ticket' => $ok['ticket'], 'reason' => 'Menggantikan teman yang sakit'])->assertJsonPath('status', 'in');
+    expect(Attendance::query()->pluck('user_id')->all())->toBe([$budi->id]);
+});
+
+it('keeps a prankster slow: every wrong face after the fifth costs another wait', function () {
+    attendanceOn();
+    $kiosk = userWithRole('manager');
+    $budi = userWithRole('waiter');
+    enrolled($budi, 3);
+    enrolled(userWithRole('kitchen'), 5);
+    $scan = fn (array $face) => $this->actingAs($kiosk)->postJson('/attendance/kiosk/scan', ['action' => 'in', 'user_id' => $budi->id, 'descriptor' => $face])->assertOk()->json();
+
+    foreach (range(1, 5) as $i) {
+        $scan(face(5));
+    }
+    expect($scan(face(5))['status'])->toBe('wait');
+    $this->travelTo(now()->addSeconds(AttendanceService::SLOW_SECONDS + 1));
+    expect($scan(face(5))['status'])->toBe('mismatch');                    // allowed to try again, and wrong again
+    expect($scan(face(5))['status'])->toBe('wait');                        // and told to wait again at once
+    expect(Attendance::query()->count())->toBe(0);
 });
 
 it('lets the kiosk take back a scan for a short time only', function () {

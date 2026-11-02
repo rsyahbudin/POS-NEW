@@ -24,10 +24,16 @@ class AttendanceService
     /** An open record older than this was a forgotten clock-out: a new scan starts a new day instead of closing it. */
     public const STALE_HOURS = 18;
 
-    /** Wrong faces in a row for one person before the kiosk stops trying for them, and for how long. */
-    public const MAX_MISMATCHES = 5;
+    /**
+     * Wrong faces for one name before the kiosk slows down for it, and how long failures are remembered. Slowing down, not
+     * locking: anybody at the kiosk can pick anybody's name, so a lock would let a prankster keep a colleague out.
+     */
+    public const SLOW_AFTER = 5;
 
-    public const LOCK_MINUTES = 5;
+    public const WINDOW_MINUTES = 10;
+
+    /** Once slowed down, one try per this many seconds: the real person waits a moment, a prankster cannot keep trying. */
+    public const SLOW_SECONDS = 10;
 
     /** From this many wrong faces on, the managers are told. */
     public const ALERT_AFTER = 3;
@@ -44,7 +50,7 @@ class AttendanceService
      * @param  'in'|'out'  $action
      * @param  list<float>  $descriptor
      * @param  array{lat: float|null, lng: float|null, distance: int|null}|null  $geo  where the kiosk was, kept with the record
-     * @return array{status: 'unknown'}|array{status: 'locked'|'mismatch'|'ambiguous'|'not_enrolled', user: User, attempts_left?: int}|array{status: 'in'|'out'|'repeat'|'already_in'|'not_in', attendance: Attendance|null, user: User}
+     * @return array{status: 'unknown'}|array{status: 'wait', user: User, retry_after: int}|array{status: 'mismatch'|'ambiguous'|'not_enrolled', user: User}|array{status: 'in'|'out'|'repeat'|'already_in'|'not_in', attendance: Attendance|null, user: User}
      */
     public function scan(int $outletId, int $userId, array $descriptor, string $action, ?CarbonInterface $now = null, ?array $geo = null): array
     {
@@ -54,9 +60,13 @@ class AttendanceService
             return ['status' => 'unknown'];
         }
         $key = "attendance.face_fail.{$outletId}.{$userId}";
+        $lastKey = "attendance.face_last.{$outletId}.{$userId}";
         $fails = (int) Cache::get($key, 0);
-        if ($fails >= self::MAX_MISMATCHES) {
-            return ['status' => 'locked', 'user' => $user];
+        if ($fails >= self::SLOW_AFTER) {
+            $wait = self::SLOW_SECONDS - ($now->getTimestamp() - (int) Cache::get($lastKey, 0));
+            if ($wait > 0) {
+                return ['status' => 'wait', 'user' => $user, 'retry_after' => $wait];
+            }
         }
 
         $hit = $this->matcher->verify($outletId, $userId, $descriptor);
@@ -65,7 +75,8 @@ class AttendanceService
                 return ['status' => 'not_enrolled', 'user' => $user];
             }
             $fails++;
-            Cache::put($key, $fails, now()->addMinutes(self::LOCK_MINUTES));
+            Cache::put($key, $fails, now()->addMinutes(self::WINDOW_MINUTES));
+            Cache::put($lastKey, $now->getTimestamp(), now()->addMinutes(self::WINDOW_MINUTES));
             Audit::log('attendance.face_rejected', $user, ['user' => $user->name, 'action' => $action, 'reason' => $hit['reason'], 'distance' => $hit['distance'], 'attempt' => $fails]);
             if ($fails >= self::ALERT_AFTER) {
                 $this->notifier->notify(
@@ -74,9 +85,10 @@ class AttendanceService
                 );
             }
 
-            return ['status' => $hit['reason'] ?? 'mismatch', 'user' => $user, 'attempts_left' => max(0, self::MAX_MISMATCHES - $fails)];
+            return ['status' => $hit['reason'] ?? 'mismatch', 'user' => $user];
         }
         Cache::forget($key);
+        Cache::forget($lastKey);
 
         $r = $this->book($outletId, $user, $action, $now, $geo, $hit['distance'], null);
         if ($r['status'] === 'need_reason') {

@@ -12,11 +12,13 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $bundle_id
  * @property int $product_id
+ * @property int|null $variant_id
  * @property int $qty
  * @property int $sort
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Product $product
+ * @property-read ProductVariant|null $variant
  */
 class BundleItem extends Model
 {
@@ -31,5 +33,11 @@ class BundleItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class)->withTrashed();
+    }
+
+    /** @return BelongsTo<ProductVariant, $this> */
+    public function variant(): BelongsTo
+    {
+        return $this->belongsTo(ProductVariant::class);
     }
 }

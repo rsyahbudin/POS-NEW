@@ -45,7 +45,7 @@ class MenuController extends Controller
                 'modifier_group_ids' => $p->modifierGroups->pluck('id')->all(),
                 'printer_ids' => $p->printers->pluck('id')->all(),
                 'is_bundle' => $p->is_bundle,
-                'components' => $p->bundleItems->map(fn ($b) => ['product_id' => $b->product_id, 'qty' => $b->qty])->all(),
+                'components' => $p->bundleItems->map(fn ($b) => ['product_id' => $b->product_id, 'variant_id' => $b->variant_id, 'qty' => $b->qty])->all(),
             ]),
             'canBundles' => (bool) request()->user()?->can('manage-bundles'),
             'modifierGroups' => ModifierGroup::query()->where('outlet_id', $id)->with('modifiers')->get()->map(fn ($g) => [
@@ -112,6 +112,7 @@ class MenuController extends Controller
             'is_bundle' => 'boolean',
             'components' => 'nullable|array|max:30',
             'components.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('outlet_id', $outletId)],
+            'components.*.variant_id' => ['nullable', 'integer', Rule::exists('product_variants', 'id')],
             'components.*.qty' => 'required|integer|min:1|max:50',
         ]);
 
@@ -153,10 +154,11 @@ class MenuController extends Controller
     }
 
     /**
-     * The menu items a bundle is made of. An item can be in a bundle once, must be plain (no variant to choose), and cannot itself be a bundle.
+     * The menu items a bundle is made of. An item can be in a bundle once and cannot itself be a bundle.
+     * An item with variants needs the variant the bundle includes (Es Teh Manis, Iced); an item without needs none.
      *
-     * @param  array<int, array{product_id: int, qty: int}>  $components
-     * @return list<array{product_id: int, qty: int}>
+     * @param  array<int, array{product_id: int, variant_id?: int|null, qty: int}>  $components
+     * @return list<array{product_id: int, variant_id: int|null, qty: int}>
      */
     private function bundleParts(array $components, ?Product $bundle): array
     {
@@ -170,17 +172,24 @@ class MenuController extends Controller
         if ($bundle !== null && in_array($bundle->id, $ids, true)) {
             throw ValidationException::withMessages(['components' => 'Paket tidak boleh berisi dirinya sendiri.']);
         }
-        $products = Product::query()->whereIn('id', $ids)->withCount('variants')->get()->keyBy('id');
-        foreach ($products as $p) {
+        $products = Product::query()->whereIn('id', $ids)->with('variants')->get()->keyBy('id');
+        $parts = [];
+        foreach ($components as $c) {
+            $p = $products->get((int) $c['product_id']);
+            if ($p === null) {
+                continue;
+            }
             if ($p->is_bundle) {
                 throw ValidationException::withMessages(['components' => "{$p->name} sendiri sebuah paket; paket tidak bisa berisi paket."]);
             }
-            if ($p->variants_count > 0) {
-                throw ValidationException::withMessages(['components' => "{$p->name} punya varian; pakai menu tanpa varian di dalam paket."]);
+            $variantId = ! empty($c['variant_id']) ? (int) $c['variant_id'] : null;
+            if ($p->variants->isNotEmpty() && ($variantId === null || ! $p->variants->contains('id', $variantId))) {
+                throw ValidationException::withMessages(['components' => "Pilih varian untuk {$p->name}."]);
             }
+            $parts[] = ['product_id' => $p->id, 'variant_id' => $p->variants->isNotEmpty() ? $variantId : null, 'qty' => (int) $c['qty']];
         }
 
-        return array_map(fn (array $c): array => ['product_id' => (int) $c['product_id'], 'qty' => (int) $c['qty']], array_values($components));
+        return $parts;
     }
 
     /** Hide a product from the POS and the QR menu without deleting it; switching it back on restores it as it was. */

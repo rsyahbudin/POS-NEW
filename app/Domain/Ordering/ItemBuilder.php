@@ -23,7 +23,7 @@ class ItemBuilder
 
         $products = Product::query()
             ->where('outlet_id', $outletId)
-            ->with(['variants', 'modifierGroups.modifiers', 'bundleItems.product'])
+            ->with(['variants', 'modifierGroups.modifiers', 'bundleItems.product', 'bundleItems.variant'])
             ->findMany(array_values(array_unique(array_map(fn (array $r) => (int) $r['product_id'], $requests))))
             ->keyBy('id');
 
@@ -124,7 +124,7 @@ class ItemBuilder
      * The menu items a bundle is made of, checked like any ordered item: sold, in stock, and enough portions left for everything in the order.
      *
      * @param  array<int, int>  $demand
-     * @return list<array{product_id: int, name: string, qty: int, station_id: int|null}>
+     * @return list<array{product_id: int, variant_id: int|null, name: string, qty: int, station_id: int|null}>
      */
     private function components(Product $bundle, int $qty, array &$demand): array
     {
@@ -138,14 +138,17 @@ class ItemBuilder
             if ($part->trashed() || ! $part->is_active) {
                 throw new OrderException("{$part->name} dalam {$bundle->name} tidak dijual.");
             }
-            if (! $part->is_available) {
+            if (! $part->is_available || ($line->variant !== null && ! $line->variant->is_available)) {
                 throw new OrderException("{$part->name} dalam {$bundle->name} sedang habis.");
             }
             $demand[$part->id] = ($demand[$part->id] ?? 0) + $line->qty * $qty;
             if ($part->stock_qty !== null && $demand[$part->id] > $part->stock_qty) {
                 throw new OrderException("Stok {$part->name} tinggal {$part->stock_qty}.");
             }
-            $parts[] = ['product_id' => $part->id, 'name' => $part->name, 'qty' => $line->qty, 'station_id' => $part->station_id];
+            $parts[] = [
+                'product_id' => $part->id, 'variant_id' => $line->variant_id, 'name' => $line->variant ? "{$part->name} ({$line->variant->name})" : $part->name,
+                'qty' => $line->qty, 'station_id' => $part->station_id,
+            ];
         }
 
         return $parts;

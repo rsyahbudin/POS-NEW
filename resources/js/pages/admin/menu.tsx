@@ -19,7 +19,11 @@ import { api, ApiError } from '@/lib/api';
 import { rupiah } from '@/lib/format';
 
 type Variant = { id?: number; name: string; price: number };
-type Component = { product_id: number | ''; qty: number };
+type Component = {
+    product_id: number | '';
+    variant_id: number | null;
+    qty: number;
+};
 type Product = {
     id: number;
     name: string;
@@ -724,6 +728,8 @@ export default function MenuPage({
                                                                     j === i
                                                                         ? {
                                                                               ...x,
+                                                                              variant_id:
+                                                                                  null,
                                                                               product_id:
                                                                                   e
                                                                                       .target
@@ -747,8 +753,6 @@ export default function MenuPage({
                                                     .filter(
                                                         (p) =>
                                                             !p.is_bundle &&
-                                                            p.variants
-                                                                .length === 0 &&
                                                             p.id !== draft.id,
                                                     )
                                                     .map((p) => (
@@ -760,6 +764,56 @@ export default function MenuPage({
                                                         </option>
                                                     ))}
                                             </Select>
+                                            {(products.find(
+                                                (p) => p.id === c.product_id,
+                                            )?.variants.length ?? 0) > 0 && (
+                                                <Select
+                                                    value={c.variant_id ?? ''}
+                                                    aria-label="Varian"
+                                                    onChange={(e) =>
+                                                        setDraft({
+                                                            ...draft,
+                                                            components:
+                                                                draft.components.map(
+                                                                    (x, j) =>
+                                                                        j === i
+                                                                            ? {
+                                                                                  ...x,
+                                                                                  variant_id:
+                                                                                      e
+                                                                                          .target
+                                                                                          .value
+                                                                                          ? Number(
+                                                                                                e
+                                                                                                    .target
+                                                                                                    .value,
+                                                                                            )
+                                                                                          : null,
+                                                                              }
+                                                                            : x,
+                                                                ),
+                                                        })
+                                                    }
+                                                >
+                                                    <option value="">
+                                                        Pilih varian
+                                                    </option>
+                                                    {products
+                                                        .find(
+                                                            (p) =>
+                                                                p.id ===
+                                                                c.product_id,
+                                                        )
+                                                        ?.variants.map((v) => (
+                                                            <option
+                                                                key={v.id}
+                                                                value={v.id}
+                                                            >
+                                                                {v.name}
+                                                            </option>
+                                                        ))}
+                                                </Select>
+                                            )}
                                             <MoneyInput
                                                 value={c.qty}
                                                 onChange={(n) =>
@@ -817,7 +871,11 @@ export default function MenuPage({
                                                 ...draft,
                                                 components: [
                                                     ...draft.components,
-                                                    { product_id: '', qty: 1 },
+                                                    {
+                                                        product_id: '',
+                                                        variant_id: null,
+                                                        qty: 1,
+                                                    },
                                                 ],
                                             })
                                         }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Floor\Models\Table;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Ordering\StockService;
 use App\Domain\Printing\Models\Printer;
@@ -94,9 +95,34 @@ it('lets a role with the bundle permission build bundles and rejects bad content
     $this->actingAs($owner)->post("/admin/products/{$saved->id}", $body([]))->assertSessionHasErrors('components');
     $this->actingAs($owner)->post("/admin/products/{$saved->id}", $body([['product_id' => $americano->id, 'qty' => 1], ['product_id' => $americano->id, 'qty' => 1]]))->assertSessionHasErrors('components');
     $this->actingAs($owner)->post('/admin/products', $body([['product_id' => $saved->id, 'qty' => 1]], ['name' => 'Paket B']))->assertSessionHasErrors('components');
-    $withVariant = product('Caffe Latte');
-    $withVariant->variants()->create(['name' => 'Hot', 'price' => 28000, 'sort' => 0]);
-    $this->actingAs($owner)->post('/admin/products', $body([['product_id' => $withVariant->id, 'qty' => 1]], ['name' => 'Paket C']))->assertSessionHasErrors('components');
+});
+
+it('keeps the chosen variant of a menu item in the bundle and prints it on the ticket', function () {
+    $owner = userWithRole('owner');
+    $latte = product('Caffe Latte');
+    $hot = $latte->variants()->create(['name' => 'Hot', 'price' => 28000, 'sort' => 0]);
+    $iced = $latte->variants()->create(['name' => 'Iced', 'price' => 30000, 'sort' => 1]);
+    $body = fn (array $components) => ['name' => 'Paket Kopi', 'category_id' => $latte->category_id, 'base_price' => 40000, 'is_bundle' => true, 'components' => $components];
+
+    // an item with variants needs one of its own variants
+    $this->actingAs($owner)->post('/admin/products', $body([['product_id' => $latte->id, 'qty' => 1]]))->assertSessionHasErrors('components');
+    $other = product('Americano');
+    $foreign = $other->variants()->create(['name' => 'Large', 'price' => 25000, 'sort' => 0]);
+    $this->actingAs($owner)->post('/admin/products', $body([['product_id' => $latte->id, 'variant_id' => $foreign->id, 'qty' => 1]]))->assertSessionHasErrors('components');
+
+    $this->actingAs($owner)->post('/admin/products', $body([['product_id' => $latte->id, 'variant_id' => $iced->id, 'qty' => 2]]))->assertSessionHasNoErrors();
+    $bundle = Product::query()->where('name', 'Paket Kopi')->firstOrFail();
+    expect($bundle->bundleItems->first()->variant_id)->toBe($iced->id);
+
+    $printer = bundlePrinter();
+    $order = placeOrder(items: [['product_id' => $bundle->id, 'qty' => 1]]);
+    $line = PrintJob::query()->where('printer_id', $printer->id)->firstOrFail()->payload['items'][0];
+    expect($order->subtotal)->toBe(40000)->and($line['name'])->toBe('Caffe Latte (Iced)')->and($line['qty'])->toBe(2);
+
+    // the variant going sold out stops the bundle
+    $iced->update(['is_available' => false]);
+    expect(fn () => placeOrder(items: [['product_id' => $bundle->id, 'qty' => 1]], tableId: Table::query()->skip(1)->value('id')))->toThrow(OrderException::class, 'sedang habis');
+    unset($hot);
 });
 
 it('leaves bundles alone for someone who manages the menu but not bundles', function () {

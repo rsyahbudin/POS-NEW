@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $image_path
  * @property bool $is_available
  * @property bool $is_active
+ * @property bool $is_bundle
  * @property int|null $stock_qty
  * @property int $sort
  * @property Carbon|null $deleted_at
@@ -37,7 +38,7 @@ class Product extends Model
 
     protected function casts(): array
     {
-        return ['is_available' => 'boolean', 'is_active' => 'boolean', 'base_price' => 'integer', 'stock_qty' => 'integer'];
+        return ['is_available' => 'boolean', 'is_active' => 'boolean', 'is_bundle' => 'boolean', 'base_price' => 'integer', 'stock_qty' => 'integer'];
     }
 
     /** @return BelongsTo<Category, $this> */
@@ -56,6 +57,12 @@ class Product extends Model
     public function variants(): HasMany
     {
         return $this->hasMany(ProductVariant::class)->orderBy('sort');
+    }
+
+    /** @return HasMany<BundleItem, $this> */
+    public function bundleItems(): HasMany
+    {
+        return $this->hasMany(BundleItem::class, 'bundle_id')->orderBy('sort');
     }
 
     /** @return BelongsToMany<Printer, $this> */

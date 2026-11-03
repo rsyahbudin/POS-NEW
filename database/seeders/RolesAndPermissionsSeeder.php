@@ -16,14 +16,14 @@ class RolesAndPermissionsSeeder extends Seeder
         'view-sales-reports', 'view-own-shift-recap', 'view-accounting', 'manage-accounting',
         'cancel-order', 'use-print-station', 'view-kitchen-report', 'view-margin-report', 'manage-printers',
         'view-stock', 'count-stock', 'view-assets', 'manage-assets', 'import-data', 'record-purchase', 'view-activity-log', 'manage-suppliers', 'record-waste', 'view-waste-report', 'manage-online-payments', 'export-receipts', 'mark-sold-out', 'view-today-summary', 'reopen-shift', 'handle-calls', 'view-cash-ledger', 'manage-fixed-expenses', 'view-schedule', 'manage-schedule', 'manage-attendance', 'use-attendance-kiosk', 'view-own-attendance', 'clock-own-attendance', 'approve-longshift', 'approve-attendance',
-        'manage-menu', 'manage-inventory', 'manage-pricing', 'manage-discount-presets', 'manage-users', 'manage-settings', 'manage-tables', 'manage-roles',
+        'manage-menu', 'manage-bundles', 'manage-inventory', 'manage-pricing', 'manage-discount-presets', 'manage-users', 'manage-settings', 'manage-tables', 'manage-roles',
     ];
 
     public const ROLES = [
         'manager' => [
             'create-order', 'receive-payment', 'discount-within-limit', 'discount-custom', 'discount-over-limit', 'void', 'refund',
             'open-close-shift', 'manage-shifts-any', 'update-kitchen-status', 'input-expense',
-            'view-sales-reports', 'view-own-shift-recap', 'view-accounting', 'manage-menu', 'manage-inventory', 'manage-tables',
+            'view-sales-reports', 'view-own-shift-recap', 'view-accounting', 'manage-menu', 'manage-bundles', 'manage-inventory', 'manage-tables',
             'cancel-order', 'use-print-station', 'view-kitchen-report', 'view-margin-report',
             'view-stock', 'count-stock', 'view-assets', 'manage-assets', 'import-data', 'record-purchase', 'view-activity-log', 'manage-suppliers', 'record-waste', 'view-waste-report', 'manage-online-payments', 'export-receipts', 'mark-sold-out', 'view-today-summary', 'reopen-shift', 'handle-calls', 'view-cash-ledger', 'manage-fixed-expenses', 'view-schedule', 'manage-schedule', 'manage-attendance', 'use-attendance-kiosk', 'view-own-attendance', 'clock-own-attendance',
         ],

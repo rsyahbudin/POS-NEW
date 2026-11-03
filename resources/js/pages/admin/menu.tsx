@@ -19,6 +19,7 @@ import { api, ApiError } from '@/lib/api';
 import { rupiah } from '@/lib/format';
 
 type Variant = { id?: number; name: string; price: number };
+type Component = { product_id: number | ''; qty: number };
 type Product = {
     id: number;
     name: string;
@@ -35,6 +36,8 @@ type Product = {
     image: string | null;
     variants: Variant[];
     modifier_group_ids: number[];
+    is_bundle: boolean;
+    components: Component[];
 };
 type Group = {
     id: number;
@@ -50,6 +53,7 @@ type Props = {
     stations: { id: number; name: string; is_active: boolean }[];
     products: Product[];
     modifierGroups: Group[];
+    canBundles: boolean;
 };
 
 type Draft = {
@@ -65,6 +69,8 @@ type Draft = {
     is_available: boolean;
     variants: Variant[];
     modifier_group_ids: number[];
+    is_bundle: boolean;
+    components: Component[];
     image: File | null;
 };
 
@@ -80,6 +86,8 @@ const blank = (cat?: number): Draft => ({
     is_available: true,
     variants: [],
     modifier_group_ids: [],
+    is_bundle: false,
+    components: [],
     image: null,
 });
 
@@ -89,6 +97,7 @@ export default function MenuPage({
     stations,
     products,
     modifierGroups,
+    canBundles,
 }: Props) {
     const [tab, setTab] = useState<
         'products' | 'categories' | 'modifiers' | 'stations'
@@ -111,7 +120,14 @@ export default function MenuPage({
         if (!draft) return;
         const body: Record<
             string,
-            string | number | boolean | File | null | Variant[] | number[]
+            | string
+            | number
+            | boolean
+            | File
+            | null
+            | Variant[]
+            | number[]
+            | Component[]
         > = {
             name: draft.name,
             sku: draft.sku || null,
@@ -124,6 +140,8 @@ export default function MenuPage({
             variants: draft.variants,
             modifier_group_ids: draft.modifier_group_ids,
             printer_ids: draft.printer_ids,
+            is_bundle: draft.is_bundle ? 1 : 0,
+            components: draft.is_bundle ? draft.components : [],
         };
         if (draft.image) body.image = draft.image;
         router.post(
@@ -273,6 +291,12 @@ export default function MenuPage({
                                                 {p.variants.length} varian
                                             </span>
                                         )}
+                                        {p.is_bundle && (
+                                            <span className="block text-xs text-muted-foreground">
+                                                Paket · {p.components.length}{' '}
+                                                menu
+                                            </span>
+                                        )}
                                     </span>
                                 </span>,
                                 categories.find((c) => c.id === p.category_id)
@@ -352,6 +376,8 @@ export default function MenuPage({
                                                 variants: p.variants,
                                                 modifier_group_ids:
                                                     p.modifier_group_ids,
+                                                is_bundle: p.is_bundle,
+                                                components: p.components,
                                                 image: null,
                                             })
                                         }
@@ -655,128 +681,286 @@ export default function MenuPage({
                         />
                     </Field>
 
-                    <fieldset className="grid gap-2">
-                        <legend className="text-sm font-medium">
-                            Varian (mengganti harga dasar)
-                        </legend>
-                        {draft.variants.map((v, i) => (
-                            <div key={i} className="flex gap-2">
-                                <Input
-                                    className="h-11"
-                                    placeholder="Hot / Iced"
-                                    value={v.name}
-                                    onChange={(e) =>
-                                        setDraft({
-                                            ...draft,
-                                            variants: draft.variants.map(
-                                                (x, j) =>
-                                                    j === i
-                                                        ? {
-                                                              ...x,
-                                                              name: e.target
-                                                                  .value,
-                                                          }
-                                                        : x,
-                                            ),
-                                        })
-                                    }
-                                />
-                                <MoneyInput
-                                    value={v.price}
-                                    onChange={(n) =>
-                                        setDraft({
-                                            ...draft,
-                                            variants: draft.variants.map(
-                                                (x, j) =>
-                                                    j === i
-                                                        ? {
-                                                              ...x,
-                                                              price:
-                                                                  n === ''
-                                                                      ? 0
-                                                                      : n,
-                                                          }
-                                                        : x,
-                                            ),
-                                        })
-                                    }
-                                />
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-11"
-                                    aria-label="Hapus varian"
-                                    onClick={() =>
-                                        setDraft({
-                                            ...draft,
-                                            variants: draft.variants.filter(
-                                                (_, j) => j !== i,
-                                            ),
-                                        })
-                                    }
-                                >
-                                    <Trash2 />
-                                </Button>
-                            </div>
-                        ))}
-                        <Button
-                            type="button"
-                            variant="outline"
-                            className="h-10"
-                            onClick={() =>
-                                setDraft({
-                                    ...draft,
-                                    variants: [
-                                        ...draft.variants,
-                                        {
-                                            name: '',
-                                            price:
-                                                draft.base_price === ''
-                                                    ? 0
-                                                    : draft.base_price,
-                                        },
-                                    ],
-                                })
-                            }
-                        >
-                            + Varian
-                        </Button>
-                    </fieldset>
-
-                    <fieldset className="grid gap-2 sm:grid-cols-2">
-                        <legend className="mb-2 text-sm font-medium">
-                            Grup modifier
-                        </legend>
-                        {modifierGroups.map((g) => (
-                            <label
-                                key={g.id}
-                                className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm"
-                            >
+                    {(canBundles || draft.is_bundle) && (
+                        <fieldset className="grid gap-2 rounded-xl border p-3">
+                            <legend className="px-1 text-sm font-medium">
+                                Paket
+                            </legend>
+                            <label className="flex min-h-11 items-center gap-2 text-sm">
                                 <input
                                     type="checkbox"
                                     className="size-5"
-                                    checked={draft.modifier_group_ids.includes(
-                                        g.id,
-                                    )}
+                                    disabled={!canBundles}
+                                    checked={draft.is_bundle}
                                     onChange={(e) =>
                                         setDraft({
                                             ...draft,
-                                            modifier_group_ids: e.target.checked
-                                                ? [
-                                                      ...draft.modifier_group_ids,
-                                                      g.id,
-                                                  ]
-                                                : draft.modifier_group_ids.filter(
-                                                      (x) => x !== g.id,
-                                                  ),
+                                            is_bundle: e.target.checked,
                                         })
                                     }
                                 />
-                                {g.name}
+                                Produk ini paket (isinya beberapa menu)
                             </label>
-                        ))}
-                    </fieldset>
+                            {draft.is_bundle && (
+                                <>
+                                    <p className="text-xs text-muted-foreground">
+                                        Harga paket = harga dasar di atas. Tiket
+                                        dipecah per isi: tiap menu tercetak di
+                                        printer menu itu sendiri (Bar, Dapur,
+                                        dst). Paket tidak punya varian atau
+                                        modifier, dan isinya harus menu tanpa
+                                        varian.
+                                    </p>
+                                    {draft.components.map((c, i) => (
+                                        <div key={i} className="flex gap-2">
+                                            <Select
+                                                value={c.product_id}
+                                                onChange={(e) =>
+                                                    setDraft({
+                                                        ...draft,
+                                                        components:
+                                                            draft.components.map(
+                                                                (x, j) =>
+                                                                    j === i
+                                                                        ? {
+                                                                              ...x,
+                                                                              product_id:
+                                                                                  e
+                                                                                      .target
+                                                                                      .value
+                                                                                      ? Number(
+                                                                                            e
+                                                                                                .target
+                                                                                                .value,
+                                                                                        )
+                                                                                      : '',
+                                                                          }
+                                                                        : x,
+                                                            ),
+                                                    })
+                                                }
+                                            >
+                                                <option value="">
+                                                    Pilih menu
+                                                </option>
+                                                {products
+                                                    .filter(
+                                                        (p) =>
+                                                            !p.is_bundle &&
+                                                            p.variants
+                                                                .length === 0 &&
+                                                            p.id !== draft.id,
+                                                    )
+                                                    .map((p) => (
+                                                        <option
+                                                            key={p.id}
+                                                            value={p.id}
+                                                        >
+                                                            {p.name}
+                                                        </option>
+                                                    ))}
+                                            </Select>
+                                            <MoneyInput
+                                                value={c.qty}
+                                                onChange={(n) =>
+                                                    setDraft({
+                                                        ...draft,
+                                                        components:
+                                                            draft.components.map(
+                                                                (x, j) =>
+                                                                    j === i
+                                                                        ? {
+                                                                              ...x,
+                                                                              qty:
+                                                                                  n ===
+                                                                                  ''
+                                                                                      ? 1
+                                                                                      : n,
+                                                                          }
+                                                                        : x,
+                                                            ),
+                                                    })
+                                                }
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="size-11 shrink-0"
+                                                aria-label="Hapus isi paket"
+                                                onClick={() =>
+                                                    setDraft({
+                                                        ...draft,
+                                                        components:
+                                                            draft.components.filter(
+                                                                (_, j) =>
+                                                                    j !== i,
+                                                            ),
+                                                    })
+                                                }
+                                            >
+                                                <Trash2 />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                    {errors?.components && (
+                                        <p className="text-sm text-destructive">
+                                            {errors.components}
+                                        </p>
+                                    )}
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="h-10"
+                                        onClick={() =>
+                                            setDraft({
+                                                ...draft,
+                                                components: [
+                                                    ...draft.components,
+                                                    { product_id: '', qty: 1 },
+                                                ],
+                                            })
+                                        }
+                                    >
+                                        + Isi paket
+                                    </Button>
+                                </>
+                            )}
+                        </fieldset>
+                    )}
+
+                    {!draft.is_bundle && (
+                        <>
+                            <fieldset className="grid gap-2">
+                                <legend className="text-sm font-medium">
+                                    Varian (mengganti harga dasar)
+                                </legend>
+                                {draft.variants.map((v, i) => (
+                                    <div key={i} className="flex gap-2">
+                                        <Input
+                                            className="h-11"
+                                            placeholder="Hot / Iced"
+                                            value={v.name}
+                                            onChange={(e) =>
+                                                setDraft({
+                                                    ...draft,
+                                                    variants:
+                                                        draft.variants.map(
+                                                            (x, j) =>
+                                                                j === i
+                                                                    ? {
+                                                                          ...x,
+                                                                          name: e
+                                                                              .target
+                                                                              .value,
+                                                                      }
+                                                                    : x,
+                                                        ),
+                                                })
+                                            }
+                                        />
+                                        <MoneyInput
+                                            value={v.price}
+                                            onChange={(n) =>
+                                                setDraft({
+                                                    ...draft,
+                                                    variants:
+                                                        draft.variants.map(
+                                                            (x, j) =>
+                                                                j === i
+                                                                    ? {
+                                                                          ...x,
+                                                                          price:
+                                                                              n ===
+                                                                              ''
+                                                                                  ? 0
+                                                                                  : n,
+                                                                      }
+                                                                    : x,
+                                                        ),
+                                                })
+                                            }
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="size-11"
+                                            aria-label="Hapus varian"
+                                            onClick={() =>
+                                                setDraft({
+                                                    ...draft,
+                                                    variants:
+                                                        draft.variants.filter(
+                                                            (_, j) => j !== i,
+                                                        ),
+                                                })
+                                            }
+                                        >
+                                            <Trash2 />
+                                        </Button>
+                                    </div>
+                                ))}
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="h-10"
+                                    onClick={() =>
+                                        setDraft({
+                                            ...draft,
+                                            variants: [
+                                                ...draft.variants,
+                                                {
+                                                    name: '',
+                                                    price:
+                                                        draft.base_price === ''
+                                                            ? 0
+                                                            : draft.base_price,
+                                                },
+                                            ],
+                                        })
+                                    }
+                                >
+                                    + Varian
+                                </Button>
+                            </fieldset>
+
+                            <fieldset className="grid gap-2 sm:grid-cols-2">
+                                <legend className="mb-2 text-sm font-medium">
+                                    Grup modifier
+                                </legend>
+                                {modifierGroups.map((g) => (
+                                    <label
+                                        key={g.id}
+                                        className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            className="size-5"
+                                            checked={draft.modifier_group_ids.includes(
+                                                g.id,
+                                            )}
+                                            onChange={(e) =>
+                                                setDraft({
+                                                    ...draft,
+                                                    modifier_group_ids: e.target
+                                                        .checked
+                                                        ? [
+                                                              ...draft.modifier_group_ids,
+                                                              g.id,
+                                                          ]
+                                                        : draft.modifier_group_ids.filter(
+                                                              (x) => x !== g.id,
+                                                          ),
+                                                })
+                                            }
+                                        />
+                                        {g.name}
+                                    </label>
+                                ))}
+                            </fieldset>
+                        </>
+                    )}
                     <label className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm">
                         <input
                             type="checkbox"

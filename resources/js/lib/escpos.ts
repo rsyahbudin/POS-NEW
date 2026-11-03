@@ -147,6 +147,8 @@ export type TicketData = {
         name: string;
         modifiers: string[];
         note: string | null;
+        /** Name of the bundle this line belongs to, when it was ordered as part of one. */
+        bundle?: string | null;
     }[];
     time: string;
 };
@@ -170,6 +172,10 @@ export function kitchenEscPos(t: TicketData, paper: PaperWidth): string[] {
             `${i.qty} x ${i.name}\n`,
             ESC + '!' + '\x00',
         );
+
+        if (i.bundle) {
+            out.push(`   Paket: ${i.bundle}\n`);
+        }
 
         for (const m of i.modifiers) {
             out.push(`   + ${m}\n`);

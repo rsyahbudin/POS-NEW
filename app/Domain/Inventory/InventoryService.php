@@ -53,6 +53,26 @@ class InventoryService
         return $use;
     }
 
+    /**
+     * Ingredients one ordered item uses. A bundle uses what the menu items inside it use.
+     *
+     * @return array<int, float> ingredient_id => quantity
+     */
+    private function portionOf(OrderItem $item): array
+    {
+        if (! $item->bundle_snapshot) {
+            return $this->portion($item->product_id, $item->variant_id, array_map('intval', $item->modifier_ids ?? []));
+        }
+        $use = [];
+        foreach ($item->bundle_snapshot as $part) {
+            foreach ($this->portion($part['product_id'], null, []) as $id => $qty) {
+                $use[$id] = ($use[$id] ?? 0) + $qty * $part['qty'];
+            }
+        }
+
+        return $use;
+    }
+
     /** Current cost of one portion at the moving-average prices. */
     public function portionCost(int $productId, ?int $variantId = null): float
     {
@@ -70,7 +90,7 @@ class InventoryService
         if (! $this->enabled() || $item->inventory_consumed) {
             return;
         }
-        $use = $this->portion($item->product_id, $item->variant_id, array_map('intval', $item->modifier_ids ?? []));
+        $use = $this->portionOf($item);
         if ($use === []) {
             return;
         }

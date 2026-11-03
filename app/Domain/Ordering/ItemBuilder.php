@@ -23,7 +23,7 @@ class ItemBuilder
 
         $products = Product::query()
             ->where('outlet_id', $outletId)
-            ->with(['variants', 'modifierGroups.modifiers'])
+            ->with(['variants', 'modifierGroups.modifiers', 'bundleItems.product'])
             ->findMany(array_values(array_unique(array_map(fn (array $r) => (int) $r['product_id'], $requests))))
             ->keyBy('id');
 
@@ -51,9 +51,11 @@ class ItemBuilder
                 throw new OrderException("Stok {$product->name} tinggal {$product->stock_qty}.");
             }
 
+            $components = $product->is_bundle ? $this->components($product, $qty, $demand) : null;
+
             $price = $product->base_price;
             $name = $product->name;
-            if (! empty($req['variant_id'])) {
+            if (! empty($req['variant_id']) && $components === null) {
                 $variant = $product->variants->firstWhere('id', (int) $req['variant_id']);
                 if (! $variant) {
                     throw new OrderException("Varian {$product->name} tidak valid.");
@@ -63,14 +65,14 @@ class ItemBuilder
                 }
                 $price = $variant->price;
                 $name .= " ({$variant->name})";
-            } elseif ($product->variants->isNotEmpty()) {
+            } elseif ($components === null && $product->variants->isNotEmpty()) {
                 throw new OrderException("Pilih varian untuk {$product->name}.");
             }
 
             $selected = is_array($req['modifier_ids'] ?? null) ? array_map('intval', $req['modifier_ids']) : [];
             $snapshot = [];
             $pickedIds = [];
-            foreach ($product->modifierGroups as $group) {
+            foreach ($components === null ? $product->modifierGroups : [] as $group) {
                 $picked = $group->modifiers->whereIn('id', $selected);
                 $count = $picked->count();
                 $min = $group->is_required ? max(1, $group->min_select) : $group->min_select;
@@ -90,7 +92,7 @@ class ItemBuilder
                 }
             }
 
-            $knownIds = $product->modifierGroups->flatMap->modifiers->pluck('id')->all();
+            $knownIds = $components === null ? $product->modifierGroups->flatMap->modifiers->pluck('id')->all() : [];
             if (array_diff($selected, $knownIds) !== []) {
                 throw new OrderException("Modifier tidak valid untuk {$product->name}.");
             }
@@ -101,18 +103,51 @@ class ItemBuilder
 
             $rows[] = [
                 'product_id' => $product->id,
-                'station_id' => $product->station_id,
+                // a bundle with no station of its own shows on the kitchen screen of its first menu item
+                'station_id' => $product->station_id ?? ($components[0]['station_id'] ?? null),
                 'name_snapshot' => $name,
                 'unit_price' => $price,
                 'qty' => $qty,
                 'variant_id' => ! empty($req['variant_id']) ? (int) $req['variant_id'] : null,
                 'modifier_ids' => $pickedIds,
                 'modifiers_snapshot' => $snapshot,
+                'bundle_snapshot' => $components,
                 'note' => isset($req['note']) && is_string($req['note']) ? mb_substr($req['note'], 0, 200) : null,
                 'line_total' => $price * $qty,
             ];
         }
 
         return $rows;
+    }
+
+    /**
+     * The menu items a bundle is made of, checked like any ordered item: sold, in stock, and enough portions left for everything in the order.
+     *
+     * @param  array<int, int>  $demand
+     * @return list<array{product_id: int, name: string, qty: int, station_id: int|null}>
+     */
+    private function components(Product $bundle, int $qty, array &$demand): array
+    {
+        if ($bundle->bundleItems->isEmpty()) {
+            throw new OrderException("Paket {$bundle->name} belum berisi menu.");
+        }
+
+        $parts = [];
+        foreach ($bundle->bundleItems as $line) {
+            $part = $line->product;
+            if ($part->trashed() || ! $part->is_active) {
+                throw new OrderException("{$part->name} dalam {$bundle->name} tidak dijual.");
+            }
+            if (! $part->is_available) {
+                throw new OrderException("{$part->name} dalam {$bundle->name} sedang habis.");
+            }
+            $demand[$part->id] = ($demand[$part->id] ?? 0) + $line->qty * $qty;
+            if ($part->stock_qty !== null && $demand[$part->id] > $part->stock_qty) {
+                throw new OrderException("Stok {$part->name} tinggal {$part->stock_qty}.");
+            }
+            $parts[] = ['product_id' => $part->id, 'name' => $part->name, 'qty' => $line->qty, 'station_id' => $part->station_id];
+        }
+
+        return $parts;
     }
 }

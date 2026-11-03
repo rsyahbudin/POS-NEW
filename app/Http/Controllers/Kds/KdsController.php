@@ -96,7 +96,7 @@ class KdsController extends Controller
                 'done' => ! $open,
                 'items' => $group->map(fn ($i) => [
                     'id' => $i->id, 'name' => $i->name_snapshot, 'qty' => $i->qty, 'note' => $i->note,
-                    'modifiers' => collect($i->modifiers_snapshot ?? [])->map(fn ($m) => $m['name'])->all(), 'status' => $i->status->value,
+                    'modifiers' => collect($i->modifiers_snapshot ?? [])->map(fn ($m) => $m['name'])->merge(collect($i->bundle_snapshot ?? [])->map(fn ($b) => $b['qty'].'× '.$b['name']))->values()->all(), 'status' => $i->status->value,
                 ])->values()->all(),
             ];
         }

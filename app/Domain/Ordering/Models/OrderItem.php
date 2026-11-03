@@ -20,6 +20,7 @@ use Illuminate\Support\Carbon;
  * @property int $unit_price
  * @property int $qty
  * @property array<mixed>|null $modifiers_snapshot
+ * @property list<array{product_id: int, name: string, qty: int, station_id: int|null}>|null $bundle_snapshot
  * @property string|null $note
  * @property int $line_total
  * @property ItemStatus $status
@@ -53,6 +54,7 @@ class OrderItem extends Model
             'status' => ItemStatus::class,
             'comp_type' => CompType::class,
             'modifiers_snapshot' => 'array',
+            'bundle_snapshot' => 'array',
             'voided_at' => 'datetime',
             'preparing_at' => 'datetime',
             'ready_at' => 'datetime',

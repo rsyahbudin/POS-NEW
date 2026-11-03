@@ -87,15 +87,32 @@ class PrintDispatcher
             return 0;
         }
 
-        $products = Product::withTrashed()->whereIn('id', $items->pluck('product_id'))->with(['printers:id', 'category.printers:id'])->get()->keyBy('id');
-        $byPrinter = [];
+        // A bundle prints as the menu items it is made of, each on the printers of that item; the bundle name rides along as a note.
+        $lines = [];
         foreach ($items as $item) {
-            $product = $products->get($item->product_id);
+            $modifiers = collect($item->modifiers_snapshot ?? [])->map(fn ($m) => (string) $m['name'])->all();
+            if ($item->bundle_snapshot) {
+                foreach ($item->bundle_snapshot as $part) {
+                    $lines[] = [
+                        'product_id' => $part['product_id'], 'station_id' => $part['station_id'], 'qty' => $part['qty'] * $item->qty,
+                        'name' => $part['name'], 'note' => $item->note, 'modifiers' => [], 'bundle' => $item->name_snapshot,
+                    ];
+                }
+
+                continue;
+            }
+            $lines[] = ['product_id' => $item->product_id, 'station_id' => $item->station_id, 'qty' => $item->qty, 'name' => $item->name_snapshot, 'note' => $item->note, 'modifiers' => $modifiers, 'bundle' => null];
+        }
+
+        $products = Product::withTrashed()->whereIn('id', array_column($lines, 'product_id'))->with(['printers:id', 'category.printers:id'])->get()->keyBy('id');
+        $byPrinter = [];
+        foreach ($lines as $line) {
+            $product = $products->get($line['product_id']);
             $ids = $this->activeIds($product?->printers, $ticketPrinters)
                 ?: $this->activeIds($product?->category?->printers, $ticketPrinters)
-                ?: $ticketPrinters->filter(fn (Printer $p) => $p->station_id === null || $p->station_id === $item->station_id)->keys()->all();
+                ?: $ticketPrinters->filter(fn (Printer $p) => $p->station_id === null || $p->station_id === $line['station_id'])->keys()->all();
             foreach ($ids as $id) {
-                $byPrinter[$id][] = $item;
+                $byPrinter[$id][] = $line;
             }
         }
 
@@ -104,9 +121,8 @@ class PrintDispatcher
         foreach ($byPrinter as $printerId => $group) {
             $payload = [
                 'label' => $label, 'number' => $order->number, 'time' => now()->setTimezone('Asia/Jakarta')->format('H:i'),
-                'items' => collect($group)->map(fn ($i) => [
-                    'qty' => $i->qty, 'name' => $i->name_snapshot, 'note' => $i->note,
-                    'modifiers' => collect($i->modifiers_snapshot ?? [])->map(fn ($m) => (string) $m['name'])->all(),
+                'items' => collect($group)->map(fn ($l) => [
+                    'qty' => $l['qty'], 'name' => $l['name'], 'note' => $l['note'], 'modifiers' => $l['modifiers'], 'bundle' => $l['bundle'],
                 ])->values()->all(),
             ];
             $count += $this->queue($order->outlet_id, 'ticket', $order->number, $payload, $ticketPrinters->only([$printerId])->values());

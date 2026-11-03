@@ -21,6 +21,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -36,14 +37,17 @@ class MenuController extends Controller
             'categories' => Category::query()->where('outlet_id', $id)->with('printers:id')->orderBy('sort')->get()->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'sort' => $c->sort, 'printer_ids' => $c->printers->pluck('id')->all()]),
             'printers' => Printer::query()->where('outlet_id', $id)->where('kind', 'ticket')->orderBy('id')->get(['id', 'name']),
             'stations' => Station::query()->where('outlet_id', $id)->orderBy('sort')->get(['id', 'name', 'is_active']),
-            'products' => Product::query()->where('outlet_id', $id)->with(['variants', 'modifierGroups:id', 'printers:id'])->orderBy('category_id')->orderBy('sort')->get()->map(fn ($p) => [
+            'products' => Product::query()->where('outlet_id', $id)->with(['variants', 'modifierGroups:id', 'printers:id', 'bundleItems'])->orderBy('category_id')->orderBy('sort')->get()->map(fn ($p) => [
                 'id' => $p->id, 'name' => $p->name, 'sku' => $p->sku, 'description' => $p->description, 'category_id' => $p->category_id, 'station_id' => $p->station_id,
                 'base_price' => $p->base_price, 'is_available' => $p->is_available, 'is_active' => $p->is_active, 'stock_qty' => $p->stock_qty, 'sort' => $p->sort,
                 'image' => MediaUrl::public($p->image_path),
                 'variants' => $p->variants->map(fn ($v) => ['id' => $v->id, 'name' => $v->name, 'price' => $v->price])->all(),
                 'modifier_group_ids' => $p->modifierGroups->pluck('id')->all(),
                 'printer_ids' => $p->printers->pluck('id')->all(),
+                'is_bundle' => $p->is_bundle,
+                'components' => $p->bundleItems->map(fn ($b) => ['product_id' => $b->product_id, 'qty' => $b->qty])->all(),
             ]),
+            'canBundles' => (bool) request()->user()?->can('manage-bundles'),
             'modifierGroups' => ModifierGroup::query()->where('outlet_id', $id)->with('modifiers')->get()->map(fn ($g) => [
                 'id' => $g->id, 'name' => $g->name, 'min_select' => $g->min_select, 'max_select' => $g->max_select, 'is_required' => $g->is_required,
                 'modifiers' => $g->modifiers->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'price_delta' => $m->price_delta])->all(),
@@ -105,10 +109,22 @@ class MenuController extends Controller
             'variants' => 'nullable|array', 'variants.*.name' => 'required|string|max:40', 'variants.*.price' => 'required|integer|min:0',
             'modifier_group_ids' => 'nullable|array', 'modifier_group_ids.*' => 'integer',
             'printer_ids' => 'nullable|array', 'printer_ids.*' => ['integer', Rule::exists('printers', 'id')->where('outlet_id', $outletId)->where('kind', 'ticket')],
+            'is_bundle' => 'boolean',
+            'components' => 'nullable|array|max:30',
+            'components.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('outlet_id', $outletId)],
+            'components.*.qty' => 'required|integer|min:1|max:50',
         ]);
 
-        DB::transaction(function () use ($request, $images, $product, $data, $outletId) {
-            $fields = Arr::except($data, ['image', 'variants', 'modifier_group_ids', 'printer_ids']);
+        // Bundles are their own permission: without it the bundle fields are left as they are.
+        $canBundle = (bool) $request->user()?->can('manage-bundles');
+        $bundle = $canBundle ? (bool) ($data['is_bundle'] ?? false) : (bool) $product?->is_bundle;
+        $parts = $canBundle && $bundle ? $this->bundleParts($data['components'] ?? [], $product) : null;
+
+        DB::transaction(function () use ($request, $images, $product, $data, $outletId, $canBundle, $bundle, $parts) {
+            $fields = Arr::except($data, ['image', 'variants', 'modifier_group_ids', 'printer_ids', 'is_bundle', 'components']);
+            if ($canBundle) {
+                $fields['is_bundle'] = $bundle;
+            }
             if ($request->hasFile('image')) {
                 $fields['image_path'] = $images->store($request->file('image'));
             }
@@ -120,14 +136,51 @@ class MenuController extends Controller
             }
 
             $product->variants()->delete();
-            foreach ($data['variants'] ?? [] as $i => $v) {
+            foreach ($bundle ? [] : ($data['variants'] ?? []) as $i => $v) {
                 $product->variants()->create($v + ['sort' => $i]);
             }
-            $product->modifierGroups()->sync($data['modifier_group_ids'] ?? []);
+            $product->modifierGroups()->sync($bundle ? [] : ($data['modifier_group_ids'] ?? []));
             $product->printers()->sync($data['printer_ids'] ?? []);
+            if ($canBundle) {
+                $product->bundleItems()->delete();
+                foreach ($parts ?? [] as $i => $part) {
+                    $product->bundleItems()->create($part + ['sort' => $i]);
+                }
+            }
         });
 
         return back()->with('success', 'Produk disimpan.');
+    }
+
+    /**
+     * The menu items a bundle is made of. An item can be in a bundle once, must be plain (no variant to choose), and cannot itself be a bundle.
+     *
+     * @param  array<int, array{product_id: int, qty: int}>  $components
+     * @return list<array{product_id: int, qty: int}>
+     */
+    private function bundleParts(array $components, ?Product $bundle): array
+    {
+        if ($components === []) {
+            throw ValidationException::withMessages(['components' => 'Paket harus berisi minimal satu menu.']);
+        }
+        $ids = array_map(fn (array $c): int => (int) $c['product_id'], $components);
+        if (count($ids) !== count(array_unique($ids))) {
+            throw ValidationException::withMessages(['components' => 'Satu menu hanya boleh sekali dalam paket; naikkan jumlahnya.']);
+        }
+        if ($bundle !== null && in_array($bundle->id, $ids, true)) {
+            throw ValidationException::withMessages(['components' => 'Paket tidak boleh berisi dirinya sendiri.']);
+        }
+        $products = Product::query()->whereIn('id', $ids)->withCount('variants')->get()->keyBy('id');
+        foreach ($products as $p) {
+            if ($p->is_bundle) {
+                throw ValidationException::withMessages(['components' => "{$p->name} sendiri sebuah paket; paket tidak bisa berisi paket."]);
+            }
+            if ($p->variants_count > 0) {
+                throw ValidationException::withMessages(['components' => "{$p->name} punya varian; pakai menu tanpa varian di dalam paket."]);
+            }
+        }
+
+        return array_map(fn (array $c): array => ['product_id' => (int) $c['product_id'], 'qty' => (int) $c['qty']], array_values($components));
     }
 
     /** Hide a product from the POS and the QR menu without deleting it; switching it back on restores it as it was. */

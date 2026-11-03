@@ -53,6 +53,7 @@ final class PermissionCatalog
             ]],
             'admin' => ['label' => 'Pengaturan', 'items' => [
                 'manage-menu' => ['label' => 'Kelola menu', 'hint' => 'Produk, kategori, modifier, stasiun dapur.'],
+                'manage-bundles' => ['label' => 'Kelola paket menu', 'hint' => 'Membuat produk paket yang isinya beberapa menu, dengan tiket dipecah per printer.'],
                 'manage-inventory' => ['label' => 'Kelola stok, bahan & resep', 'hint' => 'Bahan baku, pembelian, opname, resep, dan pengaturan HPP.'],
                 'manage-printers' => ['label' => 'Kelola printer', 'hint' => 'Daftar printer dan routing struk, bill, dan tiket per kategori/menu.'],
                 'view-stock' => ['label' => 'Lihat daftar stok', 'hint' => 'Daftar bahan dan jumlah stok (tanpa harga/biaya).'],
@@ -95,7 +96,7 @@ final class PermissionCatalog
      */
     public const OFFICE = [
         'view-sales-reports', 'view-accounting', 'manage-accounting', 'view-margin-report', 'view-kitchen-report', 'view-activity-log', 'view-waste-report',
-        'manage-menu', 'manage-inventory', 'manage-pricing', 'manage-discount-presets', 'manage-settings', 'manage-users', 'manage-roles', 'manage-tables',
+        'manage-menu', 'manage-bundles', 'manage-inventory', 'manage-pricing', 'manage-discount-presets', 'manage-settings', 'manage-users', 'manage-roles', 'manage-tables',
         'manage-printers', 'manage-online-payments', 'manage-suppliers', 'manage-assets', 'import-data', 'export-receipts',
         'manage-fixed-expenses', 'view-cash-ledger', 'manage-attendance',
     ];

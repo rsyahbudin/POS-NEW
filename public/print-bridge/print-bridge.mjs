@@ -68,6 +68,7 @@ function kitchenEscPos(t, paper) {
 	];
 	for (const i of t.items) {
 		out.push("\x1B!", `${i.qty} x ${i.name}\n`, "\x1B!\0");
+		if (i.bundle) out.push(`   Paket: ${i.bundle}\n`);
 		for (const m of i.modifiers) out.push(`   + ${m}\n`);
 		if (i.note) out.push(`   * ${i.note}\n`);
 	}

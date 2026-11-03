@@ -14,6 +14,7 @@ use Illuminate\Support\Carbon;
  * @property int $product_id
  * @property int|null $variant_id
  * @property int $qty
+ * @property bool $ask_modifiers
  * @property int $sort
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -26,7 +27,7 @@ class BundleItem extends Model
 
     protected function casts(): array
     {
-        return ['qty' => 'integer', 'sort' => 'integer'];
+        return ['qty' => 'integer', 'sort' => 'integer', 'ask_modifiers' => 'boolean'];
     }
 
     /** @return BelongsTo<Product, $this> */

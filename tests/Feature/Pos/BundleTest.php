@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Catalog\Models\ModifierGroup;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Floor\Models\Table;
 use App\Domain\Ordering\Exceptions\OrderException;
@@ -8,6 +9,7 @@ use App\Domain\Printing\Models\Printer;
 use App\Domain\Printing\Models\PrintJob;
 use App\Domain\Printing\PrintDispatcher;
 use App\Domain\Settings\Models\Outlet;
+use App\Http\Presenters\MenuPresenter;
 use App\Models\User;
 use Spatie\Permission\Models\Role;
 
@@ -104,8 +106,6 @@ it('keeps the chosen variant of a menu item in the bundle and prints it on the t
     $iced = $latte->variants()->create(['name' => 'Iced', 'price' => 30000, 'sort' => 1]);
     $body = fn (array $components) => ['name' => 'Paket Kopi', 'category_id' => $latte->category_id, 'base_price' => 40000, 'is_bundle' => true, 'components' => $components];
 
-    // an item with variants needs one of its own variants
-    $this->actingAs($owner)->post('/admin/products', $body([['product_id' => $latte->id, 'qty' => 1]]))->assertSessionHasErrors('components');
     $other = product('Americano');
     $foreign = $other->variants()->create(['name' => 'Large', 'price' => 25000, 'sort' => 0]);
     $this->actingAs($owner)->post('/admin/products', $body([['product_id' => $latte->id, 'variant_id' => $foreign->id, 'qty' => 1]]))->assertSessionHasErrors('components');
@@ -140,4 +140,58 @@ it('leaves bundles alone for someone who manages the menu but not bundles', func
 
     $made = Product::query()->where('name', 'Paket X')->firstOrFail();
     expect($made->is_bundle)->toBeFalse()->and($made->bundleItems)->toHaveCount(0);
+});
+
+it('lets the guest choose variant and options inside a bundle, adds paid options to the price and sends each choice to the right ticket', function () {
+    $owner = userWithRole('owner');
+    $bar = bundlePrinter();
+    $kitchen = bundlePrinter();
+    $tea = product('Americano');
+    $chicken = product('Nasi Goreng');
+    $tea->printers()->sync([$bar->id]);
+    $chicken->printers()->sync([$kitchen->id]);
+    $hot = $tea->variants()->create(['name' => 'Hot', 'price' => 22000, 'sort' => 0]);
+    $ice = $tea->variants()->create(['name' => 'Ice', 'price' => 22000, 'sort' => 1]);
+    $sweet = ModifierGroup::create(['outlet_id' => $tea->outlet_id, 'name' => 'Manis', 'min_select' => 1, 'max_select' => 1, 'is_required' => true]);
+    $sweetYes = $sweet->modifiers()->create(['name' => 'Manis', 'price_delta' => 0]);
+    $sweet->modifiers()->create(['name' => 'Tawar', 'price_delta' => 0]);
+    $tea->modifierGroups()->sync([$sweet->id]);
+    $sambal = ModifierGroup::create(['outlet_id' => $tea->outlet_id, 'name' => 'Sambal', 'min_select' => 0, 'max_select' => 1, 'is_required' => false]);
+    $matah = $sambal->modifiers()->create(['name' => 'Matah', 'price_delta' => 2000]);
+    $chicken->modifierGroups()->sync([$sambal->id]);
+
+    $this->actingAs($owner)->post('/admin/products', [
+        'name' => 'Paket 1', 'category_id' => $tea->category_id, 'base_price' => 30000, 'is_bundle' => true,
+        'components' => [
+            ['product_id' => $chicken->id, 'qty' => 1, 'ask_modifiers' => true],
+            ['product_id' => $tea->id, 'qty' => 1, 'ask_modifiers' => true],
+        ],
+    ])->assertSessionHasNoErrors();
+    $bundle = Product::query()->where('name', 'Paket 1')->firstOrFail();
+    $tableId = fn (int $n) => Table::query()->skip($n)->value('id');
+
+    // the menu hands the guest exactly the choices that are open
+    $menu = collect(MenuPresenter::categories($bundle->outlet_id))->flatMap(fn ($c) => $c['products'])->firstWhere('id', $bundle->id);
+    expect(collect($menu['bundle'])->pluck('name')->all())->toBe(['Nasi Goreng', 'Americano'])
+        ->and($menu['bundle'][1]['variants'])->toHaveCount(2)->and($menu['bundle'][1]['modifier_groups'])->toHaveCount(1);
+
+    // missing variant or a required option is refused
+    expect(fn () => placeOrder(items: [['product_id' => $bundle->id, 'qty' => 1, 'parts' => [['product_id' => $tea->id, 'modifier_ids' => [$sweetYes->id]]]]]))->toThrow(OrderException::class, 'Pilih varian untuk Americano');
+    expect(fn () => placeOrder(items: [['product_id' => $bundle->id, 'qty' => 1, 'parts' => [['product_id' => $tea->id, 'variant_id' => $ice->id]]]], tableId: $tableId(1)))->toThrow(OrderException::class, 'Pilih minimal 1 untuk Manis');
+    // an option that belongs to another menu item is refused
+    expect(fn () => placeOrder(items: [['product_id' => $bundle->id, 'qty' => 1, 'parts' => [['product_id' => $tea->id, 'variant_id' => $ice->id, 'modifier_ids' => [$sweetYes->id, $matah->id]]]]], tableId: $tableId(2)))->toThrow(OrderException::class, 'tidak valid');
+
+    $order = placeOrder(items: [['product_id' => $bundle->id, 'qty' => 2, 'parts' => [
+        ['product_id' => $chicken->id, 'modifier_ids' => [$matah->id]],
+        ['product_id' => $tea->id, 'variant_id' => $ice->id, 'modifier_ids' => [$sweetYes->id]],
+    ]]], tableId: $tableId(3));
+
+    // Rp30.000 + the Rp2.000 sambal, twice; the choices are on the line the receipt shows
+    expect($order->subtotal)->toBe(64000);
+    $item = $order->items->first();
+    expect(collect($item->modifiers_snapshot)->pluck('name')->all())->toBe(['Matah', 'Ice, Manis']);
+
+    $jobs = PrintJob::query()->where('kind', 'ticket')->get()->keyBy('printer_id');
+    expect($jobs[$kitchen->id]->payload['items'][0])->toMatchArray(['name' => 'Nasi Goreng', 'qty' => 2, 'modifiers' => ['Matah']])
+        ->and($jobs[$bar->id]->payload['items'][0])->toMatchArray(['name' => 'Americano (Ice)', 'qty' => 2, 'modifiers' => ['Manis']]);
 });

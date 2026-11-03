@@ -20,7 +20,7 @@ use Illuminate\Support\Carbon;
  * @property int $unit_price
  * @property int $qty
  * @property array<mixed>|null $modifiers_snapshot
- * @property list<array{product_id: int, variant_id: int|null, name: string, qty: int, station_id: int|null}>|null $bundle_snapshot
+ * @property list<array{product_id: int, variant_id: int|null, name: string, qty: int, station_id: int|null, modifier_ids: list<int>, modifiers: list<string>}>|null $bundle_snapshot
  * @property string|null $note
  * @property int $line_total
  * @property ItemStatus $status

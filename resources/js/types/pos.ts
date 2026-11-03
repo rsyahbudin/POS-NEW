@@ -138,6 +138,8 @@ export type Product = {
     stock_qty: number | null;
     variants: Variant[];
     modifier_groups: ModifierGroup[];
+    /** For a bundle: the menu items inside it and what the guest may still choose. */
+    bundle?: import('@/lib/bundle').BundlePart[] | null;
 };
 
 export type Category = { id: number; name: string; products: Product[] };
@@ -213,6 +215,8 @@ export type CartLine = {
     product: Product;
     variantId: number | null;
     modifierIds: number[];
+    /** Choices made inside a bundle, one entry per menu item. */
+    parts?: import('@/lib/bundle').BundlePayload;
     qty: number;
     note: string;
     unitPrice: number;

@@ -3,6 +3,7 @@
 namespace App\Http\Presenters;
 
 use App\Domain\Catalog\Models\Category;
+use App\Domain\Catalog\Models\ModifierGroup;
 use App\Domain\Floor\Models\Area;
 use App\Domain\Floor\Models\ServiceCall;
 use App\Domain\Ordering\Models\Order;
@@ -18,7 +19,7 @@ class MenuPresenter
     public static function categories(int $outletId): array
     {
         return Category::query()->where('outlet_id', $outletId)->orderBy('sort')
-            ->with(['products' => fn ($q) => $q->where('is_active', true)->orderBy('sort')->with(['variants', 'modifierGroups.modifiers'])])
+            ->with(['products' => fn ($q) => $q->where('is_active', true)->orderBy('sort')->with(['variants', 'modifierGroups.modifiers', 'bundleItems.product.variants', 'bundleItems.product.modifierGroups.modifiers', 'bundleItems.variant'])])
             ->get()
             ->map(fn (Category $c) => [
                 'id' => $c->id,
@@ -28,13 +29,33 @@ class MenuPresenter
                     'price' => $p->base_price, 'image' => MediaUrl::public($p->image_path),
                     'is_available' => $p->is_available, 'stock_qty' => $p->stock_qty,
                     'variants' => $p->variants->map(fn ($v) => ['id' => $v->id, 'name' => $v->name, 'price' => $v->price, 'is_available' => $v->is_available])->all(),
-                    'modifier_groups' => $p->modifierGroups->map(fn ($g) => [
-                        'id' => $g->id, 'name' => $g->name, 'min' => $g->is_required ? max(1, $g->min_select) : $g->min_select,
-                        'max' => $g->max_select, 'required' => $g->is_required,
-                        'modifiers' => $g->modifiers->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'price_delta' => $m->price_delta, 'is_available' => $m->is_available])->all(),
-                    ])->all(),
+                    'modifier_groups' => $p->is_bundle ? [] : self::groups($p->modifierGroups),
+                    'bundle' => $p->is_bundle ? $p->bundleItems->map(fn ($b) => [
+                        'product_id' => $b->product_id, 'name' => $b->product->name, 'qty' => $b->qty,
+                        'fixed_variant' => $b->variant?->name,
+                        'variants' => $b->variant === null ? $b->product->variants->map(fn ($v) => ['id' => $v->id, 'name' => $v->name, 'price' => $v->price, 'is_available' => $v->is_available])->all() : [],
+                        'modifier_groups' => $b->ask_modifiers ? self::groups($b->product->modifierGroups) : [],
+                    ])->all() : null,
                 ])->values()->all(),
             ])->filter(fn ($c) => $c['products'] !== [])->values()->all();
+    }
+
+    /**
+     * @param  iterable<ModifierGroup>  $groups
+     * @return array<int, array<string, mixed>>
+     */
+    private static function groups(iterable $groups): array
+    {
+        $out = [];
+        foreach ($groups as $g) {
+            $out[] = [
+                'id' => $g->id, 'name' => $g->name, 'min' => $g->is_required ? max(1, $g->min_select) : $g->min_select,
+                'max' => $g->max_select, 'required' => $g->is_required,
+                'modifiers' => $g->modifiers->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'price_delta' => $m->price_delta, 'is_available' => $m->is_available])->all(),
+            ];
+        }
+
+        return $out;
     }
 
     /** @return array<int, array<string, mixed>> */

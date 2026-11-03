@@ -1,7 +1,18 @@
 import { Head } from '@inertiajs/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { BundleChoices } from '@/components/pos/bundle-choices';
 import { ProductArt } from '@/components/pos/product-art';
+import {
+    bundleExtra,
+    bundleLabel,
+    bundleNeedsChoice,
+    bundleParts,
+    bundlePayload,
+    bundleProblem,
+    initialPicks,
+} from '@/lib/bundle';
+import type { BundlePayload, BundlePicks } from '@/lib/bundle';
 import type { Category, Modifier, Product } from '@/types/pos';
 
 /*
@@ -15,6 +26,7 @@ type Line = {
     product: Product;
     variantId: number | null;
     modifierIds: number[];
+    parts?: BundlePayload;
     qty: number;
     note: string;
     unit: number;
@@ -335,6 +347,7 @@ export default function QrMenu({
                         product_id: l.product.id,
                         variant_id: l.variantId,
                         modifier_ids: l.modifierIds,
+                        parts: l.parts,
                         qty: l.qty,
                         note: l.note || null,
                     })),
@@ -554,7 +567,8 @@ export default function QrMenu({
                                 {c.products.map((p) => {
                                     const hasOptions =
                                         p.variants.length > 0 ||
-                                        p.modifier_groups.length > 0;
+                                        p.modifier_groups.length > 0 ||
+                                        bundleNeedsChoice(p);
                                     const out = !p.is_available;
                                     const inCart = cart
                                         .filter((l) => l.product.id === p.id)
@@ -1720,10 +1734,15 @@ function Picker({
             ?.id ?? null,
     );
     const [picked, setPicked] = useState<Record<number, number[]>>({});
+    const [picks, setPicks] = useState<BundlePicks>(() =>
+        initialPicks(product),
+    );
+    const isBundle = bundleParts(product).length > 0;
     const [qty, setQty] = useState(1);
     const [note, setNote] = useState('');
 
     const unit =
+        bundleExtra(product, picks) +
         (product.variants.find((v) => v.id === variantId)?.price ??
             product.price) +
         product.modifier_groups
@@ -1736,6 +1755,7 @@ function Picker({
     const missing = product.modifier_groups.find(
         (g) => (picked[g.id]?.length ?? 0) < g.min,
     );
+    const bundleMissing = bundleProblem(product, picks);
 
     const toggle = (gid: number, id: number, max: number) =>
         setPicked((p) => {
@@ -1763,9 +1783,11 @@ function Picker({
             onClose={onClose}
             footer={
                 <>
-                    {missing && (
+                    {(missing || bundleMissing) && (
                         <p className="mb-2 text-xs font-medium text-red-700 dark:text-red-400">
-                            Pilih minimal {missing.min} untuk {missing.name}
+                            {missing
+                                ? `Pilih minimal ${missing.min} untuk ${missing.name}`
+                                : bundleMissing}
                         </p>
                     )}
                     <div className="flex items-center gap-3">
@@ -1793,7 +1815,7 @@ function Picker({
                             </button>
                         </div>
                         <button
-                            disabled={!!missing}
+                            disabled={!!missing || !!bundleMissing}
                             onClick={() => {
                                 const ids = Object.values(picked).flat();
                                 const names = product.modifier_groups.flatMap(
@@ -1810,6 +1832,9 @@ function Picker({
                                     product,
                                     variantId,
                                     modifierIds: ids,
+                                    parts: isBundle
+                                        ? bundlePayload(product, picks)
+                                        : undefined,
                                     qty,
                                     note: note.trim(),
                                     unit,
@@ -1818,6 +1843,9 @@ function Picker({
                                         v ? `(${v.name})` : '',
                                         names.length
                                             ? `· ${names.join(', ')}`
+                                            : '',
+                                        isBundle && bundleNeedsChoice(product)
+                                            ? `· ${bundleLabel(product, picks)}`
                                             : '',
                                     ]
                                         .filter(Boolean)
@@ -1862,6 +1890,15 @@ function Picker({
                         ))}
                     </div>
                 </fieldset>
+            )}
+            {isBundle && (
+                <div className="mb-5">
+                    <BundleChoices
+                        product={product}
+                        picks={picks}
+                        onChange={setPicks}
+                    />
+                </div>
             )}
             {product.modifier_groups.map((g) => (
                 <fieldset key={g.id} className="mb-5">

@@ -125,6 +125,11 @@ class QrMenuController extends Controller
             'items.*.variant_id' => ['nullable', 'integer'],
             'items.*.modifier_ids' => ['nullable', 'array'],
             'items.*.modifier_ids.*' => ['integer'],
+            'items.*.parts' => ['nullable', 'array', 'max:30'],
+            'items.*.parts.*.product_id' => ['required', 'integer'],
+            'items.*.parts.*.variant_id' => ['nullable', 'integer'],
+            'items.*.parts.*.modifier_ids' => ['nullable', 'array'],
+            'items.*.parts.*.modifier_ids.*' => ['integer'],
             'items.*.qty' => ['required', 'integer', 'min:1', 'max:20'],
             'items.*.note' => ['nullable', 'string', 'max:120'],
         ]);

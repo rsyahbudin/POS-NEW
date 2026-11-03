@@ -1,8 +1,19 @@
 import { useMemo, useState } from 'react';
+import { BundleChoices } from '@/components/pos/bundle-choices';
 import { Modal } from '@/components/pos/modal';
 import { TextArea } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { t } from '@/lang';
+import {
+    bundleExtra,
+    bundleLabel,
+    bundleNeedsChoice,
+    bundleParts,
+    bundlePayload,
+    bundleProblem,
+    initialPicks,
+} from '@/lib/bundle';
+import type { BundlePicks } from '@/lib/bundle';
 import { rupiah, uuid } from '@/lib/format';
 import type { CartLine, Product } from '@/types/pos';
 
@@ -49,6 +60,10 @@ function Body({
             ?.id ?? null,
     );
     const [picked, setPicked] = useState<Record<number, number[]>>({});
+    const [picks, setPicks] = useState<BundlePicks>(() =>
+        initialPicks(product),
+    );
+    const isBundle = bundleParts(product).length > 0;
     const [qty, setQty] = useState(1);
     const [note, setNote] = useState('');
 
@@ -62,12 +77,19 @@ function Body({
             )
             .reduce((s, m) => s + m.price_delta, 0);
 
-        return base + extra;
-    }, [product, variantId, picked]);
+        return base + extra + bundleExtra(product, picks);
+    }, [product, variantId, picked, picks]);
 
-    const problems = product.modifier_groups
-        .filter((g) => (picked[g.id]?.length ?? 0) < g.min)
-        .map((g) => t('Pilih minimal {n} untuk {g}', { n: g.min, g: g.name }));
+    const problems = [
+        ...product.modifier_groups
+            .filter((g) => (picked[g.id]?.length ?? 0) < g.min)
+            .map((g) =>
+                t('Pilih minimal {n} untuk {g}', { n: g.min, g: g.name }),
+            ),
+        ...(bundleProblem(product, picks)
+            ? [bundleProblem(product, picks)!]
+            : []),
+    ];
 
     const toggle = (groupId: number, id: number, max: number) =>
         setPicked((p) => {
@@ -101,10 +123,14 @@ function Body({
             qty,
             note: note.trim(),
             unitPrice: unit,
+            parts: isBundle ? bundlePayload(product, picks) : undefined,
             label: [
                 product.name,
                 v ? `(${v.name})` : '',
                 names.length ? `· ${names.join(', ')}` : '',
+                isBundle && bundleNeedsChoice(product)
+                    ? `· ${bundleLabel(product, picks)}`
+                    : '',
             ]
                 .filter(Boolean)
                 .join(' '),
@@ -141,6 +167,14 @@ function Body({
                         ))}
                     </div>
                 </fieldset>
+            )}
+
+            {isBundle && (
+                <BundleChoices
+                    product={product}
+                    picks={picks}
+                    onChange={setPicks}
+                />
             )}
 
             {product.modifier_groups.map((g) => (

@@ -45,7 +45,7 @@ class MenuController extends Controller
                 'modifier_group_ids' => $p->modifierGroups->pluck('id')->all(),
                 'printer_ids' => $p->printers->pluck('id')->all(),
                 'is_bundle' => $p->is_bundle,
-                'components' => $p->bundleItems->map(fn ($b) => ['product_id' => $b->product_id, 'variant_id' => $b->variant_id, 'qty' => $b->qty])->all(),
+                'components' => $p->bundleItems->map(fn ($b) => ['product_id' => $b->product_id, 'variant_id' => $b->variant_id, 'ask_modifiers' => $b->ask_modifiers, 'qty' => $b->qty])->all(),
             ]),
             'canBundles' => (bool) request()->user()?->can('manage-bundles'),
             'modifierGroups' => ModifierGroup::query()->where('outlet_id', $id)->with('modifiers')->get()->map(fn ($g) => [
@@ -113,6 +113,7 @@ class MenuController extends Controller
             'components' => 'nullable|array|max:30',
             'components.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('outlet_id', $outletId)],
             'components.*.variant_id' => ['nullable', 'integer', Rule::exists('product_variants', 'id')],
+            'components.*.ask_modifiers' => 'boolean',
             'components.*.qty' => 'required|integer|min:1|max:50',
         ]);
 
@@ -155,10 +156,11 @@ class MenuController extends Controller
 
     /**
      * The menu items a bundle is made of. An item can be in a bundle once and cannot itself be a bundle.
-     * An item with variants needs the variant the bundle includes (Es Teh Manis, Iced); an item without needs none.
+     * An item with variants either has the variant the bundle includes fixed (Es Teh Manis, Iced) or leaves it to the guest (no variant set).
+     * The guest can also be given the item's own options (sambal, sweetness) to pick.
      *
-     * @param  array<int, array{product_id: int, variant_id?: int|null, qty: int}>  $components
-     * @return list<array{product_id: int, variant_id: int|null, qty: int}>
+     * @param  array<int, array{product_id: int, variant_id?: int|null, ask_modifiers?: bool, qty: int}>  $components
+     * @return list<array{product_id: int, variant_id: int|null, ask_modifiers: bool, qty: int}>
      */
     private function bundleParts(array $components, ?Product $bundle): array
     {
@@ -183,10 +185,13 @@ class MenuController extends Controller
                 throw ValidationException::withMessages(['components' => "{$p->name} sendiri sebuah paket; paket tidak bisa berisi paket."]);
             }
             $variantId = ! empty($c['variant_id']) ? (int) $c['variant_id'] : null;
-            if ($p->variants->isNotEmpty() && ($variantId === null || ! $p->variants->contains('id', $variantId))) {
-                throw ValidationException::withMessages(['components' => "Pilih varian untuk {$p->name}."]);
+            if ($variantId !== null && ! $p->variants->contains('id', $variantId)) {
+                throw ValidationException::withMessages(['components' => "Varian bukan milik {$p->name}."]);
             }
-            $parts[] = ['product_id' => $p->id, 'variant_id' => $p->variants->isNotEmpty() ? $variantId : null, 'qty' => (int) $c['qty']];
+            $parts[] = [
+                'product_id' => $p->id, 'variant_id' => $variantId, 'qty' => (int) $c['qty'],
+                'ask_modifiers' => ! empty($c['ask_modifiers']) && $p->modifierGroups()->exists(),
+            ];
         }
 
         return $parts;

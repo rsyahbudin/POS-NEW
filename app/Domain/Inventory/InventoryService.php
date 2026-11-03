@@ -65,7 +65,7 @@ class InventoryService
         }
         $use = [];
         foreach ($item->bundle_snapshot as $part) {
-            foreach ($this->portion($part['product_id'], $part['variant_id'] ?? null, []) as $id => $qty) {
+            foreach ($this->portion($part['product_id'], $part['variant_id'] ?? null, array_map('intval', $part['modifier_ids'])) as $id => $qty) {
                 $use[$id] = ($use[$id] ?? 0) + $qty * $part['qty'];
             }
         }

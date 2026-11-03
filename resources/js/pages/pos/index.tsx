@@ -19,6 +19,7 @@ import { SoldOutDialog } from '@/components/pos/sold-out-dialog';
 import { DiscountDialog } from '@/components/pos/discount-dialog';
 import { HistoryDialog } from '@/components/pos/history-dialog';
 import { ModifierSheet } from '@/components/pos/modifier-sheet';
+import { bundleNeedsChoice } from '@/lib/bundle';
 import { OpenShiftDialog } from '@/components/pos/open-shift-dialog';
 import { Modal } from '@/components/pos/modal';
 import { MoveDialog } from '@/components/pos/move-dialog';
@@ -436,6 +437,7 @@ export default function PosPage(props: Props) {
 
         if (
             p.variants.length > 0 ||
+            bundleNeedsChoice(p) ||
             p.modifier_groups.some((g) => g.min > 0 || g.modifiers.length > 0)
         ) {
             setPicking(p);
@@ -462,6 +464,8 @@ export default function PosPage(props: Props) {
                     x.product.id === line.product.id &&
                     x.variantId === line.variantId &&
                     x.note === line.note &&
+                    JSON.stringify(x.parts ?? null) ===
+                        JSON.stringify(line.parts ?? null) &&
                     [...x.modifierIds].sort((a, b) => a - b).join() ===
                         [...line.modifierIds].sort((a, b) => a - b).join(),
             );
@@ -493,6 +497,7 @@ export default function PosPage(props: Props) {
                     product_id: l.product.id,
                     variant_id: l.variantId,
                     modifier_ids: l.modifierIds,
+                    parts: l.parts,
                     qty: l.qty,
                     note: l.note || null,
                 })),

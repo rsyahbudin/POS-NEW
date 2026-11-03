@@ -95,7 +95,7 @@ class PrintDispatcher
                 foreach ($item->bundle_snapshot as $part) {
                     $lines[] = [
                         'product_id' => $part['product_id'], 'station_id' => $part['station_id'], 'qty' => $part['qty'] * $item->qty,
-                        'name' => $part['name'], 'note' => $item->note, 'modifiers' => [], 'bundle' => $item->name_snapshot,
+                        'name' => $part['name'], 'note' => $item->note, 'modifiers' => $part['modifiers'], 'bundle' => $item->name_snapshot,
                     ];
                 }
 

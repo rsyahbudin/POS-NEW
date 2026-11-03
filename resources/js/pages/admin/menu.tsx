@@ -22,6 +22,7 @@ type Variant = { id?: number; name: string; price: number };
 type Component = {
     product_id: number | '';
     variant_id: number | null;
+    ask_modifiers: boolean;
     qty: number;
 };
 type Product = {
@@ -711,12 +712,20 @@ export default function MenuPage({
                                         Harga paket = harga dasar di atas. Tiket
                                         dipecah per isi: tiap menu tercetak di
                                         printer menu itu sendiri (Bar, Dapur,
-                                        dst). Paket tidak punya varian atau
-                                        modifier, dan isinya harus menu tanpa
-                                        varian.
+                                        dst). Paket sendiri tidak punya varian
+                                        atau modifier. Menu yang punya varian:
+                                        pilih varian tetap, atau biarkan
+                                        &quot;Pelanggan memilih&quot;. Centang
+                                        &quot;Pelanggan memilih opsi&quot; agar
+                                        pelanggan menentukan opsi menu itu
+                                        (sambal, manis atau tidak); opsi
+                                        berbayar menambah harga paket.
                                     </p>
                                     {draft.components.map((c, i) => (
-                                        <div key={i} className="flex gap-2">
+                                        <div
+                                            key={i}
+                                            className="flex flex-wrap items-center gap-2"
+                                        >
                                             <Select
                                                 value={c.product_id}
                                                 onChange={(e) =>
@@ -796,7 +805,7 @@ export default function MenuPage({
                                                     }
                                                 >
                                                     <option value="">
-                                                        Pilih varian
+                                                        Pelanggan memilih
                                                     </option>
                                                     {products
                                                         .find(
@@ -836,6 +845,43 @@ export default function MenuPage({
                                                     })
                                                 }
                                             />
+                                            {(products.find(
+                                                (p) => p.id === c.product_id,
+                                            )?.modifier_group_ids.length ?? 0) >
+                                                0 && (
+                                                <label className="flex min-h-11 items-center gap-2 text-xs">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="size-5"
+                                                        checked={
+                                                            c.ask_modifiers
+                                                        }
+                                                        onChange={(e) =>
+                                                            setDraft({
+                                                                ...draft,
+                                                                components:
+                                                                    draft.components.map(
+                                                                        (
+                                                                            x,
+                                                                            j,
+                                                                        ) =>
+                                                                            j ===
+                                                                            i
+                                                                                ? {
+                                                                                      ...x,
+                                                                                      ask_modifiers:
+                                                                                          e
+                                                                                              .target
+                                                                                              .checked,
+                                                                                  }
+                                                                                : x,
+                                                                    ),
+                                                            })
+                                                        }
+                                                    />
+                                                    Pelanggan memilih opsi
+                                                </label>
+                                            )}
                                             <Button
                                                 type="button"
                                                 variant="ghost"
@@ -874,6 +920,7 @@ export default function MenuPage({
                                                     {
                                                         product_id: '',
                                                         variant_id: null,
+                                                        ask_modifiers: false,
                                                         qty: 1,
                                                     },
                                                 ],

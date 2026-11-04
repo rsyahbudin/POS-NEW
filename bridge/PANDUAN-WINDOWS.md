@@ -33,3 +33,9 @@ Tugas ini berjalan saat PC menyala, tanpa perlu login. Untuk mencoba tanpa resta
 - Jika PC mati, cetakan ke printer LAN berhenti. Tiket yang menunggu lebih dari 30 menit ditandai gagal dan bisa dicetak ulang dari halaman Printer.
 - Jika token diganti, perbarui `start-print-bridge.bat`.
 - Beri IP tetap pada printer (lewat router atau pengaturan printer), supaya alamatnya tidak berubah.
+
+## Kalau ada error
+
+- **"The term 'start-print-bridge.bat' is not recognized"** (PowerShell): PowerShell tidak menjalankan file dari folder saat ini tanpa awalan `.\`. Ketik `.\start-print-bridge.bat`, atau klik dua kali file-nya.
+- **"'node' is not recognized"** (cmd atau klik dua kali): Node ada di PATH PowerShell tapi tidak di PATH cmd. Versi terbaru `start-print-bridge.bat` sudah mencoba `C:\Program Files\nodejs\node.exe` otomatis. Kalau Node ada di folder lain, jalankan `where node` di PowerShell (`(Get-Command node).Source`) dan ganti baris `set NODE=...` dengan jalur lengkapnya.
+- Hasil jalannya tercatat di `print-bridge.log` di folder yang sama.

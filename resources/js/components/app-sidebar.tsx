@@ -22,6 +22,7 @@ export function AppSidebar() {
     const features = usePage().props.features as
         | {
               kds: boolean;
+              reservation: boolean;
               inventory: boolean;
               schedule: boolean;
               attendance: boolean;

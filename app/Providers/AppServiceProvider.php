@@ -42,6 +42,8 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(6)->by('qr-submit-ip:'.$r->ip()),
             Limit::perMinute(10)->by('qr-submit-table:'.$r->route('token')),
         ]);
+        RateLimiter::for('reservation', fn (Request $r) => [Limit::perMinute(60)->by('reservation-ip:'.$r->ip())]);
+        RateLimiter::for('reservation-submit', fn (Request $r) => [Limit::perMinute(5)->by('reservation-submit-ip:'.$r->ip()), Limit::perHour(20)->by('reservation-submit-ip-h:'.$r->ip())]);
         RateLimiter::for('qr-call', fn (Request $r) => [
             Limit::perMinute(4)->by('qr-call-ip:'.$r->ip()),
             Limit::perMinute(6)->by('qr-call-table:'.$r->route('token')),

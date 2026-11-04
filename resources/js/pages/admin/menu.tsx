@@ -49,6 +49,7 @@ type Product = {
     variants: Variant[];
     modifier_group_ids: number[];
     is_bundle: boolean;
+    reservation_menu: boolean;
     components: Component[];
 };
 type Group = {
@@ -88,6 +89,7 @@ type Draft = {
     variants: Variant[];
     modifier_group_ids: number[];
     is_bundle: boolean;
+    reservation_menu: boolean;
     components: Component[];
     image: File | null;
 };
@@ -105,6 +107,7 @@ const blank = (cat?: number): Draft => ({
     variants: [],
     modifier_group_ids: [],
     is_bundle: false,
+    reservation_menu: false,
     components: [],
     image: null,
 });
@@ -159,6 +162,7 @@ export default function MenuPage({
             modifier_group_ids: draft.modifier_group_ids,
             printer_ids: draft.printer_ids,
             is_bundle: draft.is_bundle ? 1 : 0,
+            reservation_menu: draft.reservation_menu ? 1 : 0,
             components: draft.is_bundle ? draft.components : [],
         };
         if (draft.image) body.image = draft.image;
@@ -395,6 +399,8 @@ export default function MenuPage({
                                                 modifier_group_ids:
                                                     p.modifier_group_ids,
                                                 is_bundle: p.is_bundle,
+                                                reservation_menu:
+                                                    p.reservation_menu,
                                                 components: p.components,
                                                 image: null,
                                             })
@@ -594,6 +600,27 @@ export default function MenuPage({
                             }
                         />
                     </Field>
+
+                    <label className="flex min-h-11 items-center gap-2 text-sm">
+                        <input
+                            type="checkbox"
+                            className="size-5"
+                            checked={draft.reservation_menu}
+                            onChange={(e) =>
+                                setDraft({
+                                    ...draft,
+                                    reservation_menu: e.target.checked,
+                                })
+                            }
+                        />
+                        <span>
+                            Menu reservasi (Ramadan)
+                            <span className="block text-xs text-muted-foreground">
+                                Tampil di halaman reservasi pelanggan. Menu lain
+                                hanya muncul bila pelanggan memindai QR meja.
+                            </span>
+                        </span>
+                    </label>
 
                     {(canBundles || draft.is_bundle) && (
                         <fieldset className="grid gap-2 rounded-xl border p-3">

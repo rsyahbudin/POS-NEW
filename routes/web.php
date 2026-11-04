@@ -38,6 +38,8 @@ use App\Http\Controllers\Qr\QrMenuController;
 use App\Http\Controllers\Qr\QrPaymentController;
 use App\Http\Controllers\QrisWebhookController;
 use App\Http\Controllers\Receipt\ReceiptController;
+use App\Http\Controllers\Reservation\ReservationBookingController;
+use App\Http\Controllers\Reservation\ReservationStaffController;
 use App\Http\Controllers\SectionHomeController;
 use App\Http\Controllers\Shift\ShiftController;
 use App\Http\Controllers\Staffing\AttendanceController;
@@ -54,6 +56,12 @@ use Illuminate\Support\Facades\Route;
 | Public (no login): QR self-order and shareable receipts
 |--------------------------------------------------------------------------
 */
+Route::prefix('reservasi')->middleware('throttle:reservation')->group(function () {
+    Route::get('/', [ReservationBookingController::class, 'show'])->name('reservation.book');
+    Route::get('slots', [ReservationBookingController::class, 'slots'])->name('reservation.slots');
+    Route::post('/', [ReservationBookingController::class, 'store'])->middleware('throttle:reservation-submit')->name('reservation.store');
+    Route::get('{code}', [ReservationBookingController::class, 'status'])->name('reservation.status');
+});
 Route::prefix('m/{token}')->middleware('throttle:qr')->group(function () {
     Route::get('/', [QrMenuController::class, 'show'])->name('qr.show');
     Route::get('status', [QrMenuController::class, 'statusJson'])->name('qr.status');
@@ -194,6 +202,14 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::get('export', [LongshiftController::class, 'export'])->name('export');
         });
         Route::post('{approval}/decide', [LongshiftController::class, 'decide'])->middleware('permission:approve-longshift')->name('decide');
+    });
+
+    // Ramadan reservations: the staff side
+    Route::prefix('reservations')->name('reservations.')->middleware('permission:manage-reservations')->group(function () {
+        Route::get('/', [ReservationStaffController::class, 'index'])->name('index');
+        Route::post('{reservation}/seat', [ReservationStaffController::class, 'seat'])->name('seat');
+        Route::post('{reservation}/close', [ReservationStaffController::class, 'close'])->name('close');
+        Route::post('{reservation}/tables', [ReservationStaffController::class, 'retable'])->name('retable');
     });
 
     // Print station: a device that serves the queued print jobs of its printers

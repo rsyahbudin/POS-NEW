@@ -16,8 +16,7 @@ class SyncTableStatusAction
         }
 
         $order = Order::query()
-            ->where('table_id', $tableId)
-            ->whereIn('status', ['open', 'partially_paid'])
+            ->openOnTable($tableId)
             ->whereHas('items', fn ($q) => $q->whereIn('status', ['new', 'preparing', 'ready']))
             ->latest('id')
             ->first();
@@ -29,5 +28,14 @@ class SyncTableStatusAction
         };
 
         Table::query()->whereKey($tableId)->update(['status' => $status->value]);
+
+        // the tables joined to the order follow it, unless one of them has an order of its own
+        $latest = Order::query()->where('table_id', $tableId)->latest('id')->first();
+        foreach ($latest?->joinedTables()->pluck('tables.id') ?? [] as $joined) {
+            $busyOnItsOwn = Order::query()->where('table_id', $joined)->whereIn('status', ['open', 'partially_paid'])->exists();
+            if (! $busyOnItsOwn) {
+                Table::query()->whereKey($joined)->update(['status' => $status->value]);
+            }
+        }
     }
 }

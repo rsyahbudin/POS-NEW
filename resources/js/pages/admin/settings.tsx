@@ -14,7 +14,15 @@ import { ImagePicker } from '@/components/pos/image-picker';
 
 type Field_ = {
     key: string;
-    type: 'bool' | 'int' | 'text' | 'time' | 'select' | 'secret' | 'list';
+    type:
+        | 'bool'
+        | 'int'
+        | 'text'
+        | 'time'
+        | 'date'
+        | 'select'
+        | 'secret'
+        | 'list';
     label: string;
     hint: string;
     options?: [string, string][];
@@ -587,11 +595,14 @@ function CatalogForm({
                                                 type={
                                                     f.type === 'time'
                                                         ? 'time'
-                                                        : f.type === 'int'
-                                                          ? 'number'
-                                                          : f.type === 'secret'
-                                                            ? 'password'
-                                                            : 'text'
+                                                        : f.type === 'date'
+                                                          ? 'date'
+                                                          : f.type === 'int'
+                                                            ? 'number'
+                                                            : f.type ===
+                                                                'secret'
+                                                              ? 'password'
+                                                              : 'text'
                                                 }
                                                 min={f.min}
                                                 max={f.max}

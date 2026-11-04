@@ -59,7 +59,7 @@ class SubmitQrOrderAction
             $recent = OrderRound::query()
                 ->where('source', RoundSource::Qr)
                 ->where('created_at', '>=', now()->subMinutes($window))
-                ->whereHas('order', fn ($q) => $q->where('table_id', $table->id))
+                ->whereHas('order', fn ($q) => $q->openOnTable($table->id))
                 ->count();
             if ($recent >= $max) {
                 throw new OrderException('Terlalu banyak pesanan dari meja ini. Coba lagi beberapa menit lagi atau panggil staf.');
@@ -67,10 +67,7 @@ class SubmitQrOrderAction
 
             $rows = $this->items->build(is_array($data['items'] ?? null) ? array_values($data['items']) : [], $table->outlet_id);
 
-            $order = Order::query()
-                ->where('table_id', $table->id)
-                ->whereIn('status', ['open', 'partially_paid'])
-                ->lockForUpdate()->latest('id')->first();
+            $order = Order::query()->openOnTable($table->id)->lockForUpdate()->latest('id')->first();
 
             if (! $order) {
                 $date = BusinessDate::for();

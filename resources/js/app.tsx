@@ -16,6 +16,7 @@ void createInertiaApp({
             case name.startsWith('pos/'):
             case name.startsWith('kds/'):
             case name.startsWith('qr/'):
+            case name.startsWith('reservation/'):
             case name.startsWith('receipt/'):
             case name.startsWith('shift/'):
             case name === 'staffing/kiosk':

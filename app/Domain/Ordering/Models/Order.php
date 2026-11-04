@@ -9,8 +9,10 @@ use App\Domain\Payment\Models\Bill;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Pricing\Models\Discount;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -63,6 +65,24 @@ class Order extends Model
             'bill_requested_at' => 'datetime',
             'closed_at' => 'datetime',
         ];
+    }
+
+    /** @return BelongsToMany<Table, $this> the other tables of a party seated at several tables, sharing this one bill */
+    public function joinedTables(): BelongsToMany
+    {
+        return $this->belongsToMany(Table::class, 'order_tables');
+    }
+
+    /**
+     * The orders still open on a table, whether it is the order's own table or one joined to it.
+     *
+     * @param  Builder<Order>  $query
+     * @return Builder<Order>
+     */
+    public function scopeOpenOnTable(Builder $query, int $tableId): Builder
+    {
+        return $query->whereIn('status', ['open', 'partially_paid'])
+            ->where(fn (Builder $q) => $q->where('table_id', $tableId)->orWhereHas('joinedTables', fn ($t) => $t->where('tables.id', $tableId)));
     }
 
     /** @return BelongsTo<Table, $this> */

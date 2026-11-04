@@ -112,10 +112,7 @@ class PlaceOrderAction
 
         if ($type === OrderType::DineIn && ! empty($data['table_id'])) {
             $table = Table::query()->lockForUpdate()->whereKey((int) $data['table_id'])->firstOrFail();
-            $existing = Order::query()
-                ->where('table_id', $table->id)
-                ->whereIn('status', ['open', 'partially_paid'])
-                ->lockForUpdate()->latest('id')->first();
+            $existing = Order::query()->openOnTable($table->id)->lockForUpdate()->latest('id')->first();
             if ($existing) {
                 return $existing;
             }

@@ -34,6 +34,7 @@ export function AccountMenu({
     const features = page.props.features as
         | {
               kds: boolean;
+              reservation: boolean;
               inventory: boolean;
               schedule: boolean;
               attendance: boolean;

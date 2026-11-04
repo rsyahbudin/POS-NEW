@@ -1,6 +1,7 @@
 import {
     BookOpenCheck,
     CalendarCheck,
+    CalendarDays,
     ClipboardCheck,
     ChefHat,
     Coins,
@@ -32,7 +33,13 @@ import type { NavItem } from '@/types';
 
 export type Item = NavItem & {
     permission?: string | string[];
-    feature?: 'kds' | 'inventory' | 'schedule' | 'attendance' | 'staffing';
+    feature?:
+        | 'kds'
+        | 'reservation'
+        | 'inventory'
+        | 'schedule'
+        | 'attendance'
+        | 'staffing';
 };
 
 export const top: Item[] = [
@@ -54,6 +61,13 @@ export const top: Item[] = [
         icon: ChefHat,
         permission: 'update-kitchen-status',
         feature: 'kds',
+    },
+    {
+        title: 'Reservasi',
+        href: '/reservations',
+        icon: CalendarDays,
+        permission: 'manage-reservations',
+        feature: 'reservation',
     },
     {
         title: 'Shift & Kas',
@@ -285,6 +299,7 @@ type Who = { permissions?: string[]; roles?: string[] } | null | undefined;
 type Features =
     | {
           kds: boolean;
+          reservation: boolean;
           inventory: boolean;
           schedule: boolean;
           attendance: boolean;

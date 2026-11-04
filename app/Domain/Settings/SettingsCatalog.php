@@ -95,6 +95,18 @@ final class SettingsCatalog
                     ['key' => 'stock.opname_deadline', 'type' => 'time', 'label' => 'Batas jam mengirim opname', 'hint' => 'Lewat jam ini dan hitungan belum masuk, pengingat dikirim.', 'default' => '22:00'],
                 ],
             ]]],
+            ['key' => 'reservation', 'label' => 'Reservasi', 'groups' => [[
+                'title' => 'Reservasi Ramadan',
+                'fields' => [
+                    ['key' => 'reservation.enabled', 'type' => 'bool', 'label' => 'Terima reservasi dari pelanggan', 'hint' => 'Aktif: halaman /reservasi terbuka untuk tanggal di bawah. Pelanggan memilih tanggal, jam, jumlah orang, lalu memesan dari menu khusus reservasi. Meja ditahan otomatis, dan beberapa meja bisa digabung untuk rombongan besar.', 'default' => false],
+                    ['key' => 'reservation.start_date', 'type' => 'date', 'label' => 'Reservasi dibuka dari tanggal', 'hint' => 'Hari pertama yang bisa dipesan, mis. awal Ramadan. Format tahun-bulan-tanggal.', 'default' => ''],
+                    ['key' => 'reservation.end_date', 'type' => 'date', 'label' => 'Reservasi sampai tanggal', 'hint' => 'Hari terakhir yang bisa dipesan.', 'default' => ''],
+                    ['key' => 'reservation.slots', 'type' => 'text', 'label' => 'Jam reservasi', 'hint' => 'Pisahkan dengan koma, mis. 17:30,18:00,18:30,19:00. Pelanggan memilih salah satu.', 'default' => '17:30,18:00,18:30,19:00', 'max' => 120],
+                    ['key' => 'reservation.duration_minutes', 'type' => 'int', 'label' => 'Lama meja ditahan (menit)', 'hint' => 'Meja tidak bisa dipesan orang lain selama jendela ini.', 'default' => 120, 'min' => 30, 'max' => 360],
+                    ['key' => 'reservation.max_pax', 'type' => 'int', 'label' => 'Maksimal orang per reservasi', 'hint' => 'Rombongan lebih besar dari satu meja otomatis ditempatkan di beberapa meja yang berdekatan.', 'default' => 20, 'min' => 2, 'max' => 200],
+                    ['key' => 'reservation.floor_ahead_minutes', 'type' => 'int', 'label' => 'Tandai meja di kasir sebelum jam (menit)', 'hint' => 'Meja yang direservasi tampil bertanda di layar meja kasir mulai sekian menit sebelum jamnya.', 'default' => 90, 'min' => 0, 'max' => 600],
+                ],
+            ]]],
             ['key' => 'kitchen', 'label' => 'Dapur (KDS)', 'groups' => [[
                 'title' => 'Aktifkan layar dapur',
                 'fields' => [
@@ -217,6 +229,7 @@ final class SettingsCatalog
                 'bool' => ['nullable', 'boolean'],
                 'int' => ['nullable', 'integer', 'min:'.($f['min'] ?? 0), 'max:'.($f['max'] ?? 100000)],
                 'time' => ['nullable', 'regex:/^([01]\d|2[0-3]):[0-5]\d$/'],
+                'date' => ['nullable', 'date_format:Y-m-d'],
                 'select' => ['nullable', 'in:'.implode(',', array_column($f['options'], 0))],
                 'list' => ['nullable', 'regex:/^\s*\d+(\s*,\s*\d+)*\s*$/'],
                 default => ['nullable', 'string', 'max:'.($f['max'] ?? 200)],

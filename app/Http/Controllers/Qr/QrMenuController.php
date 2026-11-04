@@ -63,7 +63,7 @@ class QrMenuController extends Controller
     public function status(Table|string $table): array
     {
         $table = $table instanceof Table ? $table : Table::query()->where('qr_token', $table)->firstOrFail();
-        $order = Order::query()->where('table_id', $table->id)->whereIn('status', ['open', 'partially_paid'])->with('rounds.items')->latest('id')->first();
+        $order = Order::query()->openOnTable($table->id)->with('rounds.items')->latest('id')->first();
 
         $call = $this->callState($table);
         if (! $order) {

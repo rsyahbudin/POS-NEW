@@ -253,6 +253,13 @@ function TableCard({
         });
     }
 
+    if (tb.reserved) {
+        flags.push({
+            text: `${t('Reservasi')} ${tb.reserved.time} · ${tb.reserved.name} · ${tb.reserved.pax}`,
+            tone: 'bg-sky-600 text-white',
+        });
+    }
+
     if (o?.bill_requested) {
         flags.push({ text: t('Minta bill'), tone: 'bg-rose-600 text-white' });
     }
@@ -283,7 +290,14 @@ function TableCard({
                     {tb.capacity}
                 </span>
             </span>
-            {o ? (
+            {o?.joined_to ? (
+                <span className="mt-1 text-sm font-medium">
+                    {t('Gabung ke')} {o.joined_to}
+                    <span className="block text-xs font-normal text-muted-foreground">
+                        {t('satu bill')} · {rupiah(o.grand_total)}
+                    </span>
+                </span>
+            ) : o ? (
                 <>
                     <span className="mt-1 text-lg font-semibold tabular-nums">
                         {rupiah(o.grand_total)}

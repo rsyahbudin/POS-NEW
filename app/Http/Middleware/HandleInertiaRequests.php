@@ -55,6 +55,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'features' => [
                 'kds' => (bool) app(SettingsRepository::class)->get('kitchen.enabled', false),
+                'reservation' => (bool) app(SettingsRepository::class)->get('reservation.enabled', false),
                 'inventory' => (bool) app(SettingsRepository::class)->get('inventory.enabled', false),
                 'schedule' => (bool) app(SettingsRepository::class)->get('schedule.enabled', false),
                 'attendance' => (bool) app(SettingsRepository::class)->get('attendance.enabled', false),

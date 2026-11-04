@@ -160,12 +160,16 @@ export type FloorTable = {
     status: 'empty' | 'occupied' | 'awaiting_payment';
     qr_enabled: boolean;
     calling?: boolean;
+    /** A booking about to start on this table. */
+    reserved?: { name: string; pax: number; time: string; code: string } | null;
     order: {
         id: number;
         number: string;
         grand_total: number;
         bill_requested: boolean;
         opened_at: string | null;
+        /** Name of the main table when this one is joined to a party's order. */
+        joined_to?: string | null;
         customer_name: string | null;
         /** Items still on the order, how many of them are ready to serve, and QR rounds waiting for the cashier. */
         items: number;

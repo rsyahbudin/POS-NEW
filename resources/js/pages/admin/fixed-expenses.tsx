@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { dateId, rupiah } from '@/lib/format';
 import { SpendingTabs } from '@/components/pos/section-tabs';
+import { ImagePicker } from '@/components/pos/image-picker';
 
 type Bill = {
     id: number;
@@ -520,15 +521,10 @@ export default function FixedExpenses({
                         />
                     </Field>
                     <Field label="Foto bukti / nota (opsional)">
-                        <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) =>
-                                setPay({
-                                    ...pay,
-                                    receipt: e.target.files?.[0] ?? null,
-                                })
-                            }
+                        <ImagePicker
+                            aspect="aspect-[4/3]"
+                            file={pay.receipt}
+                            onChange={(receipt) => setPay({ ...pay, receipt })}
                         />
                     </Field>
                     <Button

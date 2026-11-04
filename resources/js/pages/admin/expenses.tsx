@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { dateId, rupiah } from '@/lib/format';
 import { SpendingTabs } from '@/components/pos/section-tabs';
 import { InfoNote } from '@/components/pos/info-tip';
+import { ImagePicker } from '@/components/pos/image-picker';
 
 type Props = {
     filters: { from: string; to: string };
@@ -164,15 +165,10 @@ export default function ExpensesPage({
                         />
                     </Field>
                     <Field label="Foto nota (opsional)">
-                        <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) =>
-                                setF({
-                                    ...f,
-                                    receipt: e.target.files?.[0] ?? null,
-                                })
-                            }
+                        <ImagePicker
+                            aspect="aspect-[4/3]"
+                            file={f.receipt}
+                            onChange={(receipt) => setF({ ...f, receipt })}
                         />
                     </Field>
                     <Button

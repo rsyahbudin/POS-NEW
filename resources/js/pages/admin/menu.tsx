@@ -23,6 +23,7 @@ import {
     ModifiersTab,
     StationsTab,
 } from '@/pages/admin/menu-setup';
+import { ImagePicker } from '@/components/pos/image-picker';
 
 type Variant = { id?: number; name: string; price: number };
 type Component = {
@@ -564,18 +565,23 @@ export default function MenuPage({
                                 }
                             />
                         </Field>
-                        <Field label="Foto (otomatis WebP ≤ 800 px)">
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) =>
-                                    setDraft({
-                                        ...draft,
-                                        image: e.target.files?.[0] ?? null,
-                                    })
-                                }
-                            />
-                        </Field>
+                        <div className="col-span-2">
+                            <Field label="Foto menu">
+                                <ImagePicker
+                                    file={draft.image}
+                                    current={
+                                        products.find((p) => p.id === draft.id)
+                                            ?.image
+                                    }
+                                    recommend={{ w: 800, h: 800 }}
+                                    previewClass="max-w-40"
+                                    note="Disarankan persegi. Otomatis diubah ke WebP, sisi terpanjang maks 800 px."
+                                    onChange={(image) =>
+                                        setDraft({ ...draft, image })
+                                    }
+                                />
+                            </Field>
+                        </div>
                     </div>
                     <Field label="Deskripsi">
                         <TextArea

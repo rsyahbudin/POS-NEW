@@ -1,5 +1,6 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
 import { Field, PageHeader, Select, Tabs } from '@/components/pos/ui';
@@ -7,7 +8,9 @@ import { ReceiptView } from '@/components/pos/receipt-view';
 import { Button } from '@/components/ui/button';
 import type { Receipt } from '@/types/pos';
 import { Input } from '@/components/ui/input';
-import { InfoNote } from '@/components/pos/info-tip';
+import { InfoNote, InfoTip } from '@/components/pos/info-tip';
+import { cn } from '@/lib/utils';
+import { ImagePicker } from '@/components/pos/image-picker';
 
 type Field_ = {
     key: string;
@@ -90,6 +93,31 @@ export default function SettingsPage({ outlet, settings, catalog }: Props) {
     );
 }
 
+function Card({
+    title,
+    info,
+    children,
+}: {
+    title: string;
+    info?: string;
+    children: ReactNode;
+}) {
+    return (
+        <section className="overflow-hidden rounded-xl border bg-card">
+            <h2 className="flex items-center gap-1.5 border-b px-4 py-3 font-semibold">
+                {title}
+                {info && <InfoTip label={`Info ${title}`}>{info}</InfoTip>}
+            </h2>
+            <div className="grid gap-4 p-4 sm:grid-cols-2">{children}</div>
+        </section>
+    );
+}
+
+/** A field that takes the whole row of a two-column card. */
+function Wide({ children }: { children: ReactNode }) {
+    return <div className="sm:col-span-2">{children}</div>;
+}
+
 function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
     const [f, setF] = useState({
         name: outlet.name,
@@ -114,6 +142,14 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
         latitude: outlet.latitude === null ? '' : String(outlet.latitude),
         longitude: outlet.longitude === null ? '' : String(outlet.longitude),
     });
+    // what counts as "changed": every field plus the names of the picked photos
+    const sig = (x: typeof f) =>
+        JSON.stringify({
+            ...x,
+            logo: x.logo?.name ?? null,
+            banner: x.banner?.name ?? null,
+        });
+    const [base, setBase] = useState(() => sig(f));
     const text = (
         key: keyof typeof f,
         label: string,
@@ -131,75 +167,62 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
     );
 
     return (
-        <div className="grid max-w-xl gap-4">
-            <section className="grid gap-3 rounded-xl border bg-card p-4">
-                <h2 className="font-semibold">Profil outlet</h2>
+        <div className="grid max-w-3xl gap-4">
+            <Card title="Profil outlet">
                 {text('name', 'Nama outlet')}
-                {text('address', 'Alamat')}
                 {text('npwp', 'NPWP (opsional)')}
-                <Field
-                    label="Logo"
-                    hint="Juga dipakai sebagai ikon tab browser dan ikon saat halaman ditambahkan ke layar utama HP."
-                >
-                    <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) =>
-                            setF({ ...f, logo: e.target.files?.[0] ?? null })
-                        }
-                    />
-                </Field>
-            </section>
-            <section className="grid gap-3 rounded-xl border bg-card p-4">
-                <div>
-                    <h2 className="font-semibold">
-                        Tampil di halaman QR pelanggan
-                    </h2>
-                    <InfoNote>
-                        Semua kolom opsional. Yang diisi akan tampil sebagai
-                        banner dan tombol Info kafe di HP pelanggan.
-                    </InfoNote>
-                </div>
-                <Field
-                    label="Banner"
-                    hint="Gambar lebar, mis. foto interior atau promo. Disarankan 1400 × 600 px."
-                >
-                    {outlet.banner && !f.remove_banner && (
-                        <img
-                            src={outlet.banner}
-                            alt="Banner saat ini"
-                            className="mb-2 aspect-[7/3] w-full rounded-xl object-cover"
+                <Wide>{text('address', 'Alamat')}</Wide>
+                <Wide>
+                    <Field
+                        label="Logo"
+                        hint="Juga dipakai sebagai ikon tab browser dan ikon di layar utama HP."
+                    >
+                        <ImagePicker
+                            file={f.logo}
+                            current={outlet.logo}
+                            recommend={{ w: 512, h: 512 }}
+                            maxMb={4}
+                            note="Disarankan persegi dengan latar polos. Otomatis diubah ke WebP, maks 800 px."
+                            onChange={(logo) => setF({ ...f, logo })}
                         />
-                    )}
-                    <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) =>
-                            setF({
-                                ...f,
-                                banner: e.target.files?.[0] ?? null,
-                                remove_banner: false,
-                            })
-                        }
-                    />
-                    {outlet.banner && (
-                        <label className="mt-2 flex items-center gap-2 text-sm">
-                            <input
-                                type="checkbox"
-                                className="size-4"
-                                checked={f.remove_banner}
-                                onChange={(e) =>
-                                    setF({
-                                        ...f,
-                                        remove_banner: e.target.checked,
-                                        banner: null,
-                                    })
-                                }
-                            />
-                            Hapus banner
-                        </label>
-                    )}
-                </Field>
+                    </Field>
+                </Wide>
+            </Card>
+            <Card
+                title="Tampil di halaman QR pelanggan"
+                info="Semua kolom opsional. Yang diisi akan tampil sebagai banner dan tombol Info kafe di HP pelanggan."
+            >
+                <Wide>
+                    <Field label="Banner">
+                        <ImagePicker
+                            aspect="aspect-[7/3]"
+                            file={f.banner}
+                            current={f.remove_banner ? null : outlet.banner}
+                            recommend={{ w: 1400, h: 600 }}
+                            note="Gambar lebar, mis. foto interior atau promo. Otomatis diubah ke WebP, maks 1400 px."
+                            onChange={(banner) =>
+                                setF({ ...f, banner, remove_banner: false })
+                            }
+                        />
+                        {outlet.banner && (
+                            <label className="mt-2 flex items-center gap-2 text-sm">
+                                <input
+                                    type="checkbox"
+                                    className="size-4"
+                                    checked={f.remove_banner}
+                                    onChange={(e) =>
+                                        setF({
+                                            ...f,
+                                            remove_banner: e.target.checked,
+                                            banner: null,
+                                        })
+                                    }
+                                />
+                                Hapus banner
+                            </label>
+                        )}
+                    </Field>
+                </Wide>
                 {text(
                     'tagline',
                     'Slogan singkat',
@@ -212,12 +235,14 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
                     undefined,
                     'Mis. Setiap hari 08.00–22.00',
                 )}
-                {text(
-                    'about',
-                    'Tentang kafe',
-                    'Cerita singkat yang tampil di Info kafe pelanggan (maks. 400 huruf).',
-                    'Mis. Kafe keluarga dengan biji kopi pilihan dari petani lokal.',
-                )}
+                <Wide>
+                    {text(
+                        'about',
+                        'Tentang kafe',
+                        'Cerita singkat yang tampil di Info kafe pelanggan (maks. 400 huruf).',
+                        'Mis. Kafe keluarga dengan biji kopi pilihan dari petani lokal.',
+                    )}
+                </Wide>
                 {text('phone', 'Telepon', undefined, 'Mis. 0812-3456-7890')}
                 {text(
                     'whatsapp',
@@ -234,19 +259,23 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
                     'Mis. namakafe',
                 )}
                 {text('website', 'Website', undefined, 'namakafe.com')}
-                {text(
-                    'maps_url',
-                    'Link Google Maps',
-                    'Tempel link dari tombol Bagikan di Google Maps. Dipakai untuk tombol Petunjuk arah.',
-                    'https://maps.app.goo.gl/...',
-                )}
-                <div className="grid gap-2 rounded-xl border p-3">
-                    <p className="text-sm font-medium">Titik lokasi kafe</p>
-                    <InfoNote>
-                        Dipakai untuk membatasi absen di sekitar kafe. Buka
-                        halaman ini dari tablet atau HP yang berada di dalam
-                        kafe, lalu tekan tombol di bawah. Perlu izin lokasi.
-                    </InfoNote>
+                <Wide>
+                    {text(
+                        'maps_url',
+                        'Link Google Maps',
+                        'Tempel link dari tombol Bagikan di Google Maps. Dipakai untuk tombol Petunjuk arah.',
+                        'https://maps.app.goo.gl/...',
+                    )}
+                </Wide>
+                <div className="grid gap-3 rounded-xl border p-3 sm:col-span-2">
+                    <p className="flex items-center gap-1.5 text-sm font-medium">
+                        Titik lokasi kafe
+                        <InfoTip label="Info titik lokasi">
+                            Dipakai untuk membatasi absen di sekitar kafe. Buka
+                            halaman ini dari tablet atau HP yang berada di dalam
+                            kafe, lalu tekan tombol di bawah. Perlu izin lokasi.
+                        </InfoTip>
+                    </p>
                     <div className="grid grid-cols-2 gap-2">
                         {text('latitude', 'Latitude', undefined, '-6.2000000')}
                         {text(
@@ -292,22 +321,24 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
                         Pakai lokasi perangkat ini
                     </Button>
                 </div>
-                {text(
-                    'google_review_url',
-                    'Link review Google',
-                    'Di Google Maps buka profil kafe, pilih Tulis ulasan, lalu salin linknya. Dipakai untuk ajakan review setelah pelanggan memesan.',
-                    'https://g.page/r/.../review',
-                )}
+                <Wide>
+                    {text(
+                        'google_review_url',
+                        'Link review Google',
+                        'Di Google Maps buka profil kafe, pilih Tulis ulasan, lalu salin linknya. Dipakai untuk ajakan review setelah pelanggan memesan.',
+                        'https://g.page/r/.../review',
+                    )}
+                </Wide>
                 {text('wifi_name', 'Nama WiFi')}
                 {text(
                     'wifi_password',
                     'Password WiFi',
                     'Ditampilkan ke pelanggan di Info kafe.',
                 )}
-            </section>
-            <Button
-                className="h-12"
-                onClick={() =>
+            </Card>
+            <SaveBar
+                dirty={sig(f) !== base}
+                onSave={() =>
                     router.post(
                         '/admin/settings/outlet',
                         {
@@ -316,12 +347,23 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
                             banner: f.banner ?? undefined,
                             remove_banner: f.remove_banner ? 1 : 0,
                         },
-                        { forceFormData: true, preserveScroll: true },
+                        {
+                            forceFormData: true,
+                            preserveScroll: true,
+                            onSuccess: () => {
+                                const next = {
+                                    ...f,
+                                    logo: null,
+                                    banner: null,
+                                    remove_banner: false,
+                                };
+                                setF(next);
+                                setBase(sig(next));
+                            },
+                        },
                     )
                 }
-            >
-                Simpan
-            </Button>
+            />
         </div>
     );
 }
@@ -380,6 +422,66 @@ function sampleReceipt(
     };
 }
 
+function Switch({
+    checked,
+    onChange,
+    label,
+}: {
+    checked: boolean;
+    onChange: (on: boolean) => void;
+    label: string;
+}) {
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={checked}
+            aria-label={label}
+            onClick={() => onChange(!checked)}
+            className={cn(
+                'relative h-7 w-12 shrink-0 rounded-full border transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
+                checked ? 'border-primary bg-primary' : 'bg-muted',
+            )}
+        >
+            <span
+                className={cn(
+                    'absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow transition-transform',
+                    checked && 'translate-x-5',
+                )}
+            />
+        </button>
+    );
+}
+
+/** Stays at the bottom of the screen so Simpan is always in reach, however long the form is. */
+function SaveBar({
+    dirty,
+    onSave,
+    label = 'Simpan',
+}: {
+    dirty: boolean;
+    onSave: () => void;
+    label?: string;
+}) {
+    return (
+        <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-between gap-3 border-t bg-background px-4 py-3 md:-mx-6 md:px-6">
+            <span
+                className={cn(
+                    'text-sm',
+                    dirty
+                        ? 'text-amber-700 dark:text-amber-400'
+                        : 'text-muted-foreground',
+                )}
+            >
+                {dirty ? 'Ada perubahan belum disimpan' : 'Tidak ada perubahan'}
+            </span>
+            <Button className="h-12 px-6" disabled={!dirty} onClick={onSave}>
+                {label}
+            </Button>
+        </div>
+    );
+}
+
 function CatalogForm({
     tab,
     settings,
@@ -401,6 +503,12 @@ function CatalogForm({
         ),
     );
 
+    const dirty = fields.some((f) => {
+        const saved = settings[f.key] ?? (f.type === 'bool' ? false : '');
+
+        return String(v[f.key] ?? '') !== String(saved);
+    });
+
     return (
         <div
             className={
@@ -409,94 +517,97 @@ function CatalogForm({
                     : ''
             }
         >
-            <div className="grid max-w-2xl gap-4">
+            <div className="grid max-w-3xl gap-4">
                 {tab.groups.map((g) => (
                     <section
                         key={g.title}
-                        className="grid gap-4 rounded-xl border bg-card p-4"
+                        className="overflow-hidden rounded-xl border bg-card"
                     >
-                        <h2 className="font-semibold">{g.title}</h2>
-                        {g.fields.map((f) =>
-                            f.type === 'bool' ? (
-                                <label
-                                    key={f.key}
-                                    className="flex cursor-pointer items-start gap-3 rounded-lg border p-3"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        role="switch"
-                                        className="mt-0.5 size-6 shrink-0"
-                                        checked={v[f.key] === true}
-                                        onChange={(e) =>
-                                            setV({
-                                                ...v,
-                                                [f.key]: e.target.checked,
-                                            })
-                                        }
-                                    />
-                                    <span>
-                                        <span className="block font-medium">
+                        <h2 className="border-b px-4 py-3 font-semibold">
+                            {g.title}
+                        </h2>
+                        <div className="grid gap-x-4 gap-y-4 p-4 sm:grid-cols-2">
+                            {g.fields.map((f) =>
+                                f.type === 'bool' ? (
+                                    <div
+                                        key={f.key}
+                                        className="flex items-center justify-between gap-3 sm:col-span-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:pt-4"
+                                    >
+                                        <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
                                             {f.label}
+                                            <InfoTip label={`Info ${f.label}`}>
+                                                {f.hint}
+                                            </InfoTip>
                                         </span>
-                                        <span className="block text-xs text-muted-foreground">
-                                            {f.hint}
-                                        </span>
-                                    </span>
-                                </label>
-                            ) : (
-                                <Field
-                                    key={f.key}
-                                    label={f.label}
-                                    hint={f.hint}
-                                >
-                                    {f.type === 'select' ? (
-                                        <Select
-                                            value={String(v[f.key] ?? '')}
-                                            onChange={(e) =>
-                                                setV({
-                                                    ...v,
-                                                    [f.key]: e.target.value,
-                                                })
-                                            }
-                                        >
-                                            {f.options?.map(([val, label]) => (
-                                                <option key={val} value={val}>
-                                                    {label}
-                                                </option>
-                                            ))}
-                                        </Select>
-                                    ) : (
-                                        <Input
-                                            className="h-11"
-                                            type={
-                                                f.type === 'time'
-                                                    ? 'time'
-                                                    : f.type === 'int'
-                                                      ? 'number'
-                                                      : f.type === 'secret'
-                                                        ? 'password'
-                                                        : 'text'
-                                            }
-                                            min={f.min}
-                                            max={f.max}
-                                            value={String(v[f.key] ?? '')}
-                                            onChange={(e) =>
-                                                setV({
-                                                    ...v,
-                                                    [f.key]: e.target.value,
-                                                })
+                                        <Switch
+                                            label={f.label}
+                                            checked={v[f.key] === true}
+                                            onChange={(on) =>
+                                                setV({ ...v, [f.key]: on })
                                             }
                                         />
-                                    )}
-                                </Field>
-                            ),
-                        )}
+                                    </div>
+                                ) : (
+                                    <Field
+                                        key={f.key}
+                                        label={f.label}
+                                        hint={f.hint}
+                                    >
+                                        {f.type === 'select' ? (
+                                            <Select
+                                                value={String(v[f.key] ?? '')}
+                                                onChange={(e) =>
+                                                    setV({
+                                                        ...v,
+                                                        [f.key]: e.target.value,
+                                                    })
+                                                }
+                                            >
+                                                {f.options?.map(
+                                                    ([val, label]) => (
+                                                        <option
+                                                            key={val}
+                                                            value={val}
+                                                        >
+                                                            {label}
+                                                        </option>
+                                                    ),
+                                                )}
+                                            </Select>
+                                        ) : (
+                                            <Input
+                                                className="h-11"
+                                                type={
+                                                    f.type === 'time'
+                                                        ? 'time'
+                                                        : f.type === 'int'
+                                                          ? 'number'
+                                                          : f.type === 'secret'
+                                                            ? 'password'
+                                                            : 'text'
+                                                }
+                                                min={f.min}
+                                                max={f.max}
+                                                value={String(v[f.key] ?? '')}
+                                                onChange={(e) =>
+                                                    setV({
+                                                        ...v,
+                                                        [f.key]: e.target.value,
+                                                    })
+                                                }
+                                            />
+                                        )}
+                                    </Field>
+                                ),
+                            )}
+                        </div>
                     </section>
                 ))}
                 {tab.key === 'notif' && <NotificationTests />}
-                <Button
-                    className="h-12"
-                    onClick={() =>
+                <SaveBar
+                    dirty={dirty}
+                    label="Simpan pengaturan"
+                    onSave={() =>
                         router.post(
                             '/admin/settings',
                             {
@@ -510,9 +621,7 @@ function CatalogForm({
                             { preserveScroll: true },
                         )
                     }
-                >
-                    Simpan pengaturan
-                </Button>
+                />
             </div>
             {tab.key === 'pos' && (
                 <aside

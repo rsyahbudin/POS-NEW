@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { dateId, rupiah } from '@/lib/format';
 import { SpendingTabs } from '@/components/pos/section-tabs';
-import { InfoNote } from '@/components/pos/info-tip';
+import { InfoNote, InfoTip } from '@/components/pos/info-tip';
+import { Switch } from '@/components/pos/switch';
 import { ImagePicker } from '@/components/pos/image-picker';
 
 type Props = {
@@ -26,7 +27,14 @@ type Props = {
         receipt: string | null;
         from_drawer: boolean;
     }[];
-    categories: { id: number; name: string }[];
+    categories: {
+        id: number;
+        name: string;
+        account_id: number;
+        allow_drawer: boolean;
+    }[];
+    expenseAccounts: { id: number; code: string; name: string }[];
+    canManageCategories: boolean;
     sources: { id: number; code: string; name: string }[];
     today: string;
 };
@@ -35,6 +43,8 @@ export default function ExpensesPage({
     filters,
     expenses,
     categories,
+    expenseAccounts,
+    canManageCategories,
     sources,
     today,
 }: Props) {
@@ -266,7 +276,121 @@ export default function ExpensesPage({
                         ),
                     ])}
                 />
+
+                {canManageCategories && (
+                    <CategoryManager
+                        categories={categories}
+                        accounts={expenseAccounts}
+                    />
+                )}
             </div>
         </>
+    );
+}
+
+/** Which costs staff may pay out of the cash drawer, and the categories themselves. */
+function CategoryManager({
+    categories,
+    accounts,
+}: {
+    categories: Props['categories'];
+    accounts: Props['expenseAccounts'];
+}) {
+    const [name, setName] = useState('');
+    const [account, setAccount] = useState<number | ''>(accounts[0]?.id ?? '');
+    const save = (
+        c: { id?: number; name: string; account_id: number },
+        allow: boolean,
+    ) => {
+        const body = {
+            name: c.name,
+            account_id: c.account_id,
+            allow_drawer: allow ? 1 : 0,
+        };
+        const opts = { preserveScroll: true };
+
+        if (c.id) {
+            router.put(`/admin/expense-categories/${c.id}`, body, opts);
+        } else {
+            router.post('/admin/expense-categories', body, {
+                ...opts,
+                onSuccess: () => setName(''),
+            });
+        }
+    };
+
+    return (
+        <section className="grid gap-3 rounded-xl border bg-card p-4">
+            <div className="flex items-center gap-1.5">
+                <h2 className="font-semibold">Kategori beban</h2>
+                <InfoTip label="Info kategori beban">
+                    Tiap kategori terhubung ke satu akun beban. Nyalakan
+                    &quot;Boleh dari laci kas&quot; hanya untuk keperluan yang
+                    wajar dibayar staf dari uang laci, seperti belanja bahan
+                    atau galon. Gaji, sewa, dan listrik sebaiknya tetap mati:
+                    dibayar lewat rekening di halaman ini.
+                </InfoTip>
+            </div>
+            <ul className="divide-y">
+                {categories.map((c) => (
+                    <li
+                        key={c.id}
+                        className="flex items-center justify-between gap-3 py-2.5"
+                    >
+                        <span className="min-w-0">
+                            <span className="block font-medium">{c.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                                {c.allow_drawer
+                                    ? 'Staf boleh bayar dari laci kas'
+                                    : 'Tidak dari laci kas'}
+                            </span>
+                        </span>
+                        <Switch
+                            label={`Boleh dari laci kas: ${c.name}`}
+                            checked={c.allow_drawer}
+                            onChange={(on) => save(c, on)}
+                        />
+                    </li>
+                ))}
+            </ul>
+            <form
+                className="grid gap-2 border-t pt-3 sm:grid-cols-[1fr_1fr_auto]"
+                onSubmit={(e) => {
+                    e.preventDefault();
+
+                    if (name.trim() && account !== '') {
+                        save(
+                            { name: name.trim(), account_id: Number(account) },
+                            false,
+                        );
+                    }
+                }}
+            >
+                <Input
+                    className="h-11"
+                    placeholder="Kategori baru"
+                    aria-label="Kategori baru"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                />
+                <Select
+                    aria-label="Akun beban"
+                    value={account}
+                    onChange={(e) => setAccount(Number(e.target.value))}
+                >
+                    {accounts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                            {a.code} · {a.name}
+                        </option>
+                    ))}
+                </Select>
+                <Button
+                    className="h-11"
+                    disabled={!name.trim() || account === ''}
+                >
+                    Tambah
+                </Button>
+            </form>
+        </section>
     );
 }

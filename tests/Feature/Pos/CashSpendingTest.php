@@ -96,3 +96,34 @@ it('counts a drawer spend once in the daily expense list', function () {
     $list = app(ReportDelivery::class)->expenses(now()->toDateString());
     expect($list['items'])->toHaveCount(1)->and($list['total'])->toBe(12000)->and($list['items'][0]['source'])->toBe('Kas laci');
 });
+
+it('lets staff pay only supply costs out of the drawer, and only the shift managers book other costs', function () {
+    $cashier = userWithRole('cashier');
+    openShiftFor($cashier, 100000);
+    $salary = ExpenseCategory::query()->where('name', 'Gaji')->firstOrFail();
+    $supplies = galon();
+    expect($salary->allow_drawer)->toBeFalse()->and($supplies->allow_drawer)->toBeTrue();
+
+    // the shift page offers staff just the supply categories and no free-form costs
+    $this->actingAs($cashier)->get('/shift')->assertInertia(fn ($p) => $p->where('can_free_form', false)
+        ->where('categories', fn ($rows) => ! collect($rows)->pluck('name')->contains('Gaji') && collect($rows)->pluck('name')->contains($supplies->name)));
+    $this->actingAs(userWithRole('manager'))->get('/shift')->assertInertia(fn ($p) => $p->where('can_free_form', true));
+
+    $this->actingAs($cashier)->post('/shift/movements', ['direction' => 'out', 'amount' => 500000, 'category_id' => $salary->id])->assertSessionHas('error');
+    $expenseAccount = Account::query()->where('code', '5-2000')->value('id');
+    $this->actingAs($cashier)->post('/shift/movements', ['direction' => 'out', 'amount' => 500000, 'reason' => 'gaji', 'account_id' => $expenseAccount])->assertSessionHas('error');
+    expect(CashMovement::query()->count())->toBe(0);
+
+    $this->actingAs(userWithRole('manager'))->post('/shift/movements', ['direction' => 'out', 'amount' => 500000, 'reason' => 'servis AC', 'account_id' => $expenseAccount])->assertSessionHasNoErrors();
+    expect(CashMovement::query()->count())->toBe(1);
+});
+
+it('lets the owner choose which categories staff may pay from the drawer', function () {
+    $owner = userWithRole('owner');
+    $salary = ExpenseCategory::query()->where('name', 'Gaji')->firstOrFail();
+
+    $this->actingAs($owner)->put("/admin/expense-categories/{$salary->id}", ['name' => 'Gaji', 'account_id' => $salary->account_id, 'allow_drawer' => 1])->assertSessionHasNoErrors();
+    expect($salary->fresh()->allow_drawer)->toBeTrue();
+    $this->actingAs($owner)->get('/admin/expenses')->assertInertia(fn ($p) => $p->where('canManageCategories', true)->has('expenseAccounts'));
+    $this->actingAs(userWithRole('manager'))->get('/admin/expenses')->assertInertia(fn ($p) => $p->where('canManageCategories', false));
+});

@@ -33,6 +33,10 @@ class AddCashMovementAction
         if ($categoryId === null && ($accountId === null || trim($reason) === '')) {
             throw new OrderException('Alasan dan akun wajib diisi.');
         }
+        // cash going out for a cost with no category (salary, rent...) is for whoever runs the store's shifts, not for every till operator
+        if ($direction === 'out' && $categoryId === null && ! $user->can('manage-shifts-any')) {
+            throw new OrderException('Uang keluar dari laci harus memilih keperluannya (mis. belanja bahan).');
+        }
 
         return DB::transaction(function () use ($shift, $user, $direction, $amount, $reason, $accountId, $categoryId, $receiptPath) {
             $shift = Shift::query()->lockForUpdate()->findOrFail($shift->id);
@@ -41,6 +45,9 @@ class AddCashMovementAction
             }
 
             $category = $categoryId === null ? null : ExpenseCategory::query()->where('outlet_id', $shift->outlet_id)->findOrFail($categoryId);
+            if ($category !== null && ! $category->allow_drawer) {
+                throw new OrderException("{$category->name} tidak boleh dibayar dari laci kas.");
+            }
             if ($category !== null) {
                 $accountId = $category->account_id;
                 $reason = trim($reason) === '' ? $category->name : "{$category->name}: ".trim($reason);

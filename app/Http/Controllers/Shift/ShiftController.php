@@ -38,7 +38,9 @@ class ShiftController extends Controller
             // One shift for the whole store: shown to every role, only people with the shift permission can act on it.
             'shift' => $shift ? $this->present($shift, $cash) : null,
             'suggestedOpening' => $open->suggestedOpeningCash(),
-            'categories' => $operate ? ExpenseCategory::query()->where('outlet_id', $outletId)->orderBy('name')->get(['id', 'name']) : [],
+            'categories' => $operate ? ExpenseCategory::query()->where('outlet_id', $outletId)->where('allow_drawer', true)->orderBy('name')->get(['id', 'name']) : [],
+            // only whoever runs the store's shifts may pay a non-supply cost out of the drawer; everybody else spends on supplies only
+            'can_free_form' => $operate && (bool) $request->user()?->can('manage-shifts-any'),
             'accounts' => $operate ? [
                 'expense' => Account::query()->where('outlet_id', $outletId)->whereIn('type', ['expense'])->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
                 'other' => Account::query()->where('outlet_id', $outletId)->whereIn('type', ['equity', 'revenue', 'liability'])->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),

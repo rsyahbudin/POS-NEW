@@ -37,7 +37,9 @@ class ExpenseController extends Controller
                 'id' => $e->id, 'date' => $e->date->format('Y-m-d'), 'category' => $e->category->name, 'amount' => $e->amount, 'note' => $e->note,
                 'receipt' => $e->receipt_path ? MediaUrl::public($e->receipt_path) : null, 'from_drawer' => $e->cash_movement_id !== null,
             ]),
-            'categories' => ExpenseCategory::query()->where('outlet_id', $id)->orderBy('name')->get(['id', 'name']),
+            'categories' => ExpenseCategory::query()->where('outlet_id', $id)->orderBy('name')->get(['id', 'name', 'account_id', 'allow_drawer']),
+            'expenseAccounts' => Account::query()->where('outlet_id', $id)->where('type', 'expense')->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
+            'canManageCategories' => (bool) $request->user()?->can('manage-settings'),
             'sources' => Account::query()->where('outlet_id', $id)->where('type', 'asset')->where('is_active', true)->where(fn ($q) => $q->whereNull('system_key')->orWhere('system_key', '!=', SystemAccount::CashDrawer->value))->orderBy('code')->get(['id', 'code', 'name']),
             'today' => BusinessDate::for(),
         ]);
@@ -80,7 +82,8 @@ class ExpenseController extends Controller
     public function saveCategory(Request $request, ?ExpenseCategory $category = null): RedirectResponse
     {
         $id = $this->outlet->id();
-        $data = $request->validate(['name' => 'required|string|max:60', 'account_id' => ['required', Rule::exists('accounts', 'id')->where('outlet_id', $id)->where('type', 'expense')]]);
+        $data = $request->validate(['name' => 'required|string|max:60', 'account_id' => ['required', Rule::exists('accounts', 'id')->where('outlet_id', $id)->where('type', 'expense')], 'allow_drawer' => 'nullable|boolean']);
+        $data['allow_drawer'] = (bool) ($data['allow_drawer'] ?? false);
         $category ? $category->update($data) : ExpenseCategory::create($data + ['outlet_id' => $id]);
 
         return back()->with('success', 'Kategori beban disimpan.');

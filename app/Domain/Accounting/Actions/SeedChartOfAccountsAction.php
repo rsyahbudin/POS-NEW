@@ -45,7 +45,7 @@ class SeedChartOfAccountsAction
                 ['outlet_id' => $outletId, 'code' => $code],
                 ['name' => "Beban {$name}", 'type' => AccountType::Expense],
             );
-            ExpenseCategory::firstOrCreate(['outlet_id' => $outletId, 'name' => $name], ['account_id' => $acc->id]);
+            ExpenseCategory::firstOrCreate(['outlet_id' => $outletId, 'name' => $name], ['account_id' => $acc->id, 'allow_drawer' => in_array($name, ['Bahan Baku', 'Lain-lain'], true)]);
         }
     }
 }

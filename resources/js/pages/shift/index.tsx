@@ -8,7 +8,10 @@ import {
     ResponsiveTable,
     Select,
     Stat,
+    Tabs,
 } from '@/components/pos/ui';
+import { ImagePicker } from '@/components/pos/image-picker';
+import { InfoTip } from '@/components/pos/info-tip';
 import { AccountMenu } from '@/components/pos/account-menu';
 import { Modal } from '@/components/pos/modal';
 import { Button } from '@/components/ui/button';
@@ -58,6 +61,7 @@ type Props = {
     suggestedOpening: number;
     accounts: { expense: Acc[]; other: Acc[]; bank: Acc[] };
     categories: { id: number; name: string }[];
+    can_free_form: boolean;
     recent: ShiftData[];
     transactions: {
         id: number;
@@ -84,12 +88,14 @@ export default function ShiftPage({
     suggestedOpening,
     accounts,
     categories,
+    can_free_form,
     recent,
     unsettled,
     transactions,
     can,
 }: Props) {
     const errors = usePage().props.errors as Record<string, string> | undefined;
+    const [tab, setTab] = useState<'summary' | 'cash' | 'close'>('summary');
 
     return (
         <>
@@ -121,8 +127,11 @@ export default function ShiftPage({
                         shift={shift}
                         accounts={accounts}
                         categories={categories}
+                        canFreeForm={can_free_form}
                         operate={can.operate}
                         unsettled={unsettled}
+                        tab={tab}
+                        onTab={setTab}
                     />
                 ) : can.operate ? (
                     <>
@@ -138,7 +147,7 @@ export default function ShiftPage({
                         )}
                     </p>
                 )}
-                {shift && (
+                {shift && tab === 'summary' && (
                     <p className="text-xs text-muted-foreground">
                         {t(
                             'Satu shift dipakai bersama oleh semua staf toko. Tiap pembayaran dan kas tercatat atas nama orang yang melakukannya.',
@@ -146,7 +155,7 @@ export default function ShiftPage({
                     </p>
                 )}
 
-                {shift && (
+                {shift && tab === 'summary' && (
                     <section
                         aria-label={t('Transaksi shift ini')}
                         className="grid gap-2"
@@ -175,7 +184,7 @@ export default function ShiftPage({
                     </section>
                 )}
 
-                {recent.length > 0 && (
+                {recent.length > 0 && (!shift || tab === 'summary') && (
                     <section aria-label={t('Shift sebelumnya')}>
                         <h2 className="mb-2 font-semibold">
                             {t('Shift sebelumnya')}
@@ -403,47 +412,78 @@ function Open({
     shift,
     accounts,
     categories,
+    canFreeForm,
     operate,
     unsettled,
+    tab,
+    onTab,
 }: {
     shift: ShiftData;
     accounts: Props['accounts'];
     categories: Props['categories'];
+    canFreeForm: boolean;
     operate: boolean;
     unsettled: Props['unsettled'];
+    tab: 'summary' | 'cash' | 'close';
+    onTab: (t: 'summary' | 'cash' | 'close') => void;
 }) {
     const s = shift.summary;
 
     return (
         <>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <Stat label={t('Modal awal')} value={rupiah(s.opening)} />
-                <Stat
-                    label={t('Penjualan tunai')}
-                    value={rupiah(s.cash_sales)}
-                />
-                <Stat
-                    label={t('Kas masuk/keluar')}
-                    value={`${rupiah(s.cash_in)} / ${rupiah(s.cash_out)}`}
-                />
-                <Stat
-                    label={t('Kas seharusnya di laci')}
-                    value={rupiah(s.expected)}
-                    hint={
-                        s.cash_refunds
-                            ? `${t('refund tunai')} ${rupiah(s.cash_refunds)}`
-                            : undefined
-                    }
-                />
-            </div>
-            <SalesBreakdown shift={shift} />
-            <Movement
-                accounts={accounts}
-                categories={categories}
-                movements={shift.movements}
-                operate={operate}
+            <Tabs
+                value={tab}
+                onChange={onTab}
+                tabs={[
+                    { id: 'summary', label: t('Ringkasan') },
+                    { id: 'cash', label: t('Uang laci') },
+                    ...(operate
+                        ? [{ id: 'close' as const, label: t('Tutup shift') }]
+                        : []),
+                ]}
             />
-            {operate && (
+            {tab === 'summary' && (
+                <>
+                    <section className="grid gap-1 rounded-2xl border bg-card p-5">
+                        <p className="text-sm text-muted-foreground">
+                            {t('Kas seharusnya di laci')}
+                        </p>
+                        <p className="text-3xl font-bold tabular-nums">
+                            {rupiah(s.expected)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            {t('Modal awal')} {rupiah(s.opening)} ＋{' '}
+                            {t('tunai')} {rupiah(s.cash_sales)} ＋{' '}
+                            {t('kas masuk')} {rupiah(s.cash_in)} －{' '}
+                            {t('kas keluar')} {rupiah(s.cash_out)}
+                            {s.cash_refunds
+                                ? ` － ${t('refund')} ${rupiah(s.cash_refunds)}`
+                                : ''}
+                        </p>
+                    </section>
+                    <div className="grid grid-cols-2 gap-2">
+                        <Stat
+                            label={t('Kas masuk')}
+                            value={rupiah(s.cash_in)}
+                        />
+                        <Stat
+                            label={t('Kas keluar')}
+                            value={rupiah(s.cash_out)}
+                        />
+                    </div>
+                    <SalesBreakdown shift={shift} />
+                </>
+            )}
+            {tab === 'cash' && (
+                <Movement
+                    accounts={accounts}
+                    categories={categories}
+                    canFreeForm={canFreeForm}
+                    movements={shift.movements}
+                    operate={operate}
+                />
+            )}
+            {tab === 'close' && operate && (
                 <CloseForm
                     shift={shift}
                     accounts={accounts.bank}
@@ -454,116 +494,162 @@ function Open({
     );
 }
 
+type Mode = 'spend' | 'in' | 'other';
+
+/**
+ * Money going in or out of the drawer outside of sales. Staff record what they spent on supplies (a category and a
+ * receipt photo) or money they put in; whoever runs the store's shifts can also book other costs against an account.
+ */
 function Movement({
     accounts,
     categories,
+    canFreeForm,
     movements,
     operate,
 }: {
     accounts: Props['accounts'];
     categories: Props['categories'];
+    canFreeForm: boolean;
     movements: ShiftData['movements'];
     operate: boolean;
 }) {
-    const [dir, setDir] = useState<'in' | 'out'>('out');
+    const [mode, setMode] = useState<Mode>('spend');
     const [amount, setAmount] = useState<number | ''>('');
     const [reason, setReason] = useState('');
     const [account, setAccount] = useState<number | ''>('');
     const [category, setCategory] = useState<number | ''>('');
     const [receipt, setReceipt] = useState<File | null>(null);
-    const fileRef = useRef<HTMLInputElement>(null);
-    const spending = dir === 'out' && categories.length > 0;
+    const spend = mode === 'spend';
     const ready =
-        !!amount && (spending ? !!category : !!reason.trim() && !!account);
+        !!amount && (spend ? !!category : !!reason.trim() && !!account);
+    const modes: { id: Mode; label: string }[] = [
+        { id: 'spend', label: t('Belanja') },
+        { id: 'in', label: t('Tambah uang') },
+        ...(canFreeForm
+            ? [{ id: 'other' as const, label: t('Biaya lain') }]
+            : []),
+    ];
 
     const reset = () => {
         setAmount('');
         setReason('');
         setCategory('');
         setReceipt(null);
-        if (fileRef.current) {
-            fileRef.current.value = '';
-        }
+    };
+    const pick = (m: Mode) => {
+        setMode(m);
+        setAccount('');
+        setCategory('');
     };
 
     return (
-        <section className="grid gap-3 rounded-xl border bg-card p-4">
-            <h2 className="font-semibold">
-                {t('Uang laci: belanja & kas masuk')}
-            </h2>
+        <section className="grid gap-4 rounded-2xl border bg-card p-4">
+            <div className="flex items-center gap-1.5">
+                <h2 className="font-semibold">{t('Uang laci')}</h2>
+                <InfoTip label={t('Info uang laci')}>
+                    {t(
+                        'Catat uang yang keluar dari laci untuk belanja kecil, atau uang yang kamu tambahkan ke laci. Penjualan tidak dicatat di sini. Foto nota membantu manager mencocokkan.',
+                    )}
+                </InfoTip>
+            </div>
+
             {operate && (
                 <>
-                    <div role="radiogroup" className="grid grid-cols-2 gap-2">
-                        <Button
-                            type="button"
-                            role="radio"
-                            aria-checked={dir === 'out'}
-                            variant={dir === 'out' ? 'default' : 'outline'}
-                            className="h-11"
-                            onClick={() => {
-                                setDir('out');
-                                setAccount('');
-                            }}
-                        >
-                            {t('Belanja / uang keluar')}
-                        </Button>
-                        <Button
-                            type="button"
-                            role="radio"
-                            aria-checked={dir === 'in'}
-                            variant={dir === 'in' ? 'default' : 'outline'}
-                            className="h-11"
-                            onClick={() => {
-                                setDir('in');
-                                setAccount('');
-                            }}
-                        >
-                            {t('Uang masuk')}
-                        </Button>
+                    <div
+                        role="radiogroup"
+                        aria-label={t('Jenis catatan')}
+                        className={`grid gap-2 ${modes.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}
+                    >
+                        {modes.map((m) => (
+                            <Button
+                                key={m.id}
+                                type="button"
+                                role="radio"
+                                aria-checked={mode === m.id}
+                                variant={mode === m.id ? 'default' : 'outline'}
+                                className="h-12"
+                                onClick={() => pick(m.id)}
+                            >
+                                {m.label}
+                            </Button>
+                        ))}
                     </div>
-                    {spending && (
+
+                    {spend && (
                         <Field label={t('Untuk apa?')}>
-                            <div className="flex flex-wrap gap-2">
-                                {categories.map((c) => (
-                                    <Button
-                                        key={c.id}
-                                        type="button"
-                                        aria-pressed={category === c.id}
-                                        variant={
-                                            category === c.id
-                                                ? 'default'
-                                                : 'outline'
-                                        }
-                                        className="h-11"
-                                        onClick={() => setCategory(c.id)}
-                                    >
-                                        {c.name}
-                                    </Button>
-                                ))}
-                            </div>
+                            {categories.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">
+                                    {t(
+                                        'Belum ada kategori belanja. Minta manager mengaturnya di Pengeluaran.',
+                                    )}
+                                </p>
+                            ) : (
+                                <div className="flex flex-wrap gap-2">
+                                    {categories.map((c) => (
+                                        <Button
+                                            key={c.id}
+                                            type="button"
+                                            aria-pressed={category === c.id}
+                                            variant={
+                                                category === c.id
+                                                    ? 'default'
+                                                    : 'outline'
+                                            }
+                                            className="h-11 rounded-full"
+                                            onClick={() => setCategory(c.id)}
+                                        >
+                                            {c.name}
+                                        </Button>
+                                    ))}
+                                </div>
+                            )}
                         </Field>
                     )}
+
                     <Field label={t('Nominal')}>
                         <MoneyInput value={amount} onChange={setAmount} />
                     </Field>
+
                     <Field
-                        label={spending ? t('Catatan (opsional)') : t('Alasan')}
+                        label={spend ? t('Catatan (opsional)') : t('Alasan')}
                     >
                         <Input
                             className="h-11"
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
                             placeholder={
-                                spending
+                                spend
                                     ? t('mis. galon 2 buah')
-                                    : t('mis. tambah uang kembalian')
+                                    : mode === 'in'
+                                      ? t('mis. tambah uang kembalian')
+                                      : t('mis. servis AC')
                             }
                         />
+                        {mode === 'in' && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                {[
+                                    t('Tambah uang kembalian'),
+                                    t('Setor modal'),
+                                ].map((r) => (
+                                    <Button
+                                        key={r}
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-9 rounded-full"
+                                        onClick={() => setReason(r)}
+                                    >
+                                        {r}
+                                    </Button>
+                                ))}
+                            </div>
+                        )}
                     </Field>
-                    {!spending && (
+
+                    {!spend && (
                         <Field
                             label={
-                                dir === 'out'
+                                mode === 'other'
                                     ? t('Akun beban')
                                     : t('Akun lawan')
                             }
@@ -575,7 +661,7 @@ function Movement({
                                 }
                             >
                                 <option value="">{t('— pilih —')}</option>
-                                {(dir === 'out'
+                                {(mode === 'other'
                                     ? accounts.expense
                                     : accounts.other
                                 ).map((a) => (
@@ -586,19 +672,18 @@ function Movement({
                             </Select>
                         </Field>
                     )}
-                    {spending && (
+
+                    {spend && (
                         <Field label={t('Foto nota (opsional)')}>
-                            <input
-                                ref={fileRef}
-                                type="file"
-                                accept="image/*"
-                                capture="environment"
-                                onChange={(e) =>
-                                    setReceipt(e.target.files?.[0] ?? null)
-                                }
+                            <ImagePicker
+                                aspect="aspect-[4/3]"
+                                previewClass="max-w-40"
+                                file={receipt}
+                                onChange={setReceipt}
                             />
                         </Field>
                     )}
+
                     <Button
                         className="h-12"
                         disabled={!ready}
@@ -606,10 +691,10 @@ function Movement({
                             router.post(
                                 '/shift/movements',
                                 {
-                                    direction: dir,
+                                    direction: mode === 'in' ? 'in' : 'out',
                                     amount,
                                     reason,
-                                    ...(spending
+                                    ...(spend
                                         ? {
                                               category_id: category,
                                               receipt: receipt ?? undefined,
@@ -624,43 +709,55 @@ function Movement({
                             )
                         }
                     >
-                        {t('Catat')}
+                        {mode === 'in'
+                            ? t('Catat uang masuk')
+                            : t('Catat pengeluaran')}
                     </Button>
                 </>
             )}
-            {movements.length > 0 && (
-                <ul className="text-sm">
-                    {movements.map((m, i) => (
-                        <li
-                            key={i}
-                            className="flex justify-between gap-3 border-t py-1"
-                        >
-                            <span>
-                                {m.direction === 'in' ? '＋' : '－'} {m.reason}
-                                {m.by && (
-                                    <span className="text-muted-foreground">
-                                        {' '}
-                                        · {m.by}
+
+            <div className="grid gap-1">
+                <h3 className="text-sm font-medium text-muted-foreground">
+                    {t('Tercatat di shift ini')}
+                </h3>
+                {movements.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                        {t('Belum ada uang masuk atau keluar.')}
+                    </p>
+                ) : (
+                    <ul className="text-sm">
+                        {movements.map((m, i) => (
+                            <li
+                                key={i}
+                                className="flex items-start justify-between gap-3 border-t py-2"
+                            >
+                                <span className="min-w-0">
+                                    {m.reason}
+                                    <span className="block text-xs text-muted-foreground">
+                                        {m.by}
+                                        {m.receipt && (
+                                            <a
+                                                className="ml-2 underline"
+                                                href={m.receipt}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                            >
+                                                {t('nota')}
+                                            </a>
+                                        )}
                                     </span>
-                                )}
-                                {m.receipt && (
-                                    <a
-                                        className="ml-2 underline"
-                                        href={m.receipt}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                    >
-                                        {t('nota')}
-                                    </a>
-                                )}
-                            </span>
-                            <span className="tabular-nums">
-                                {rupiah(m.amount)}
-                            </span>
-                        </li>
-                    ))}
-                </ul>
-            )}
+                                </span>
+                                <span
+                                    className={`shrink-0 font-medium tabular-nums ${m.direction === 'in' ? 'text-emerald-700 dark:text-emerald-400' : ''}`}
+                                >
+                                    {m.direction === 'in' ? '＋' : '－'}
+                                    {rupiah(m.amount)}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
         </section>
     );
 }

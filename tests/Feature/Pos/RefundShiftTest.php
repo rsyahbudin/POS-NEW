@@ -65,7 +65,7 @@ it('computes expected cash and journals the difference, deposit and leaves the f
     $shift = openShiftFor($cashier, 100000);
     pay(placeOrder()); // 44.000 cash
     pay(placeOrder(tableId: Table::query()->skip(1)->value('id')), type: 'qris'); // non-cash
-    app(AddCashMovementAction::class)->handle($shift, $cashier, 'out', 5000, 'beli es batu', Account::query()->where('code', '5-5000')->value('id'));
+    app(AddCashMovementAction::class)->handle($shift, userWithRole('manager'), 'out', 5000, 'beli es batu', Account::query()->where('code', '5-5000')->value('id'));
     app(AddCashMovementAction::class)->handle($shift, $cashier, 'in', 10000, 'tambah modal', SystemAccount::OwnerEquity->resolve()->id);
 
     $summary = app(ShiftCash::class)->summarize($shift->fresh());
@@ -102,7 +102,7 @@ it('holds the Kas Laci invariant per shift: opening + cash sales + in - out - ca
     $p1 = pay(placeOrder());
     pay(placeOrder(tableId: Table::query()->skip(1)->value('id')), amount: 50000);
     app(RefundPaymentAction::class)->handle($p1, $manager, 10000, 'komplain', 'r1');
-    app(AddCashMovementAction::class)->handle($shift, $cashier, 'out', 3000, 'parkir', Account::query()->where('code', '5-5000')->value('id'));
+    app(AddCashMovementAction::class)->handle($shift, $manager, 'out', 3000, 'parkir', Account::query()->where('code', '5-5000')->value('id'));
 
     $s = app(ShiftCash::class)->summarize($shift->fresh());
     expect($s['expected'])->toBe($s['opening'] + 44000 + 44000 - 10000 - 3000)->toBe(75000 + 88000 - 10000 - 3000); // the manager's cash refund leaves the same drawer

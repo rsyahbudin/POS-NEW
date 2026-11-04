@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Notification\Models\AppNotification;
 use App\Domain\Printing\Models\Printer;
 use App\Domain\Printing\Models\PrintJob;
 use App\Domain\Printing\PrintBridge;
@@ -88,4 +89,30 @@ it('saves the LAN address of a printer and rejects nonsense addresses', function
     $this->actingAs($manager)->post('/admin/printers', $base + ['host' => ''])->assertSessionHasNoErrors();
 
     expect(Printer::query()->where('host', '192.168.1.60')->value('port'))->toBe(9100)->and(Printer::query()->whereNull('host')->count())->toBe(1);
+});
+
+it('tells staff when a ticket fails or waits too long, and clears the alert once printing works again', function () {
+    $lan = lanPrinter();
+    $h = bridgeHeaders();
+    $job = PrintJob::create(['outlet_id' => $lan->outlet_id, 'printer_id' => $lan->id, 'kind' => 'ticket', 'reference' => 'A-1', 'payload' => ['copies' => 1]]);
+    $open = fn (string $kind) => AppNotification::query()->where('kind', $kind)->whereNull('resolved_at')->count();
+
+    $this->postJson("/bridge/print/jobs/{$job->id}/done", ['ok' => false, 'error' => 'timeout'], $h)->assertOk();
+    expect($open('print.failed'))->toBe(1);
+    $this->postJson("/bridge/print/jobs/{$job->id}/done", ['ok' => false, 'error' => 'timeout'], $h)->assertOk();
+    expect($open('print.failed'))->toBe(1);                                      // one alert per printer, not one per ticket
+    $this->postJson("/bridge/print/jobs/{$job->id}/done", ['ok' => true], $h)->assertOk();
+    expect($open('print.failed'))->toBe(0);
+
+    $stuck = PrintJob::create(['outlet_id' => $lan->outlet_id, 'printer_id' => $lan->id, 'kind' => 'ticket', 'reference' => 'A-2', 'payload' => ['copies' => 1]]);
+    $this->artisan('print:watch')->assertSuccessful();
+    expect($open('print.stuck'))->toBe(0);                                       // too fresh to worry about
+
+    $stuck->forceFill(['created_at' => now()->subMinutes(3)])->save();
+    $this->artisan('print:watch')->assertSuccessful();
+    expect($open('print.stuck'))->toBe(1);
+
+    $stuck->update(['status' => 'printed']);
+    $this->artisan('print:watch')->assertSuccessful();
+    expect($open('print.stuck'))->toBe(0);
 });

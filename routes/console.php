@@ -23,6 +23,9 @@ Schedule::command('fixed-expenses:remind')->dailyAt('08:00')->withoutOverlapping
 // QRIS online: expire old codes, catch missed webhooks, book payments that waited for an open shift.
 Schedule::command('qris:sweep')->everyMinute()->withoutOverlapping();
 
+// LAN printers: warn when tickets wait because the print bridge or a printer is off.
+Schedule::command('print:watch')->everyMinute()->withoutOverlapping();
+
 // Monthly receipt PDFs are only kept for a month.
 Schedule::command('receipt-exports:prune')->dailyAt('03:20');
 

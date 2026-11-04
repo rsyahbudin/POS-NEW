@@ -226,7 +226,7 @@ export default function MenuPage({
                         { id: 'products', label: 'Produk' },
                         { id: 'categories', label: 'Kategori' },
                         { id: 'modifiers', label: 'Modifier' },
-                        { id: 'stations', label: 'Stasiun dapur' },
+                        { id: 'stations', label: 'Station (dapur/bar)' },
                     ]}
                 />
                 {Object.values(errors ?? {})[0] && (
@@ -573,7 +573,10 @@ export default function MenuPage({
                                 ))}
                             </Select>
                         </Field>
-                        <Field label="Stasiun dapur">
+                        <Field
+                            label="Station (dapur/bar)"
+                            hint="Layar dapur atau bar yang menampilkan menu ini. Juga dipakai untuk memilih printer tiket yang punya station sama, bila printer tidak dipilih di kategori atau di menu ini."
+                        >
                             <Select
                                 value={draft.station_id}
                                 onChange={(e) =>
@@ -595,8 +598,8 @@ export default function MenuPage({
                         </Field>
                         {printers.length > 0 && (
                             <Field
-                                label="Cetak tiket di printer"
-                                hint="Kosong = ikut printer kategori. Pilih lebih dari satu untuk mencetak di beberapa printer."
+                                label="Printer khusus menu ini (opsional)"
+                                hint="Biasanya dikosongkan: menu ikut printer kategorinya. Isi hanya bila menu ini harus tercetak di printer lain dari kategorinya, atau di beberapa printer sekaligus."
                             >
                                 <div className="flex flex-wrap gap-2">
                                     {printers.map((pr) => (

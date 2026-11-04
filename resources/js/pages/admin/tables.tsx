@@ -1,9 +1,15 @@
 import { Head, router } from '@inertiajs/react';
-import { Plus, Printer, RefreshCw } from 'lucide-react';
+import { MoreVertical, Plus, Printer, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { Modal } from '@/components/pos/modal';
 import { Field, PageHeader, Select } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 
 type Table = {
@@ -63,17 +69,12 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                     }
                 />
 
-                <div className="flex max-w-md gap-2">
-                    <Input
-                        className="h-11"
-                        placeholder="Area baru (mis. Lantai 2)"
-                        value={area}
-                        onChange={(e) => setArea(e.target.value)}
-                    />
-                    <Button
-                        className="h-11"
-                        disabled={!area.trim()}
-                        onClick={() =>
+                <form
+                    className="flex max-w-md gap-2"
+                    onSubmit={(e) => {
+                        e.preventDefault();
+
+                        if (area.trim()) {
                             router.post(
                                 '/admin/areas',
                                 { name: area },
@@ -81,12 +82,20 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                                     preserveScroll: true,
                                     onSuccess: () => setArea(''),
                                 },
-                            )
+                            );
                         }
-                    >
-                        Tambah area
+                    }}
+                >
+                    <Input
+                        className="h-11"
+                        placeholder="Area baru (mis. Lantai 2)"
+                        value={area}
+                        onChange={(e) => setArea(e.target.value)}
+                    />
+                    <Button className="h-11 shrink-0" disabled={!area.trim()}>
+                        <Plus /> Area
                     </Button>
-                </div>
+                </form>
 
                 {areas.length === 0 && (
                     <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -97,53 +106,68 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
 
                 {areas.map((a) => (
                     <section key={a.id} aria-label={a.name}>
-                        <div className="mb-2 flex items-center justify-between">
-                            <h2 className="font-semibold">{a.name}</h2>
-                            <div className="flex flex-wrap justify-end gap-1">
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-10"
-                                    onClick={() =>
-                                        setAreaForm({ id: a.id, name: a.name })
-                                    }
-                                >
-                                    Ubah nama
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-10"
-                                    onClick={() =>
-                                        confirm(`Hapus area ${a.name}?`) &&
-                                        router.delete(`/admin/areas/${a.id}`, {
-                                            preserveScroll: true,
-                                        })
-                                    }
-                                >
-                                    Hapus
-                                </Button>
-                                <Button
-                                    asChild
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-10"
-                                >
-                                    <a
-                                        href={`/admin/tables-qr.pdf?area_id=${a.id}`}
-                                        target="_blank"
-                                        rel="noreferrer"
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                            <h2 className="min-w-0 truncate font-semibold">
+                                {a.name}{' '}
+                                <span className="text-sm font-normal text-muted-foreground">
+                                    {a.tables.length}
+                                </span>
+                            </h2>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="size-10 shrink-0"
+                                        aria-label={`Aksi area ${a.name}`}
                                     >
-                                        <Printer /> QR area
-                                    </a>
-                                </Button>
-                            </div>
+                                        <MoreVertical />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                    align="end"
+                                    className="min-w-44"
+                                >
+                                    <DropdownMenuItem
+                                        className="h-11"
+                                        onSelect={() =>
+                                            setAreaForm({
+                                                id: a.id,
+                                                name: a.name,
+                                            })
+                                        }
+                                    >
+                                        Ubah nama
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild className="h-11">
+                                        <a
+                                            href={`/admin/tables-qr.pdf?area_id=${a.id}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                        >
+                                            <Printer /> QR area (PDF)
+                                        </a>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        className="h-11 text-destructive focus:text-destructive"
+                                        onSelect={() =>
+                                            confirm(`Hapus area ${a.name}?`) &&
+                                            router.delete(
+                                                `/admin/areas/${a.id}`,
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        Hapus area
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
                         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                             {a.tables.map((t) => (
                                 <div
                                     key={t.id}
-                                    className="rounded-xl border bg-card p-3"
+                                    className="min-w-0 rounded-xl border bg-card p-3"
                                 >
                                     <p className="font-medium">
                                         {t.name}{' '}
@@ -154,7 +178,7 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                                     <p className="mt-1 truncate text-xs text-muted-foreground">
                                         {t.qr_url}
                                     </p>
-                                    <div className="mt-2 flex flex-wrap gap-2">
+                                    <div className="mt-2 flex items-center gap-2">
                                         <Button
                                             size="sm"
                                             variant="outline"
@@ -208,51 +232,69 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                                                 ? 'QR aktif'
                                                 : 'QR nonaktif'}
                                         </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="h-10"
-                                            onClick={() =>
-                                                confirm(
-                                                    `Buat ulang QR ${t.name}? QR lama langsung tidak berlaku.`,
-                                                ) &&
-                                                router.post(
-                                                    `/admin/tables/${t.id}/regenerate-token`,
-                                                    {},
-                                                    { preserveScroll: true },
-                                                )
-                                            }
-                                        >
-                                            <RefreshCw /> Token baru
-                                        </Button>
-                                        <Button
-                                            asChild
-                                            size="sm"
-                                            variant="ghost"
-                                            className="h-10"
-                                        >
-                                            <a
-                                                href={`/admin/tables-qr.pdf?table_id=${t.id}`}
-                                                target="_blank"
-                                                rel="noreferrer"
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="ml-auto size-10"
+                                                    aria-label={`Aksi ${t.name}`}
+                                                >
+                                                    <MoreVertical />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent
+                                                align="end"
+                                                className="min-w-48"
                                             >
-                                                <Printer /> PDF
-                                            </a>
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="h-10"
-                                            onClick={() =>
-                                                confirm(`Hapus ${t.name}?`) &&
-                                                router.delete(
-                                                    `/admin/tables/${t.id}`,
-                                                    { preserveScroll: true },
-                                                )
-                                            }
-                                        >
-                                            Hapus
-                                        </Button>
+                                                <DropdownMenuItem
+                                                    asChild
+                                                    className="h-11"
+                                                >
+                                                    <a
+                                                        href={`/admin/tables-qr.pdf?table_id=${t.id}`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                    >
+                                                        <Printer /> Cetak QR
+                                                        (PDF)
+                                                    </a>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    className="h-11"
+                                                    onSelect={() =>
+                                                        confirm(
+                                                            `Buat ulang QR ${t.name}? QR lama langsung tidak berlaku.`,
+                                                        ) &&
+                                                        router.post(
+                                                            `/admin/tables/${t.id}/regenerate-token`,
+                                                            {},
+                                                            {
+                                                                preserveScroll: true,
+                                                            },
+                                                        )
+                                                    }
+                                                >
+                                                    <RefreshCw /> Token QR baru
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    className="h-11 text-destructive focus:text-destructive"
+                                                    onSelect={() =>
+                                                        confirm(
+                                                            `Hapus ${t.name}?`,
+                                                        ) &&
+                                                        router.delete(
+                                                            `/admin/tables/${t.id}`,
+                                                            {
+                                                                preserveScroll: true,
+                                                            },
+                                                        )
+                                                    }
+                                                >
+                                                    Hapus meja
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </div>
                                 </div>
                             ))}

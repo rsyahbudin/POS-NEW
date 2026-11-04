@@ -9,6 +9,7 @@ import {
     ResponsiveTable,
     Select,
 } from '@/components/pos/ui';
+import { StationChips } from '@/components/pos/station-chips';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -22,14 +23,17 @@ type U = {
     pin_login: boolean;
     has_2fa: boolean;
     face_samples: number;
+    station_ids: number[];
 };
 
 export default function UsersPage({
     users,
     roles,
+    stations,
     face,
 }: {
     users: U[];
+    stations: { id: number; name: string }[];
     roles: { name: string; label: string }[];
     face: boolean;
 }) {
@@ -41,6 +45,7 @@ export default function UsersPage({
         role: string;
         password: string;
         pin: string;
+        station_ids: number[];
     } | null>(null);
     const [faceOf, setFaceOf] = useState<U | null>(null);
     const [sec, setSec] = useState<{
@@ -66,6 +71,7 @@ export default function UsersPage({
                                     role: 'cashier',
                                     password: '',
                                     pin: '',
+                                    station_ids: [],
                                 })
                             }
                         >
@@ -171,6 +177,7 @@ export default function UsersPage({
                                         role: u.role ?? 'cashier',
                                         password: '',
                                         pin: '',
+                                        station_ids: u.station_ids,
                                     })
                                 }
                             >
@@ -304,6 +311,18 @@ export default function UsersPage({
                                 </option>
                             ))}
                         </Select>
+                    </Field>
+                    <Field
+                        label="Station"
+                        hint="Station tempat orang ini bekerja. Bila Pengaturan > Stok per station aktif, ia hanya menghitung dan membelanjakan bahan station-nya."
+                    >
+                        <StationChips
+                            stations={stations}
+                            value={form.station_ids}
+                            onChange={(station_ids) =>
+                                setForm({ ...form, station_ids })
+                            }
+                        />
                     </Field>
                     {!form.id && (
                         <>

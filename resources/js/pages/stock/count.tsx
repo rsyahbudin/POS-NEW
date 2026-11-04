@@ -6,6 +6,7 @@ import { PageHeader, Select } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { StockShare } from '@/components/pos/stock-share';
 
 type Ingredient = {
     id: number;
@@ -144,6 +145,7 @@ export default function StockCount({
                         </Button>
                     }
                 />
+                <StockShare />
                 {Object.values(errors ?? {})[0] && (
                     <p role="alert" className="text-sm text-destructive">
                         {Object.values(errors)[0]}

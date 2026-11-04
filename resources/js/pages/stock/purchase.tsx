@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { rupiah } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { StockShare } from '@/components/pos/stock-share';
 
 type History = {
     id: number;
@@ -95,6 +96,7 @@ export default function PurchasePage({
                         </>
                     }
                 />
+                <StockShare />
                 {needsApproval && (
                     <p
                         role="status"

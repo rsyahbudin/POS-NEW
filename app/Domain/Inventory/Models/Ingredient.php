@@ -2,9 +2,11 @@
 
 namespace App\Domain\Inventory\Models;
 
+use App\Domain\Catalog\Models\Station;
 use App\Domain\Notification\Alerts;
 use App\Domain\Notification\Notifier;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
@@ -32,6 +34,12 @@ class Ingredient extends Model
                 Notifier::later(fn () => Alerts::ingredient($i->refresh()));
             }
         });
+    }
+
+    /** @return BelongsToMany<Station, $this> the stations that hold this ingredient (several may share one, e.g. sugar) */
+    public function stations(): BelongsToMany
+    {
+        return $this->belongsToMany(Station::class, 'ingredient_station');
     }
 
     /** @return HasMany<StockMovement, $this> */

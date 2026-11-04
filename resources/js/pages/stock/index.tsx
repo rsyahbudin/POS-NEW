@@ -4,6 +4,7 @@ import { PageHeader, ResponsiveTable } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { StockShare } from '@/components/pos/stock-share';
 
 type Ingredient = {
     id: number;
@@ -50,6 +51,7 @@ export default function StockList({
                         )
                     }
                 />
+                <StockShare />
                 <div className="flex flex-wrap items-center gap-2">
                     <Input
                         className="h-11 max-w-xs"

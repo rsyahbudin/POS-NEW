@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Catalog\Models\Station;
 use App\Domain\Payment\Online\OnlineActor;
 use App\Domain\Settings\OutletContext;
 use App\Domain\Settings\SettingsRepository;
@@ -29,10 +30,11 @@ class UserController extends Controller
 
         return Inertia::render('admin/users', [
             'face' => $face,
-            'users' => User::query()->where('email', '!=', OnlineActor::EMAIL)->orderBy('name')->get()->map(fn (User $u) => [
+            'stations' => Station::query()->where('outlet_id', $outlet->id())->where('is_active', true)->orderBy('sort')->get(['id', 'name']),
+            'users' => User::query()->where('email', '!=', OnlineActor::EMAIL)->with('stations:id')->orderBy('name')->get()->map(fn (User $u) => [
                 'pin_login' => $u->roles()->where('allow_pin_login', true)->exists(),
                 'id' => $u->id, 'name' => $u->name, 'email' => $u->email, 'is_active' => $u->is_active, 'face_samples' => (int) ($samples[$u->id] ?? 0),
-                'role' => $u->getRoleNames()->first(), 'has_pin' => $u->pin_hash !== null, 'has_2fa' => $u->two_factor_confirmed_at !== null,
+                'station_ids' => $u->stations->pluck('id')->all(), 'role' => $u->getRoleNames()->first(), 'has_pin' => $u->pin_hash !== null, 'has_2fa' => $u->two_factor_confirmed_at !== null,
             ]),
             'roles' => Role::query()->orderBy('id')->pluck('name')->map(fn (string $n) => ['name' => $n, 'label' => PermissionCatalog::BUILT_IN[$n] ?? $n])->all(),
         ]);
@@ -43,7 +45,7 @@ class UserController extends Controller
         $data = $request->validate([
             'name' => 'required|string|max:80', 'email' => 'required|email|unique:users,email',
             'password' => ['required', 'string', 'min:8'], 'role' => ['required', Rule::exists('roles', 'name')],
-            'pin' => 'nullable|digits:6',
+            'pin' => 'nullable|digits:6', 'station_ids' => 'nullable|array', 'station_ids.*' => ['integer', Rule::exists('stations', 'id')->where('outlet_id', $outlet->id())],
         ]);
         $this->guardRoleAssignment($request, $data['role']);
         $this->guardPinUnique($data['pin'] ?? null);
@@ -53,20 +55,25 @@ class UserController extends Controller
             'pin_hash' => isset($data['pin']) ? Hash::make($data['pin']) : null, 'email_verified_at' => now(),
         ]);
         $user->syncRoles([$data['role']]);
+        $user->stations()->sync($data['station_ids'] ?? []);
         Audit::log('user.created', $user, ['role' => $data['role']]);
 
         return back()->with('success', 'User dibuat.');
     }
 
-    public function update(Request $request, User $user): RedirectResponse
+    public function update(Request $request, User $user, OutletContext $outlet): RedirectResponse
     {
         $data = $request->validate([
             'name' => 'required|string|max:80', 'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
             'role' => ['required', Rule::exists('roles', 'name')],
+            'station_ids' => 'nullable|array', 'station_ids.*' => ['integer', Rule::exists('stations', 'id')->where('outlet_id', $outlet->id())],
         ]);
         $this->guardRoleAssignment($request, $data['role']);
 
         $user->update(['name' => $data['name'], 'email' => $data['email']]);
+        if ($request->has('station_ids')) {
+            $user->stations()->sync($data['station_ids'] ?? []);
+        }
         if ($user->getRoleNames()->first() !== $data['role']) {
             Audit::log('user.role_changed', $user, ['from' => $user->getRoleNames()->first(), 'to' => $data['role']]);
             $user->syncRoles([$data['role']]);

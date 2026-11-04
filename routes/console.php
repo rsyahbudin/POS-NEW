@@ -26,6 +26,9 @@ Schedule::command('qris:sweep')->everyMinute()->withoutOverlapping();
 // LAN printers: warn when tickets wait because the print bridge or a printer is off.
 Schedule::command('print:watch')->everyMinute()->withoutOverlapping();
 
+// Stations that have not sent their stock count by the deadline (only when stock is held per station and counting is a duty).
+Schedule::command('stock:remind-opname')->everyThirtyMinutes()->withoutOverlapping();
+
 // Monthly receipt PDFs are only kept for a month.
 Schedule::command('receipt-exports:prune')->dailyAt('03:20');
 

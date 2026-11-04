@@ -53,6 +53,7 @@ it('only shows an alert to roles that hold one of its permissions', function () 
 });
 
 it('tells managers about a stock count waiting for approval and the submitter about the result', function () {
+    setting('inventory.count_needs_approval', true);
     $sugar = lowItem(1000, 0);
     $cashier = userWithRole('cashier');
     $this->actingAs($cashier)->post('/stock/count/submit', ['lines' => [['ingredient_id' => $sugar->id, 'counted' => 900]]])->assertSessionHasNoErrors();

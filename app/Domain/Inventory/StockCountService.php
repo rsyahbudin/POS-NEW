@@ -22,7 +22,7 @@ class StockCountService
 
     public function needsApproval(): bool
     {
-        return (bool) $this->settings->get('inventory.count_needs_approval', true);
+        return (bool) $this->settings->get('inventory.count_needs_approval', false);
     }
 
     public function blind(): bool

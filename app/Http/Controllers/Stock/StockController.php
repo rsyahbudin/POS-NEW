@@ -8,10 +8,12 @@ use App\Domain\Inventory\Models\Purchase;
 use App\Domain\Inventory\Models\StockCount;
 use App\Domain\Inventory\Models\Supplier;
 use App\Domain\Inventory\StockCountService;
+use App\Domain\Inventory\StockScope;
 use App\Domain\Inventory\Units;
 use App\Domain\Settings\OutletContext;
 use App\Domain\Settings\SettingsRepository;
 use App\Http\Controllers\Controller;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -21,14 +23,33 @@ use Inertia\Response;
 /** What staff see of the stock: a read-only list and the stock count form. Costs stay with managers. */
 class StockController extends Controller
 {
-    public function __construct(private OutletContext $outlet, private StockCountService $counts, private InventoryService $inventory, private SettingsRepository $settings) {}
+    public function __construct(private OutletContext $outlet, private StockCountService $counts, private InventoryService $inventory, private SettingsRepository $settings, private StockScope $scope) {}
+
+    /** Ingredients this person handles: everything, or just those of their station when stock is held per station. */
+    /** @return Builder<Ingredient> */
+    private function ingredients(Request $request): Builder
+    {
+        $user = $this->actor($request);
+        $ids = $this->scope->ingredientIds($user, $this->outlet->id());
+
+        return Ingredient::query()->where('outlet_id', $this->outlet->id())->where('is_active', true)->when($ids !== null, fn ($q) => $q->whereIn('id', $ids));
+    }
+
+    /** @return array{by_station: bool, stations: list<string>} what the stock pages tell staff about their share */
+    private function share(Request $request): array
+    {
+        $user = $this->actor($request);
+
+        return ['by_station' => $this->scope->ingredientIds($user, $this->outlet->id()) !== null, 'stations' => $this->scope->stationNames($user)];
+    }
 
     public function index(Request $request): Response
     {
         $user = $this->actor($request);
 
         return Inertia::render('stock/index', [
-            'ingredients' => Ingredient::query()->where('outlet_id', $this->outlet->id())->where('is_active', true)->orderBy('name')->get()->map(fn (Ingredient $i) => [
+            'share' => $this->share($request),
+            'ingredients' => $this->ingredients($request)->orderBy('name')->get()->map(fn (Ingredient $i) => [
                 'id' => $i->id, 'name' => $i->name, 'unit' => $i->unit, 'stock' => $i->stock, 'min_stock' => $i->min_stock, 'low' => $i->stock <= $i->min_stock,
             ])->all(),
             'canCount' => $user->can('count-stock'),
@@ -46,7 +67,8 @@ class StockController extends Controller
             'draft' => ['id' => $draft->id, 'note' => $draft->note],
             'blind' => ! $showSystem,
             'needsApproval' => $this->counts->needsApproval(),
-            'ingredients' => Ingredient::query()->where('outlet_id', $this->outlet->id())->where('is_active', true)->with('packs')->orderBy('name')->get()->map(fn (Ingredient $i) => [
+            'share' => $this->share($request),
+            'ingredients' => $this->ingredients($request)->with('packs')->orderBy('name')->get()->map(fn (Ingredient $i) => [
                 'id' => $i->id, 'name' => $i->name, 'unit' => $i->unit, 'choices' => Units::choices($i), 'counted' => $saved->get($i->id),
                 'system' => $showSystem ? $i->stock : null,
             ])->all(),
@@ -65,7 +87,8 @@ class StockController extends Controller
         return Inertia::render('stock/purchase', [
             'suppliers' => Supplier::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('name')->get(['id', 'name'])->all(),
             'needsApproval' => ! $user->can('manage-inventory') && (bool) $this->settings->get('inventory.purchase_needs_approval', true),
-            'ingredients' => Ingredient::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('name')->get()->map(fn (Ingredient $i) => [
+            'share' => $this->share($request),
+            'ingredients' => $this->ingredients($request)->orderBy('name')->get()->map(fn (Ingredient $i) => [
                 'id' => $i->id, 'name' => $i->name, 'unit' => $i->unit, 'choices' => Units::choices($i),
             ])->all(),
             'history' => Purchase::query()->where('outlet_id', $id)->where('user_id', $user->id)->with('items')->latest('id')->limit(15)->get()->map(fn (Purchase $p) => [
@@ -85,6 +108,14 @@ class StockController extends Controller
             'items.*.qty' => 'required|numeric|gt:0', 'items.*.unit' => 'nullable|string|max:20',
             'items.*.total' => 'nullable|numeric|min:0', 'items.*.unit_cost' => 'nullable|numeric|min:0',
         ]);
+        $allowed = $this->scope->ingredientIds($this->actor($request), $outletId);
+        if ($allowed !== null) {
+            foreach ((array) $data['items'] as $item) {
+                if (! in_array((int) $item['ingredient_id'], $allowed, true)) {
+                    return back()->withErrors(['items' => 'Ada bahan yang bukan milik station Anda.']);
+                }
+            }
+        }
         $data['items'] = $this->inventory->normalizePurchaseItems($outletId, $data['items']);
         $purchase = $this->inventory->submitPurchase($outletId, $data, $this->actor($request));
 
@@ -112,10 +143,14 @@ class StockController extends Controller
         $data = $request->validate(['lines' => 'present|array', 'lines.*.ingredient_id' => 'required|integer', 'lines.*.counted' => 'nullable|numeric|min:0', 'lines.*.unit' => 'nullable|string|max:20', 'note' => 'nullable|string|max:200']);
         $draft = $this->counts->draftFor($this->actor($request), $this->outlet->id());
 
-        $ingredients = Ingredient::query()->where('outlet_id', $this->outlet->id())->with('packs')->get()->keyBy('id');
+        $allowed = $this->scope->ingredientIds($this->actor($request), $this->outlet->id());
+        $ingredients = Ingredient::query()->where('outlet_id', $this->outlet->id())->when($allowed !== null, fn ($q) => $q->whereIn('id', $allowed))->with('packs')->get()->keyBy('id');
         $counted = [];
         foreach ($data['lines'] as $line) {
             $ingredient = $ingredients->get((int) $line['ingredient_id']);
+            if ($ingredient === null && $allowed !== null) {
+                continue;
+            }
             $qty = $line['counted'] ?? null;
             // quantities may be entered in a packaging; the count is kept in the base unit
             $counted[(int) $line['ingredient_id']] = $ingredient !== null && $qty !== null ? Units::toBase($ingredient, $line['unit'] ?? null, (float) $qty) : null;

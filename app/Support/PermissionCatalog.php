@@ -57,6 +57,7 @@ final class PermissionCatalog
                 'manage-inventory' => ['label' => 'Kelola stok, bahan & resep', 'hint' => 'Bahan baku, pembelian, opname, resep, dan pengaturan HPP.'],
                 'manage-printers' => ['label' => 'Kelola printer', 'hint' => 'Daftar printer dan routing struk, bill, dan tiket per kategori/menu.'],
                 'view-stock' => ['label' => 'Lihat daftar stok', 'hint' => 'Daftar bahan dan jumlah stok (tanpa harga/biaya).'],
+                'stock-all-stations' => ['label' => 'Stok semua station', 'hint' => 'Melihat, menghitung, dan mencatat belanja bahan milik semua station. Tanpa izin ini, staf hanya memegang bahan station-nya sendiri (bila Pengaturan > Stok per station aktif).'],
                 'count-stock' => ['label' => 'Stok opname', 'hint' => 'Menghitung stok bahan dan mengirim hasilnya. Persetujuan diatur di Pengaturan > Stok & HPP.'],
                 'record-purchase' => ['label' => 'Catat belanja bahan', 'hint' => 'Karyawan yang berbelanja mencatat bahan yang dibeli (jumlah dan harga). Persetujuan diatur di Pengaturan > Stok & HPP.'],
                 'view-assets' => ['label' => 'Lihat daftar aset & alat', 'hint' => 'Melihat daftar peralatan, kondisi, dan riwayat servis.'],

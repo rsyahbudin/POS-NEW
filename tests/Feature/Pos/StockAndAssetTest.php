@@ -38,6 +38,7 @@ it('hides the system quantity from counting staff, but not from managers', funct
 });
 
 it('applies a staff count as a difference only after a manager approves it', function () {
+    setting('inventory.count_needs_approval', true);
     $sugar = stockItem('Gula', 100);
     $coffee = stockItem('Kopi', 50);
     $cashier = userWithRole('cashier');
@@ -84,6 +85,7 @@ it('refuses an empty count and a second submit of the same draft', function () {
 });
 
 it('lists staff counts for the manager to review', function () {
+    setting('inventory.count_needs_approval', true);
     $sugar = stockItem('Gula', 100);
     $this->actingAs(userWithRole('waiter'))->post('/stock/count/submit', ['lines' => [['ingredient_id' => $sugar->id, 'counted' => 90]]])->assertSessionHasNoErrors();
 

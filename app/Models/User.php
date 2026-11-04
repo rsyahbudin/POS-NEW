@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use App\Domain\Catalog\Models\Station;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -40,6 +42,16 @@ class User extends Authenticatable implements PasskeyUser
 
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+
+    /**
+     * The stations this person works for (Bar, Dapur...). They decide which ingredients this person counts and buys.
+     *
+     * @return BelongsToMany<Station, $this>
+     */
+    public function stations(): BelongsToMany
+    {
+        return $this->belongsToMany(Station::class, 'station_user');
+    }
 
     /**
      * Get the attributes that should be cast.

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Catalog\Models\Station;
 use App\Domain\Inventory\InventoryService;
 use App\Domain\Inventory\Models\Ingredient;
 use App\Domain\Inventory\Models\IngredientUnit;
@@ -41,8 +42,9 @@ class InventoryController extends Controller
             'suppliers' => Supplier::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('name')->get(['id', 'name'])->all(),
             'wasteReasons' => WasteReason::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('sort')->orderBy('id')->get(['id', 'name'])->all(),
             'baseUnits' => Units::suggestions($id),
-            'ingredients' => Ingredient::query()->where('outlet_id', $id)->with('packs')->orderBy('name')->get()->map(fn (Ingredient $i) => [
-                'id' => $i->id, 'name' => $i->name, 'unit' => $i->unit, 'stock' => $i->stock, 'avg_cost' => round($i->avg_cost, 2),
+            'stations' => Station::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('sort')->get(['id', 'name']),
+            'ingredients' => Ingredient::query()->where('outlet_id', $id)->with(['packs', 'stations:id'])->orderBy('name')->get()->map(fn (Ingredient $i) => [
+                'station_ids' => $i->stations->pluck('id')->all(), 'id' => $i->id, 'name' => $i->name, 'unit' => $i->unit, 'stock' => $i->stock, 'avg_cost' => round($i->avg_cost, 2),
                 'min_stock' => $i->min_stock, 'value' => (int) round(max(0, $i->stock) * $i->avg_cost), 'is_active' => $i->is_active,
                 'packs' => $i->packs->map(fn ($u) => ['name' => $u->name, 'factor' => $u->factor])->values()->all(), 'choices' => Units::choices($i),
                 'low' => $i->is_active && $i->stock <= $i->min_stock,
@@ -83,6 +85,7 @@ class InventoryController extends Controller
             'unit' => ['required', 'string', 'max:12', fn ($a, $v, $fail) => Units::isValidName((string) $v) ?: $fail('Satuan dasar harus diawali huruf, maksimal 12 karakter, dan bukan kg / liter (pakai g / ml).')], 'min_stock' => 'nullable|numeric|min:0',
             'stock' => 'nullable|numeric|min:0', 'unit_cost' => 'nullable|numeric|min:0',
             'packs' => 'nullable|array|max:6', 'packs.*.name' => 'required|string|max:20', 'packs.*.factor' => 'required|numeric|gt:0',
+            'station_ids' => 'nullable|array', 'station_ids.*' => ['integer', Rule::exists('stations', 'id')->where('outlet_id', $outletId)],
         ]);
         $data['unit'] = Units::normalize($data['unit']);
         $ingredient = Ingredient::create([
@@ -90,6 +93,7 @@ class InventoryController extends Controller
             'avg_cost' => $data['unit_cost'] ?? 0,
         ]);
         $this->syncPacks($ingredient, $data['packs'] ?? []);
+        $ingredient->stations()->sync($data['station_ids'] ?? []);
         if (($data['stock'] ?? 0) > 0) {
             $this->inventory->count($ingredient, (float) $data['stock'], $this->actor($request), 'Stok awal');
         }
@@ -105,6 +109,7 @@ class InventoryController extends Controller
             'name' => ['required', 'string', 'max:80', Rule::unique('ingredients', 'name')->where('outlet_id', $ingredient->outlet_id)->ignore($ingredient->id)],
             'unit' => ['required', 'string', 'max:12', fn ($a, $v, $fail) => Units::isValidName((string) $v) ?: $fail('Satuan dasar harus diawali huruf, maksimal 12 karakter, dan bukan kg / liter (pakai g / ml).')], 'min_stock' => 'nullable|numeric|min:0', 'is_active' => 'boolean',
             'packs' => 'nullable|array|max:6', 'packs.*.name' => 'required|string|max:20', 'packs.*.factor' => 'required|numeric|gt:0',
+            'station_ids' => 'nullable|array', 'station_ids.*' => ['integer', Rule::exists('stations', 'id')->where('outlet_id', $ingredient->outlet_id)],
         ]);
         $data['unit'] = Units::normalize($data['unit']);
         if ($data['unit'] !== $ingredient->unit && ($ingredient->stock != 0 || $ingredient->movements()->exists() || RecipeLine::query()->where('ingredient_id', $ingredient->id)->exists())) {
@@ -112,6 +117,9 @@ class InventoryController extends Controller
         }
         $ingredient->update(['name' => $data['name'], 'unit' => $data['unit'], 'min_stock' => $data['min_stock'] ?? 0, 'is_active' => (bool) ($data['is_active'] ?? true)]);
         $this->syncPacks($ingredient, $data['packs'] ?? []);
+        if ($request->has('station_ids')) {
+            $ingredient->stations()->sync($data['station_ids'] ?? []);
+        }
 
         return back()->with('success', 'Bahan disimpan.');
     }

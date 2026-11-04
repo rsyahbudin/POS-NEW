@@ -14,6 +14,8 @@ export type PrinterPrefs = {
     method: PrintMethod;
     /** Print the receipt by itself right after a payment (otherwise only the Cetak button prints). */
     auto: boolean;
+    /** Show the receipt on screen after a payment. Off: it only prints and a short message confirms it. */
+    preview: boolean;
 };
 
 const KEY = 'pos.printer';
@@ -27,6 +29,7 @@ export function getPrinterPrefs(): PrinterPrefs {
             enabled: false,
             method: 'qz',
             auto: true,
+            preview: true,
             ...JSON.parse(localStorage.getItem(KEY) ?? '{}'),
         };
     } catch {
@@ -36,6 +39,7 @@ export function getPrinterPrefs(): PrinterPrefs {
             enabled: false,
             method: 'qz',
             auto: true,
+            preview: true,
         };
     }
 }

@@ -232,7 +232,7 @@ export default function MenuPage({
                         { id: 'products', label: 'Produk' },
                         { id: 'categories', label: 'Kategori' },
                         { id: 'modifiers', label: 'Modifier' },
-                        { id: 'stations', label: 'Station (dapur/bar)' },
+                        { id: 'stations', label: 'Station' },
                     ]}
                 />
                 {Object.values(errors ?? {})[0] && (
@@ -523,11 +523,18 @@ export default function MenuPage({
                         </section>
                     )}
                 {tab === 'stations' && (
+                    <p className="text-sm text-muted-foreground">
+                        Station = pos kerja tempat pesanan disiapkan, mis. Dapur
+                        dan Bar. Dipakai untuk layar dapur dan laporan waktu
+                        penyajian. Dipilih per kategori di tab Kategori.
+                    </p>
+                )}
+                {tab === 'stations' && (
                     <Simple
                         items={stations}
                         addUrl="/admin/stations"
                         editUrl={(id) => `/admin/stations/${id}`}
-                        label="Stasiun"
+                        label="Station"
                     />
                 )}
 
@@ -618,7 +625,7 @@ export default function MenuPage({
                             </Select>
                         </Field>
                         <Field
-                            label="Station (dapur/bar)"
+                            label="Station"
                             hint="Kosong = ikut station kategori (diatur di tab Kategori). Isi hanya bila menu ini tampil di layar dapur atau bar yang berbeda dari kategorinya."
                         >
                             <Select

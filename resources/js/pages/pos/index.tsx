@@ -614,6 +614,15 @@ export default function PosPage(props: Props) {
                 : copy || getPrinterPrefs().auto
                   ? await printReceipt(r.receipt)
                   : undefined;
+            if (
+                !getPrinterPrefs().preview &&
+                (how === 'qz' || how === 'queue')
+            ) {
+                toast.success(t('Struk dikirim ke printer.'));
+
+                return;
+            }
+
             setDialog({
                 kind: 'receipt',
                 receipt: r.receipt,
@@ -1203,11 +1212,18 @@ export default function PosPage(props: Props) {
                             onClick={() => setSheet(true)}
                         >
                             <span>
-                                {cartCount > 0
-                                    ? `${cartCount} ${t('item baru')}`
-                                    : order
-                                      ? order.number
-                                      : t('Pesanan')}
+                                {cartCount > 0 ? (
+                                    `${cartCount} ${t('item baru')}`
+                                ) : order ? (
+                                    <span className="flex flex-col items-start leading-tight">
+                                        <span>{title}</span>
+                                        <span className="text-xs font-normal opacity-80">
+                                            {order.number}
+                                        </span>
+                                    </span>
+                                ) : (
+                                    t('Pesanan')
+                                )}
                             </span>
                             <span className="flex items-center gap-1 tabular-nums">
                                 {rupiah(
@@ -1944,6 +1960,24 @@ function PrinterDialog({ onClose }: { onClose: () => void }) {
                     <span className="block text-xs text-muted-foreground">
                         {t(
                             'Matikan kalau perangkat ini tidak punya printer: struk tetap tampil di layar dengan tombol Cetak, dan tidak ada jendela cetak yang terbuka sendiri.',
+                        )}
+                    </span>
+                </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+                <input
+                    type="checkbox"
+                    className="mt-0.5 size-5"
+                    checked={prefs.preview}
+                    onChange={(e) =>
+                        setPrefs({ ...prefs, preview: e.target.checked })
+                    }
+                />
+                <span>
+                    {t('Tampilkan struk di layar setelah bayar')}
+                    <span className="block text-xs text-muted-foreground">
+                        {t(
+                            'Matikan agar struk langsung tercetak tanpa jendela pratinjau. Kalau gagal tercetak, struk tetap tampil.',
                         )}
                     </span>
                 </span>

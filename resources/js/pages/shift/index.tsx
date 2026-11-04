@@ -54,7 +54,7 @@ type ShiftData = {
         receipt: string | null;
     }[];
 };
-type Acc = { id: number; code: string; name: string };
+type Acc = { id: number; code: string; name: string; type?: string };
 
 type Props = {
     shift: ShiftData | null;
@@ -520,8 +520,29 @@ function Movement({
     const [category, setCategory] = useState<number | ''>('');
     const [receipt, setReceipt] = useState<File | null>(null);
     const spend = mode === 'spend';
+    // Plain words for the books: money put in comes from the owner unless told otherwise, and a cost defaults to "other".
+    const sources = canFreeForm
+        ? accounts.other
+        : accounts.other.filter((a) => a.type === 'equity');
+    // the system's own accounts (cost of goods, waste, differences) are booked by the app, never picked by hand
+    const costs = accounts.expense.filter(
+        (a) => !/^(Selisih|Harga Pokok|Beban Bahan Terbuang)/i.test(a.name),
+    );
+    const options = mode === 'other' ? costs : sources;
+    const plain = (name: string) =>
+        name
+            .replace(/^Beban\s+/i, '')
+            .replace(/^Modal Pemilik$/i, 'Modal pemilik');
+    const defaultAccount = (m: Mode): number | '' =>
+        m === 'other'
+            ? (costs.find((a) => /lain-lain/i.test(a.name))?.id ?? '')
+            : (sources.find((a) => a.type === 'equity')?.id ?? '');
     const ready =
-        !!amount && (spend ? !!category : !!reason.trim() && !!account);
+        !!amount &&
+        (spend
+            ? !!category
+            : !!reason.trim() &&
+              (account !== '' || defaultAccount(mode) !== ''));
     const modes: { id: Mode; label: string }[] = [
         { id: 'spend', label: t('Belanja') },
         { id: 'in', label: t('Tambah uang') },
@@ -646,27 +667,36 @@ function Movement({
                         )}
                     </Field>
 
-                    {!spend && (
+                    {!spend && options.length > 0 && (
                         <Field
                             label={
                                 mode === 'other'
-                                    ? t('Akun beban')
-                                    : t('Akun lawan')
+                                    ? t('Jenis biaya')
+                                    : t('Uang tambahan ini dari mana?')
+                            }
+                            hint={
+                                mode === 'other'
+                                    ? t(
+                                          'Pilih jenis biayanya supaya masuk ke laporan keuangan di pos yang benar. Bingung? Pilih Lain-lain.',
+                                      )
+                                    : t(
+                                          'Biasanya dari modal pemilik. Pilihan lain hanya untuk manager.',
+                                      )
                             }
                         >
                             <Select
-                                value={account}
+                                value={
+                                    account === ''
+                                        ? defaultAccount(mode)
+                                        : account
+                                }
                                 onChange={(e) =>
                                     setAccount(Number(e.target.value))
                                 }
                             >
-                                <option value="">{t('— pilih —')}</option>
-                                {(mode === 'other'
-                                    ? accounts.expense
-                                    : accounts.other
-                                ).map((a) => (
+                                {options.map((a) => (
                                     <option key={a.id} value={a.id}>
-                                        {a.name}
+                                        {plain(a.name)}
                                     </option>
                                 ))}
                             </Select>
@@ -699,7 +729,12 @@ function Movement({
                                               category_id: category,
                                               receipt: receipt ?? undefined,
                                           }
-                                        : { account_id: account }),
+                                        : {
+                                              account_id:
+                                                  account === ''
+                                                      ? defaultAccount(mode)
+                                                      : account,
+                                          }),
                                 },
                                 {
                                     forceFormData: true,

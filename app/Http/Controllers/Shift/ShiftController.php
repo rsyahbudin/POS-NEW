@@ -43,7 +43,7 @@ class ShiftController extends Controller
             'can_free_form' => $operate && (bool) $request->user()?->can('manage-shifts-any'),
             'accounts' => $operate ? [
                 'expense' => Account::query()->where('outlet_id', $outletId)->whereIn('type', ['expense'])->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
-                'other' => Account::query()->where('outlet_id', $outletId)->whereIn('type', ['equity', 'revenue', 'liability'])->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
+                'other' => Account::query()->where('outlet_id', $outletId)->whereIn('type', ['equity', 'revenue', 'liability'])->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name', 'type']),
                 'bank' => Account::query()->where('outlet_id', $outletId)->where('type', 'asset')->where('system_key', null)->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
             ] : ['expense' => [], 'other' => [], 'bank' => []],
             'recent' => Shift::query()->where('outlet_id', $outletId)->whereNotNull('closed_at')->with(['user:id,name', 'closer:id,name'])->latest('closed_at')->limit(10)->get()->map(fn ($s) => $this->present($s, $cash))->all(),

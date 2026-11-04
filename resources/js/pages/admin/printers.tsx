@@ -88,6 +88,28 @@ export default function PrintersPage({
         router.reload({ only: ['bridge'] });
     };
     const command = `node print-bridge.mjs --url ${bridge.url} --token ${token ?? 'TOKEN'}`;
+    // The same start script as bridge/start-print-bridge.bat with the address and token already filled in.
+    const downloadBat = () => {
+        const bat = [
+            '@echo off',
+            `set PRINT_BRIDGE_URL=${bridge.url}`,
+            `set PRINT_BRIDGE_TOKEN=${token}`,
+            '',
+            'cd /d "%~dp0"',
+            ':loop',
+            'node print-bridge.mjs >> print-bridge.log 2>&1',
+            'rem Exit code 2 means the token was rejected: stop instead of retrying forever.',
+            'if %errorlevel%==2 exit /b 2',
+            'ping -n 6 127.0.0.1 >nul',
+            'goto loop',
+            '',
+        ].join('\r\n');
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([bat], { type: 'text/plain' }));
+        a.download = 'start-print-bridge.bat';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    };
 
     const save = () => {
         if (!form) {
@@ -228,7 +250,15 @@ export default function PrintersPage({
                             Beri IP tetap ke tiap printer LAN, tambahkan di
                             tabel di atas dengan alamat IP dan port 9100.
                         </li>
-                        <li>Buat token, lalu jalankan perintah di bawah.</li>
+                        <li>
+                            Di Windows, taruh semua file di satu folder, mis.{' '}
+                            <code>C:\pos-bridge</code> (jangan di System32).
+                        </li>
+                        <li>
+                            Buat token, lalu unduh start-print-bridge.bat yang
+                            sudah berisi token itu, taruh di folder yang sama,
+                            dan jalankan.
+                        </li>
                     </ol>
                     <div className="flex flex-wrap gap-2">
                         <Button
@@ -244,6 +274,17 @@ export default function PrintersPage({
                         <div className="grid gap-2 rounded-lg bg-muted p-3">
                             <p className="text-xs text-muted-foreground">
                                 Token hanya tampil sekali. Salin sekarang.
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                <Button
+                                    className="h-10 w-fit"
+                                    onClick={downloadBat}
+                                >
+                                    Unduh start-print-bridge.bat
+                                </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Atau jalankan manual dari folder jembatan:
                             </p>
                             <code className="text-sm break-all">{command}</code>
                             <Button

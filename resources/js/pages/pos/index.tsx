@@ -130,7 +130,14 @@ type Dialog =
     | { kind: 'refund'; payment: Payment }
     | { kind: 'move' }
     | { kind: 'allocate'; bill: Bill }
-    | { kind: 'receipt'; receipt: Receipt; note?: string; billId?: number }
+    | {
+          kind: 'receipt';
+          receipt: Receipt;
+          note?: string;
+          billId?: number;
+          /** Set on a pre-bill: the bill can also go to the bill printer. */
+          prebillOrderId?: number;
+      }
     | { kind: 'online' }
     | { kind: 'printer' }
     | { kind: 'soldout' }
@@ -690,6 +697,7 @@ export default function PosPage(props: Props) {
                 if (rc) {
                     setDialog({
                         kind: 'receipt',
+                        prebillOrderId: r.order.id,
                         receipt: {
                             ...rc.receipt,
                             footer: t('PRE-BILL: belum dibayar'),
@@ -1460,7 +1468,7 @@ export default function PosPage(props: Props) {
                         <ReceiptView r={dialog.receipt} />
                     </div>
                     <div
-                        className={`grid gap-2 ${settings.receipt_whatsapp ? 'grid-cols-2' : 'grid-cols-1'}`}
+                        className={`grid gap-2 ${settings.receipt_whatsapp || (dialog.prebillOrderId && routing.bill) ? 'grid-cols-2' : 'grid-cols-1'}`}
                     >
                         <Button
                             type="button"
@@ -1481,8 +1489,28 @@ export default function PosPage(props: Props) {
                                     : void printReceipt(dialog.receipt)
                             }
                         >
-                            {t('Cetak')}
+                            {dialog.prebillOrderId && routing.bill
+                                ? t('Cetak di perangkat ini')
+                                : t('Cetak')}
                         </Button>
+                        {dialog.prebillOrderId && routing.bill && (
+                            <Button
+                                type="button"
+                                className="h-12"
+                                onClick={() =>
+                                    void api(
+                                        'POST',
+                                        `/pos/orders/${dialog.prebillOrderId}/print-bill`,
+                                    ).then(() =>
+                                        toast.success(
+                                            t('Bill dikirim ke printer bill.'),
+                                        ),
+                                    )
+                                }
+                            >
+                                {t('Cetak di printer bill')}
+                            </Button>
+                        )}
                         {settings.receipt_whatsapp && (
                             <Button
                                 type="button"

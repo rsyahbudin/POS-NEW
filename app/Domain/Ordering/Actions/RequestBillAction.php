@@ -4,7 +4,6 @@ namespace App\Domain\Ordering\Actions;
 
 use App\Domain\Floor\Actions\SyncTableStatusAction;
 use App\Domain\Ordering\Models\Order;
-use App\Domain\Printing\PrintDispatcher;
 use App\Models\User;
 use App\Support\Audit;
 use Illuminate\Support\Facades\DB;
@@ -22,9 +21,6 @@ class RequestBillAction
                 $order->update(['bill_requested_at' => now(), 'bill_requested_by' => $user->id]);
                 Audit::log('bill.requested', $order, ['order' => $order->number], $user);
                 $this->syncTable->handle($order->table_id);
-            }
-            if ($order->status->isEditable()) {
-                PrintDispatcher::later(fn (PrintDispatcher $d) => $d->bill($order));
             }
 
             return $order;

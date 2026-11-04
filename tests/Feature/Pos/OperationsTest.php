@@ -339,7 +339,10 @@ it('routes the receipt, the bill and each station ticket to its own printer', fu
     expect($tickets->pluck('printer_id')->unique()->sort()->values()->all())->toBe(collect([$barPrinter->id, $kitchenPrinter->id])->unique()->sort()->values()->all());
     expect($tickets->first()->payload['items'][0])->toHaveKeys(['qty', 'name', 'note', 'modifiers']);
 
+    // asking for the bill only marks the table; whoever asks picks where it prints (a waiter prints on their own Bluetooth printer)
     $this->actingAs(userWithRole('cashier'))->postJson("/pos/orders/{$order->id}/bill-request")->assertOk();
+    expect((clone $jobs)->where('kind', 'bill')->count())->toBe(0);
+    $this->actingAs(userWithRole('cashier'))->postJson("/pos/orders/{$order->id}/print-bill")->assertOk()->assertJsonPath('queued', 1);
     expect((clone $jobs)->where('kind', 'bill')->where('printer_id', $bill->id)->count())->toBe(1)
         ->and((clone $jobs)->where('kind', 'bill')->first()->payload['title'])->toBe('TAGIHAN');
 

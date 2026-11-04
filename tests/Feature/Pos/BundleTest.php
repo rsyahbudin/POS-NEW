@@ -2,6 +2,7 @@
 
 use App\Domain\Catalog\Models\ModifierGroup;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\Station;
 use App\Domain\Floor\Models\Table;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Ordering\StockService;
@@ -206,4 +207,24 @@ it('puts who ordered, from where, the order type, the batch and the item notes o
     expect($payload['customer'])->toBe('Rani')->and($payload['type'])->toBe('TAKE AWAY')->and($payload['source'])->toBe('POS')
         ->and($payload['by'])->toBe($cashier->name)->and($payload['batch'])->toBe(1)
         ->and($payload['items'][0]['note'])->toBe('less ice');
+});
+
+it('takes the kitchen or bar screen from the category unless the menu item has its own', function () {
+    $bar = Station::query()->first();
+    $other = Station::query()->where('id', '!=', $bar->id)->first() ?? Station::create(['outlet_id' => $bar->outlet_id, 'name' => 'Extra', 'is_active' => true]);
+    $americano = product('Americano');
+    $americano->category->update(['station_id' => $bar->id]);
+    $americano->update(['station_id' => null]);
+
+    openShiftFor($cashier = userWithRole('cashier'), 0);
+    $order = placeOrder($cashier, [['product_id' => $americano->id, 'qty' => 1]]);
+    expect($order->items->first()->station_id)->toBe($bar->id);
+
+    $americano->update(['station_id' => $other->id]);
+    $again = placeOrder($cashier, [['product_id' => $americano->id, 'qty' => 1]]);
+    expect($again->items->last()->station_id)->toBe($other->id);
+
+    $manager = userWithRole('manager');
+    $this->actingAs($manager)->put("/admin/categories/{$americano->category_id}", ['name' => $americano->category->name, 'station_id' => null])->assertRedirect();
+    expect($americano->category->fresh()->station_id)->toBeNull();
 });

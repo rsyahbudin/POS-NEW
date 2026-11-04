@@ -53,6 +53,12 @@ class Product extends Model
         return $this->belongsTo(Station::class);
     }
 
+    /** The kitchen or bar screen of this item: its own station, else the one of its category. */
+    public function effectiveStationId(): ?int
+    {
+        return $this->station_id ?? $this->category->station_id;
+    }
+
     /** @return HasMany<ProductVariant, $this> */
     public function variants(): HasMany
     {

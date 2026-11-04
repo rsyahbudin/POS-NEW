@@ -23,7 +23,7 @@ class ItemBuilder
 
         $products = Product::query()
             ->where('outlet_id', $outletId)
-            ->with(['variants', 'modifierGroups.modifiers', 'bundleItems.product.variants', 'bundleItems.product.modifierGroups.modifiers', 'bundleItems.variant'])
+            ->with(['category', 'variants', 'modifierGroups.modifiers', 'bundleItems.product.category', 'bundleItems.product.variants', 'bundleItems.product.modifierGroups.modifiers', 'bundleItems.variant'])
             ->findMany(array_values(array_unique(array_map(fn (array $r) => (int) $r['product_id'], $requests))))
             ->keyBy('id');
 
@@ -86,7 +86,7 @@ class ItemBuilder
             $rows[] = [
                 'product_id' => $product->id,
                 // a bundle with no station of its own shows on the kitchen screen of its first menu item
-                'station_id' => $product->station_id ?? ($components[0]['station_id'] ?? null),
+                'station_id' => $product->effectiveStationId() ?? ($components[0]['station_id'] ?? null),
                 'name_snapshot' => $name,
                 'unit_price' => $price,
                 'qty' => $qty,
@@ -193,7 +193,7 @@ class ItemBuilder
             $label = $variant ? "{$part->name} ({$variant->name})" : $part->name;
             $names = array_column($options['snapshot'], 'name');
             $parts[] = [
-                'product_id' => $part->id, 'variant_id' => $variant?->id, 'name' => $label, 'qty' => $line->qty, 'station_id' => $part->station_id,
+                'product_id' => $part->id, 'variant_id' => $variant?->id, 'name' => $label, 'qty' => $line->qty, 'station_id' => $part->effectiveStationId(),
                 'modifier_ids' => $options['ids'], 'modifiers' => $names,
             ];
             // what the guest chose for this item, shown on the receipt and reports like any option

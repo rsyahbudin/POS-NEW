@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $outlet_id
  * @property string $name
+ * @property int|null $station_id
  * @property int $sort
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at

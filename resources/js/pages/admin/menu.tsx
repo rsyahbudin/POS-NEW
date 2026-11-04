@@ -53,7 +53,13 @@ type Group = {
     modifiers: { id?: number; name: string; price_delta: number }[];
 };
 type Props = {
-    categories: { id: number; name: string; printer_ids: number[] }[];
+    categories: {
+        id: number;
+        name: string;
+        sort: number;
+        station_id: number | null;
+        printer_ids: number[];
+    }[];
     printers: { id: number; name: string }[];
     stations: { id: number; name: string; is_active: boolean }[];
     products: Product[];
@@ -421,63 +427,101 @@ export default function MenuPage({
                         label="Kategori"
                     />
                 )}
-                {tab === 'categories' && printers.length > 0 && (
-                    <section className="grid gap-2 rounded-xl border bg-card p-3">
-                        <h2 className="font-semibold">
-                            Printer tiket per kategori
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                            Pilih printer yang mencetak pesanan kategori ini.
-                            Boleh lebih dari satu (mis. minuman tercetak di Bar
-                            dan Kasir). Kosong = ikut printer station produk.
-                            Satu menu bisa menimpa ini di form menu.
-                        </p>
-                        {categories.map((c) => (
-                            <div
-                                key={c.id}
-                                className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2"
-                            >
-                                <span className="w-40 font-medium">
-                                    {c.name}
-                                </span>
-                                {printers.map((pr) => (
-                                    <label
-                                        key={pr.id}
-                                        className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm"
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            className="size-5"
-                                            checked={c.printer_ids.includes(
-                                                pr.id,
-                                            )}
+                {tab === 'categories' &&
+                    (printers.length > 0 || stations.length > 0) && (
+                        <section className="grid gap-2 rounded-xl border bg-card p-3">
+                            <h2 className="font-semibold">
+                                Station dan printer tiket per kategori
+                            </h2>
+                            <p className="text-sm text-muted-foreground">
+                                Atur sekali per kategori, semua menunya ikut.
+                                Station = layar dapur atau bar yang menampilkan
+                                kategori ini. Printer = tempat tiketnya
+                                tercetak; boleh lebih dari satu (mis. minuman di
+                                Bar dan Kasir). Satu menu bisa menimpa keduanya
+                                di form menu.
+                            </p>
+                            {categories.map((c) => (
+                                <div
+                                    key={c.id}
+                                    className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2"
+                                >
+                                    <span className="w-40 font-medium">
+                                        {c.name}
+                                    </span>
+                                    {stations.length > 0 && (
+                                        <Select
+                                            aria-label={`Station ${c.name}`}
+                                            className="h-11 w-44"
+                                            value={c.station_id ?? ''}
                                             onChange={(e) =>
-                                                router.post(
-                                                    `/admin/categories/${c.id}/printers`,
+                                                router.put(
+                                                    `/admin/categories/${c.id}`,
                                                     {
-                                                        printer_ids: e.target
-                                                            .checked
-                                                            ? [
-                                                                  ...c.printer_ids,
-                                                                  pr.id,
-                                                              ]
-                                                            : c.printer_ids.filter(
-                                                                  (x) =>
-                                                                      x !==
-                                                                      pr.id,
-                                                              ),
+                                                        name: c.name,
+                                                        sort: c.sort,
+                                                        station_id: e.target
+                                                            .value
+                                                            ? Number(
+                                                                  e.target
+                                                                      .value,
+                                                              )
+                                                            : null,
                                                     },
                                                     { preserveScroll: true },
                                                 )
                                             }
-                                        />
-                                        {pr.name}
-                                    </label>
-                                ))}
-                            </div>
-                        ))}
-                    </section>
-                )}
+                                        >
+                                            <option value="">
+                                                Tanpa station
+                                            </option>
+                                            {stations.map((s) => (
+                                                <option key={s.id} value={s.id}>
+                                                    {s.name}
+                                                </option>
+                                            ))}
+                                        </Select>
+                                    )}
+                                    {printers.map((pr) => (
+                                        <label
+                                            key={pr.id}
+                                            className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                className="size-5"
+                                                checked={c.printer_ids.includes(
+                                                    pr.id,
+                                                )}
+                                                onChange={(e) =>
+                                                    router.post(
+                                                        `/admin/categories/${c.id}/printers`,
+                                                        {
+                                                            printer_ids: e
+                                                                .target.checked
+                                                                ? [
+                                                                      ...c.printer_ids,
+                                                                      pr.id,
+                                                                  ]
+                                                                : c.printer_ids.filter(
+                                                                      (x) =>
+                                                                          x !==
+                                                                          pr.id,
+                                                                  ),
+                                                        },
+                                                        {
+                                                            preserveScroll: true,
+                                                        },
+                                                    )
+                                                }
+                                            />
+                                            {pr.name}
+                                        </label>
+                                    ))}
+                                </div>
+                            ))}
+                        </section>
+                    )}
                 {tab === 'stations' && (
                     <Simple
                         items={stations}
@@ -575,7 +619,7 @@ export default function MenuPage({
                         </Field>
                         <Field
                             label="Station (dapur/bar)"
-                            hint="Layar dapur atau bar yang menampilkan menu ini. Juga dipakai untuk memilih printer tiket yang punya station sama, bila printer tidak dipilih di kategori atau di menu ini."
+                            hint="Kosong = ikut station kategori (diatur di tab Kategori). Isi hanya bila menu ini tampil di layar dapur atau bar yang berbeda dari kategorinya."
                         >
                             <Select
                                 value={draft.station_id}

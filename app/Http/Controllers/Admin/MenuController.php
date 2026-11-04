@@ -34,7 +34,7 @@ class MenuController extends Controller
         $id = $this->outlet->id();
 
         return Inertia::render('admin/menu', [
-            'categories' => Category::query()->where('outlet_id', $id)->with('printers:id')->orderBy('sort')->get()->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'sort' => $c->sort, 'printer_ids' => $c->printers->pluck('id')->all()]),
+            'categories' => Category::query()->where('outlet_id', $id)->with('printers:id')->orderBy('sort')->get()->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'sort' => $c->sort, 'station_id' => $c->station_id, 'printer_ids' => $c->printers->pluck('id')->all()]),
             'printers' => Printer::query()->where('outlet_id', $id)->where('kind', 'ticket')->orderBy('id')->get(['id', 'name']),
             'stations' => Station::query()->where('outlet_id', $id)->orderBy('sort')->get(['id', 'name', 'is_active']),
             'products' => Product::query()->where('outlet_id', $id)->with(['variants', 'modifierGroups:id', 'printers:id', 'bundleItems'])->orderBy('category_id')->orderBy('sort')->get()->map(fn ($p) => [
@@ -57,7 +57,7 @@ class MenuController extends Controller
 
     public function saveCategory(Request $request, ?Category $category = null): RedirectResponse
     {
-        $data = $request->validate(['name' => 'required|string|max:60', 'sort' => 'nullable|integer|min:0']);
+        $data = $request->validate(['name' => 'required|string|max:60', 'sort' => 'nullable|integer|min:0', 'station_id' => ['nullable', Rule::exists('stations', 'id')->where('outlet_id', $this->outlet->id())]]);
         $category ? $category->update($data) : Category::create($data + ['outlet_id' => $this->outlet->id()]);
 
         return back()->with('success', 'Kategori disimpan.');

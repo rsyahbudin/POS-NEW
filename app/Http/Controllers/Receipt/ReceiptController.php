@@ -33,7 +33,7 @@ class ReceiptController extends Controller
     /** Reprints are labelled COPY and written to the audit log (PRD 4.13). */
     public function reprint(Bill $bill, Request $request): JsonResponse
     {
-        abort_unless($this->actor($request)->can('receive-payment'), 403);
+        abort_unless($this->actor($request)->canAny(['receive-payment', 'reprint-receipt']), 403);
         Audit::log('receipt.reprinted', $bill, ['order' => $bill->order->number, 'bill' => $bill->id]);
 
         return response()->json(['receipt' => ReceiptPresenter::forBill($bill, copy: true)]);

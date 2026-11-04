@@ -5,6 +5,7 @@ namespace App\Domain\Printing;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Ordering\Enums\RoundSource;
 use App\Domain\Ordering\Models\Order;
+use App\Domain\Ordering\Models\OrderItem;
 use App\Domain\Ordering\Models\OrderRound;
 use App\Domain\Payment\Enums\BillStatus;
 use App\Domain\Payment\Models\Bill;
@@ -81,17 +82,66 @@ class PrintDispatcher
      * chosen for its category, else on the ticket printers of its station (or of every station).
      * Each printer gets one ticket with all the items routed to it.
      */
-    public function tickets(OrderRound $round): int
+    public function tickets(OrderRound $round, bool $reprint = false): int
     {
         $round->loadMissing('order.table', 'items', 'creator');
         $order = $round->order;
-        $items = $round->items->filter(fn ($i) => in_array($i->status->value, ['new', 'preparing'], true));
+        $items = $this->liveItems($round, $reprint);
         $ticketPrinters = $this->printers($order->outlet_id, 'ticket')->keyBy('id');
         if ($items->isEmpty() || $ticketPrinters->isEmpty()) {
             return 0;
         }
 
-        // A bundle prints as the menu items it is made of, each on the printers of that item; the bundle name rides along as a note.
+        $lines = $this->lines($items);
+        $products = Product::withTrashed()->whereIn('id', array_column($lines, 'product_id'))->with(['printers:id', 'category.printers:id'])->get()->keyBy('id');
+        $byPrinter = [];
+        foreach ($lines as $line) {
+            $product = $products->get($line['product_id']);
+            $ids = $this->activeIds($product?->printers, $ticketPrinters)
+                ?: $this->activeIds($product?->category?->printers, $ticketPrinters)
+                ?: $ticketPrinters->filter(fn (Printer $p) => $p->station_id === null || $p->station_id === $line['station_id'])->keys()->all();
+            foreach ($ids as $id) {
+                $byPrinter[$id][] = $line;
+            }
+        }
+
+        $count = 0;
+        foreach ($byPrinter as $printerId => $group) {
+            $count += $this->queue($order->outlet_id, 'ticket', $order->number, $this->payload($round, $group, $reprint), $ticketPrinters->only([$printerId])->values());
+        }
+
+        return $count;
+    }
+
+    /**
+     * One ticket with everything of the round, for the device in the waiter's hand to print when no ticket printer is set up on the server.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function ticketForDevice(OrderRound $round): ?array
+    {
+        $round->loadMissing('order.table', 'items', 'creator');
+        $items = $this->liveItems($round, true);
+
+        return $items->isEmpty() ? null : $this->payload($round, $this->lines($items), true);
+    }
+
+    /** @return Collection<int, OrderItem> */
+    private function liveItems(OrderRound $round, bool $reprint): Collection
+    {
+        $status = $reprint ? ['new', 'preparing', 'ready'] : ['new', 'preparing'];
+
+        return $round->items->filter(fn ($i) => in_array($i->status->value, $status, true));
+    }
+
+    /**
+     * A bundle prints as the menu items it is made of, each on the printers of that item; the bundle name rides along as a note.
+     *
+     * @param  Collection<int, OrderItem>  $items
+     * @return list<array<string, mixed>>
+     */
+    private function lines(Collection $items): array
+    {
         $lines = [];
         foreach ($items as $item) {
             $modifiers = collect($item->modifiers_snapshot ?? [])->map(fn ($m) => (string) $m['name'])->all();
@@ -108,39 +158,33 @@ class PrintDispatcher
             $lines[] = ['product_id' => $item->product_id, 'station_id' => $item->station_id, 'qty' => $item->qty, 'name' => $item->name_snapshot, 'note' => $item->note, 'modifiers' => $modifiers, 'bundle' => null];
         }
 
-        $products = Product::withTrashed()->whereIn('id', array_column($lines, 'product_id'))->with(['printers:id', 'category.printers:id'])->get()->keyBy('id');
-        $byPrinter = [];
-        foreach ($lines as $line) {
-            $product = $products->get($line['product_id']);
-            $ids = $this->activeIds($product?->printers, $ticketPrinters)
-                ?: $this->activeIds($product?->category?->printers, $ticketPrinters)
-                ?: $ticketPrinters->filter(fn (Printer $p) => $p->station_id === null || $p->station_id === $line['station_id'])->keys()->all();
-            foreach ($ids as $id) {
-                $byPrinter[$id][] = $line;
-            }
-        }
+        return $lines;
+    }
 
+    /**
+     * @param  list<array<string, mixed>>  $group
+     * @return array<string, mixed>
+     */
+    private function payload(OrderRound $round, array $group, bool $reprint): array
+    {
+        $order = $round->order;
         $label = $order->table->name ?? ($order->call_number ? ($order->type->value === 'dine_in' ? "Dine-in {$order->call_number}" : "Takeaway {$order->call_number}") : ($order->platform ? "Online {$order->platform}" : $order->number));
         // who ordered and how, so the bar and the kitchen know whom to call and which batch of an open table this is
         $isQr = $round->source === RoundSource::Qr;
         $batch = OrderRound::query()->where('order_id', $order->id)->where('id', '<=', $round->id)->count();
-        $count = 0;
-        foreach ($byPrinter as $printerId => $group) {
-            $payload = [
-                'label' => $label, 'number' => $order->number, 'time' => now()->setTimezone('Asia/Jakarta')->format('H:i'),
-                'type' => self::TYPES[$order->type->value],
-                'customer' => $order->customer_name ?: $round->customer_name,
-                'source' => $isQr ? 'QR' : 'POS',
-                'by' => $isQr ? null : $round->creator?->name,
-                'batch' => $batch,
-                'items' => collect($group)->map(fn ($l) => [
-                    'qty' => $l['qty'], 'name' => $l['name'], 'note' => $l['note'], 'modifiers' => $l['modifiers'], 'bundle' => $l['bundle'],
-                ])->values()->all(),
-            ];
-            $count += $this->queue($order->outlet_id, 'ticket', $order->number, $payload, $ticketPrinters->only([$printerId])->values());
-        }
 
-        return $count;
+        return [
+            'label' => $label, 'number' => $order->number, 'time' => now()->setTimezone('Asia/Jakarta')->format('H:i'),
+            'type' => self::TYPES[$order->type->value],
+            'customer' => $order->customer_name ?: $round->customer_name,
+            'source' => $isQr ? 'QR' : 'POS',
+            'by' => $isQr ? null : $round->creator?->name,
+            'batch' => $batch,
+            'reprint' => $reprint,
+            'items' => collect($group)->map(fn ($l) => [
+                'qty' => $l['qty'], 'name' => $l['name'], 'note' => $l['note'], 'modifiers' => $l['modifiers'], 'bundle' => $l['bundle'],
+            ])->values()->all(),
+        ];
     }
 
     /**

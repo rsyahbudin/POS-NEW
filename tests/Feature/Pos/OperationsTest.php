@@ -498,3 +498,24 @@ it('tells the floor view how many items a table has, how many are ready and who 
 
     expect($table['order'])->toMatchArray(['customer_name' => 'Rani', 'items' => 2, 'ready' => 2, 'pending_qr' => 0]);
 });
+
+it('lets a waiter reprint a ticket and a paid receipt copy without the right to take payments', function () {
+    openShiftFor($cashier = userWithRole('cashier'), 0);
+    $waiter = userWithRole('waiter');
+    $order = placeOrder($waiter, [['product_id' => product('Americano')->id, 'qty' => 1]]);
+    $roundId = $order->rounds()->firstOrFail()->id;
+
+    // no ticket printer on the server: the ticket comes back for the waiter's own device
+    $res = $this->actingAs($waiter)->postJson("/pos/rounds/{$roundId}/reprint-ticket")->assertOk();
+    expect($res->json('queued'))->toBe(0)->and($res->json('ticket.reprint'))->toBeTrue()->and($res->json('ticket.items.0.name'))->toContain('Americano');
+
+    $printer = printer('ticket');
+    $this->actingAs($waiter)->postJson("/pos/rounds/{$roundId}/reprint-ticket")->assertOk()->assertJsonPath('queued', 1)->assertJsonPath('ticket', null);
+    expect(PrintJob::query()->where('printer_id', $printer->id)->latest('id')->first()->payload['reprint'])->toBeTrue();
+
+    pay($order, $cashier);
+    $bill = $order->bills()->firstOrFail();
+    $this->actingAs($waiter)->postJson("/pos/bills/{$bill->id}/reprint")->assertOk();
+
+    $this->actingAs(userWithRole('kitchen'))->postJson("/pos/rounds/{$roundId}/reprint-ticket")->assertForbidden();
+});

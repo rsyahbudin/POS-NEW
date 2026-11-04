@@ -24,6 +24,8 @@ final class PermissionCatalog
                 'void' => ['label' => 'Batalkan item/order & komplimen', 'hint' => 'Membatalkan item atau order yang sudah masuk, dan menandai komplimen/staff meal. Peran tanpa izin ini butuh PIN dari pemegang izin.'],
                 'refund' => ['label' => 'Refund', 'hint' => 'Refund pembayaran yang sudah lunas (jurnal pembalik).'],
                 'cancel-order' => ['label' => 'Batalkan pesanan / item (belum dibayar)', 'hint' => 'Batalkan sendiri dengan alasan wajib (tercatat di laporan). Peran tanpa izin ini butuh PIN dari pemegang izin "Batalkan item/order & komplimen".'],
+                'reprint-receipt' => ['label' => 'Cetak ulang struk', 'hint' => 'Mencetak salinan struk yang sudah dibayar (berlabel SALINAN dan tercatat di log). Tidak perlu izin menerima pembayaran, jadi waiter bisa membantu tamu yang minta salinan.'],
+                'reprint-ticket' => ['label' => 'Cetak ulang tiket pesanan', 'hint' => 'Mengirim ulang tiket pesanan ke printer bar atau dapur (atau mencetaknya di perangkat ini), mis. saat kertas habis atau tiket tidak keluar.'],
                 'use-print-station' => ['label' => 'Pakai Stasiun Cetak', 'hint' => 'Membuka halaman Stasiun Cetak untuk mencetak antrean struk, bill, dan tiket.'],
                 'update-kitchen-status' => ['label' => 'Update status dapur', 'hint' => 'Buka layar dapur dan majukan status item.'],
             ]],

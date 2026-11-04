@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Print;
 
 use App\Domain\Catalog\Models\Station;
 use App\Domain\Ordering\Models\Order;
+use App\Domain\Ordering\Models\OrderRound;
 use App\Domain\Payment\Models\Bill;
 use App\Domain\Printing\Models\Printer;
 use App\Domain\Printing\Models\PrintJob;
@@ -80,11 +81,23 @@ class PrintStationController extends Controller
     /** Reprint a paid bill's receipt on the receipt printer (labelled COPY, audited). */
     public function reprintReceipt(Bill $bill, Request $request, PrintDispatcher $dispatcher): JsonResponse
     {
-        abort_unless($this->actor($request)->can('receive-payment'), 403);
+        abort_unless($this->actor($request)->canAny(['receive-payment', 'reprint-receipt']), 403);
         $queued = $dispatcher->receipt($bill, copy: true);
         Audit::log('receipt.reprinted', $bill, ['order' => $bill->order->number, 'bill' => $bill->id, 'to_printer' => true]);
 
         return response()->json(['queued' => $queued]);
+    }
+
+    /** Sends an order ticket again to its printers; without ticket printers on the server it hands the ticket back for the device to print. */
+    public function reprintTicket(OrderRound $round, Request $request, PrintDispatcher $dispatcher): JsonResponse
+    {
+        abort_unless($this->actor($request)->can('reprint-ticket'), 403);
+        $round->loadMissing('order');
+        abort_unless($round->order->outlet_id === $this->outlet->id() && $round->status->value === 'confirmed', 404);
+        $queued = $dispatcher->tickets($round, reprint: true);
+        Audit::log('ticket.reprinted', $round, ['order' => $round->order->number, 'round' => $round->id, 'to_printer' => $queued > 0]);
+
+        return response()->json(['queued' => $queued, 'ticket' => $queued > 0 ? null : $dispatcher->ticketForDevice($round)]);
     }
 
     /** Print the guest's bill (before payment) on the bill printer. */

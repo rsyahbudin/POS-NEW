@@ -55,10 +55,12 @@ import {
     getPrinterPrefs,
     listPrinters,
     pairBluetoothPrinter,
+    printKitchenTicket,
     printTest,
     printReceipt,
     savePrinterPrefs,
 } from '@/lib/print';
+import type { TicketData } from '@/lib/escpos';
 import type { PrinterPrefs } from '@/lib/print';
 import { cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/notification-bell';
@@ -99,6 +101,8 @@ type Props = {
         mark_sold_out: boolean;
         handle_calls: boolean;
         confirm_qr: boolean;
+        reprint_receipt: boolean;
+        reprint_ticket: boolean;
     };
     settings: {
         discount_limit_percent: number;
@@ -735,6 +739,29 @@ export default function PosPage(props: Props) {
         voidOrder: () => setDialog({ kind: 'void-order' }),
         move: () => setDialog({ kind: 'move' }),
         reprint: (bill) => void showReceipt(bill, true),
+        reprintTicket: async (roundId) => {
+            const r = await guard(() =>
+                api<{ queued: number; ticket: TicketData | null }>(
+                    'POST',
+                    `/pos/rounds/${roundId}/reprint-ticket`,
+                ),
+            );
+
+            if (!r) {
+                return;
+            }
+
+            if (r.queued > 0) {
+                toast.success(t('Tiket dikirim ulang ke printer.'));
+            } else if (r.ticket) {
+                const ok = await printKitchenTicket(r.ticket);
+                toast[ok ? 'success' : 'error'](
+                    ok ? t('Tiket dicetak.') : t('Printer belum diatur.'),
+                );
+            } else {
+                toast.error(t('Tidak ada item untuk dicetak.'));
+            }
+        },
         billOf: async (bill) => {
             const rc = await guard(() =>
                 api<{ receipt: Receipt }>(

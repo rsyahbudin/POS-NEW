@@ -204,6 +204,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::post('jobs/{job}/retry', [PrintStationController::class, 'retry'])->name('retry');
     });
     Route::post('pos/bills/{bill}/print', [PrintStationController::class, 'reprintReceipt'])->name('pos.bills.print');
+    Route::post('pos/rounds/{round}/reprint-ticket', [PrintStationController::class, 'reprintTicket'])->name('pos.rounds.reprint-ticket');
     Route::post('pos/orders/{order}/print-bill', [PrintStationController::class, 'printBill'])->name('pos.orders.print-bill');
 
     // Stock list and counting for staff

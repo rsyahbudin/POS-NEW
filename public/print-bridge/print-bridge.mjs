@@ -64,6 +64,7 @@ function kitchenEscPos(t, paper) {
 		"\x1B!\0",
 		`${t.number}  ${t.time}\n`
 	];
+	if (t.reprint) out.push("\x1B!\b", "** CETAK ULANG: JANGAN DIBUAT DOBEL **\n", "\x1B!\0");
 	if (t.type) out.push("\x1B!\b", `${t.type}\n`, "\x1B!\0");
 	if (t.batch && t.batch > 1) out.push("\x1B!\b", `** TAMBAHAN #${t.batch} **\n`, "\x1B!\0");
 	out.push("\x1Ba\0");

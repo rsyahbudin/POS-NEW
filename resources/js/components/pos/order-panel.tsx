@@ -1,4 +1,4 @@
-import { MoreVertical, Minus, Plus, Trash2 } from 'lucide-react';
+import { MoreVertical, Minus, Plus, Printer, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -55,6 +55,8 @@ export type PanelActions = {
     voidOrder: () => void;
     move: () => void;
     reprint: (b: Bill) => void;
+    /** Send the ticket of one round to its printers again, or print it on this device. */
+    reprintTicket: (roundId: number) => void;
     /** Print the guest's bill of one split bill. */
     billOf: (b: Bill) => void;
     refund: (p: Payment) => void;
@@ -94,7 +96,14 @@ export function OrderPanel({
     subtitle?: string;
     order: Order | null;
     cart: CartLine[];
-    can: { pay: boolean; void: boolean; refund: boolean; discount: boolean };
+    can: {
+        pay: boolean;
+        void: boolean;
+        refund: boolean;
+        discount: boolean;
+        reprint_receipt: boolean;
+        reprint_ticket: boolean;
+    };
     actions: PanelActions;
     pick?: PickState;
     showKitchenStatus?: boolean;
@@ -170,6 +179,19 @@ export function OrderPanel({
                                     {t('Ditolak')}: {round.reject_reason}
                                 </span>
                             )}
+                            {can.reprint_ticket &&
+                                round.status === 'confirmed' && (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            actions.reprintTicket(round.id)
+                                        }
+                                        className="ml-auto flex h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    >
+                                        <Printer className="size-3.5" />
+                                        {t('Cetak ulang tiket')}
+                                    </button>
+                                )}
                         </p>
                         <ul className="divide-y rounded-lg border">
                             {round.items
@@ -370,19 +392,20 @@ export function OrderPanel({
                                     </span>
                                     <span className="flex items-center gap-1 tabular-nums">
                                         {rupiah(b.grand_total)}
-                                        {b.status === 'paid' && (
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-9"
-                                                onClick={() =>
-                                                    actions.reprint(b)
-                                                }
-                                            >
-                                                {t('Struk')}
-                                            </Button>
-                                        )}
+                                        {b.status === 'paid' &&
+                                            can.reprint_receipt && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-9"
+                                                    onClick={() =>
+                                                        actions.reprint(b)
+                                                    }
+                                                >
+                                                    {t('Struk')}
+                                                </Button>
+                                            )}
                                         {b.status === 'unpaid' &&
                                             !b.is_unallocated && (
                                                 <Button
@@ -675,7 +698,7 @@ export function OrderPanel({
                         </div>
                     )}
 
-                {order && order.status === 'paid' && (
+                {order && order.status === 'paid' && can.reprint_receipt && (
                     <div className="grid gap-2">
                         {order.bills.map((b) => (
                             <Button

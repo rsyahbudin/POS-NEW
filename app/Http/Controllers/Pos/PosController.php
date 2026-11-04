@@ -48,6 +48,8 @@ class PosController extends Controller
                 'handle_calls' => $user->can('handle-calls'),
                 'open_shift' => $user->can('open-close-shift'),
                 'confirm_qr' => $user->can('receive-payment'),
+                'reprint_receipt' => $user->canAny(['receive-payment', 'reprint-receipt']),
+                'reprint_ticket' => $user->can('reprint-ticket'),
             ],
             'settings' => [
                 'discount_limit_percent' => (int) $this->settings->get('discount.cashier_limit_percent', 10),

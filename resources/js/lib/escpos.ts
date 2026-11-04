@@ -161,6 +161,8 @@ export type TicketData = {
     by?: string | null;
     /** Which batch of the open order this is; the second one onward prints as an addition. */
     batch?: number | null;
+    /** The ticket is sent again by hand, so the kitchen does not cook it twice. */
+    reprint?: boolean;
 };
 
 export function kitchenEscPos(t: TicketData, paper: PaperWidth): string[] {
@@ -173,6 +175,14 @@ export function kitchenEscPos(t: TicketData, paper: PaperWidth): string[] {
         ESC + '!' + '\x00',
         `${t.number}  ${t.time}\n`,
     ];
+
+    if (t.reprint) {
+        out.push(
+            ESC + '!' + '\x08',
+            '** CETAK ULANG: JANGAN DIBUAT DOBEL **\n',
+            ESC + '!' + '\x00',
+        );
+    }
 
     if (t.type) {
         out.push(ESC + '!' + '\x08', `${t.type}\n`, ESC + '!' + '\x00');

@@ -137,6 +137,8 @@ type Dialog =
           billId?: number;
           /** Set on a pre-bill: the bill can also go to the bill printer. */
           prebillOrderId?: number;
+          /** Set when only one bill of a split order is printed. */
+          prebillBillId?: number;
       }
     | { kind: 'online' }
     | { kind: 'printer' }
@@ -695,7 +697,21 @@ export default function PosPage(props: Props) {
 
             if (r) {
                 apply(r.order);
-                const bill = r.order.bills[0];
+                const open = r.order.bills.filter(
+                    (b) => b.status === 'unpaid' && !b.is_unallocated,
+                );
+
+                if (open.length > 1) {
+                    toast.success(
+                        t(
+                            'Bill diminta. Ketuk Bill di tiap tagihan untuk mencetak.',
+                        ),
+                    );
+
+                    return;
+                }
+
+                const bill = open[0] ?? r.order.bills[0];
                 const rc = await guard(() =>
                     api<{ receipt: Receipt }>(
                         'GET',
@@ -707,6 +723,7 @@ export default function PosPage(props: Props) {
                     setDialog({
                         kind: 'receipt',
                         prebillOrderId: r.order.id,
+                        prebillBillId: open.length === 1 ? bill.id : undefined,
                         receipt: {
                             ...rc.receipt,
                             footer: t('PRE-BILL: belum dibayar'),
@@ -718,6 +735,26 @@ export default function PosPage(props: Props) {
         voidOrder: () => setDialog({ kind: 'void-order' }),
         move: () => setDialog({ kind: 'move' }),
         reprint: (bill) => void showReceipt(bill, true),
+        billOf: async (bill) => {
+            const rc = await guard(() =>
+                api<{ receipt: Receipt }>(
+                    'GET',
+                    `/pos/bills/${bill.id}/receipt`,
+                ),
+            );
+
+            if (rc && order) {
+                setDialog({
+                    kind: 'receipt',
+                    prebillOrderId: order.id,
+                    prebillBillId: bill.id,
+                    receipt: {
+                        ...rc.receipt,
+                        footer: t('PRE-BILL: belum dibayar'),
+                    },
+                });
+            }
+        },
         refund: (payment) => setDialog({ kind: 'refund', payment }),
         clear: () => setCart([]),
     };
@@ -1517,6 +1554,7 @@ export default function PosPage(props: Props) {
                                     void api(
                                         'POST',
                                         `/pos/orders/${dialog.prebillOrderId}/print-bill`,
+                                        { bill_id: dialog.prebillBillId },
                                     ).then(() =>
                                         toast.success(
                                             t('Bill dikirim ke printer bill.'),

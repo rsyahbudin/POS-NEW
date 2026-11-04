@@ -53,7 +53,7 @@ class QrMenuController extends Controller
 
         return [
             'logo' => MediaUrl::public($o->logo_path), 'banner' => MediaUrl::public($o->banner_path), 'tagline' => $o->tagline, 'hours' => $o->opening_hours,
-            'address' => $o->address, 'phone' => $o->phone, 'instagram' => $o->instagram, 'wifi_name' => $o->wifi_name, 'wifi_password' => $o->wifi_password,
+            'address' => $o->address, 'phone' => $o->phone, 'instagram' => $o->instagram, 'wifi_name' => $o->wifi_name, 'wifi_username' => $o->wifi_username, 'wifi_password' => $o->wifi_password,
             'about' => $o->about, 'whatsapp' => $o->whatsapp, 'tiktok' => $o->tiktok, 'facebook' => $o->facebook, 'website' => $o->website, 'maps_url' => $o->maps_url,
             'review_url' => $o->google_review_url,
         ];

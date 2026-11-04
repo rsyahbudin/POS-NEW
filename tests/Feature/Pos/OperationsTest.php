@@ -458,3 +458,16 @@ it('lists the new permissions in the role editor', function () {
         }
     });
 });
+
+it('prints one bill of a split order on its own, or all of them', function () {
+    printer('bill');
+    $cashier = userWithRole('cashier');
+    openShiftFor($cashier, 0);
+    $order = placeOrder($cashier, [['product_id' => product('Americano')->id, 'qty' => 2]]);
+    $this->actingAs($cashier)->postJson("/pos/orders/{$order->id}/split", ['mode' => 'equal', 'count' => 2])->assertOk();
+    $bills = $order->bills()->get();
+    expect($bills)->toHaveCount(2);
+
+    $this->actingAs($cashier)->postJson("/pos/orders/{$order->id}/print-bill", ['bill_id' => $bills->first()->id])->assertOk()->assertJsonPath('queued', 1);
+    $this->actingAs($cashier)->postJson("/pos/orders/{$order->id}/print-bill")->assertOk()->assertJsonPath('queued', 2);
+});

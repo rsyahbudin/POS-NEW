@@ -38,6 +38,7 @@ type Props = {
         phone: string | null;
         instagram: string | null;
         wifi_name: string | null;
+        wifi_username: string | null;
         wifi_password: string | null;
         about: string | null;
         whatsapp: string | null;
@@ -131,6 +132,7 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
         phone: outlet.phone ?? '',
         instagram: outlet.instagram ?? '',
         wifi_name: outlet.wifi_name ?? '',
+        wifi_username: outlet.wifi_username ?? '',
         wifi_password: outlet.wifi_password ?? '',
         about: outlet.about ?? '',
         whatsapp: outlet.whatsapp ?? '',
@@ -330,6 +332,11 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
                     )}
                 </Wide>
                 {text('wifi_name', 'Nama WiFi')}
+                {text(
+                    'wifi_username',
+                    'Username WiFi (opsional)',
+                    'Isi hanya bila WiFi kafe meminta username dan password (halaman login). Kosongkan bila pelanggan cukup memilih WiFi lalu memasukkan password.',
+                )}
                 {text(
                     'wifi_password',
                     'Password WiFi',

@@ -20,6 +20,8 @@ const LABELS: Record<string, string> = {
     day: 'Per hari',
     hour: 'Per jam',
     product: 'Per produk',
+    variant: 'Per varian',
+    modifier: 'Per modifier / opsi',
     category: 'Per kategori',
     method: 'Per metode bayar',
     cashier: 'Per pencatat order',
@@ -245,7 +247,13 @@ export default function SalesReport({
                             title={`Penjualan ${LABELS[filters.dimension].toLowerCase()}`}
                             data={rows.map((r) => ({
                                 label: r.display,
-                                value: detailed ? r.net_sales : r.total,
+                                // options are often free: rank them by how often they were chosen
+                                value:
+                                    filters.dimension === 'modifier'
+                                        ? r.orders
+                                        : detailed
+                                          ? r.net_sales
+                                          : r.total,
                             }))}
                         />
                     )}
@@ -298,11 +306,17 @@ export default function SalesReport({
                     <ResponsiveTable
                         headers={[
                             LABELS[filters.dimension],
-                            filters.dimension === 'product' ||
-                            filters.dimension === 'category'
+                            [
+                                'product',
+                                'variant',
+                                'modifier',
+                                'category',
+                            ].includes(filters.dimension)
                                 ? 'Qty'
                                 : 'Transaksi',
-                            'Total',
+                            filters.dimension === 'modifier'
+                                ? 'Tambahan harga'
+                                : 'Total',
                         ]}
                         numeric={[1, 2]}
                         rows={rows.map((r) => [

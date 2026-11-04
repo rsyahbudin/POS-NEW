@@ -92,7 +92,9 @@ class PrintStationController extends Controller
     {
         abort_unless($this->actor($request)->can('create-order'), 403);
 
-        return response()->json(['queued' => $dispatcher->bill($order)]);
+        $billId = $request->validate(['bill_id' => ['nullable', 'integer']])['bill_id'] ?? null;
+
+        return response()->json(['queued' => $dispatcher->bill($order, $billId)]);
     }
 
     private function authorizeStation(Request $request): void

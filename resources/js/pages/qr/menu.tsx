@@ -55,6 +55,7 @@ type Venue = {
     phone: string | null;
     instagram: string | null;
     wifi_name: string | null;
+    wifi_username: string | null;
     wifi_password: string | null;
     about: string | null;
     whatsapp: string | null;
@@ -94,6 +95,7 @@ const ICONS = {
     close: ['M18 6 6 18', 'm6 6 12 12'],
     check: ['M20 6 9 17l-5-5'],
     list: ['M4 6h16', 'M4 12h16', 'M4 18h10'],
+    grid: ['M4 4h7v7H4z', 'M13 4h7v7h-7z', 'M4 13h7v7H4z', 'M13 13h7v7h-7z'],
 } as const;
 
 function Ico({
@@ -207,6 +209,34 @@ export default function QrMenu({
     }, [refresh]);
 
     const [q, setQ] = useState('');
+    // photo cards when most of the menu has photos, a plain list otherwise; the guest can switch and it is remembered
+    const [view, setViewState] = useState<'list' | 'grid'>(() => {
+        try {
+            const saved = localStorage.getItem('qr.view');
+
+            if (saved === 'list' || saved === 'grid') {
+                return saved;
+            }
+        } catch {
+            // private mode: fall through to the default
+        }
+
+        const all = menu.flatMap((c) => c.products);
+
+        return all.length > 0 &&
+            all.filter((p) => p.image).length * 2 >= all.length
+            ? 'grid'
+            : 'list';
+    });
+    const setView = (v: 'list' | 'grid') => {
+        setViewState(v);
+
+        try {
+            localStorage.setItem('qr.view', v);
+        } catch {
+            // ignore
+        }
+    };
     const allCount = useMemo(
         () => menu.reduce((n, c) => n + c.products.length, 0),
         [menu],
@@ -546,6 +576,30 @@ export default function QrMenu({
                                 </button>
                             ))}
                         </nav>
+                        <div
+                            role="group"
+                            aria-label="Tampilan menu"
+                            className="flex shrink-0 rounded-full bg-muted p-0.5"
+                        >
+                            {(['grid', 'list'] as const).map((v) => (
+                                <button
+                                    key={v}
+                                    onClick={() => setView(v)}
+                                    aria-pressed={view === v}
+                                    aria-label={
+                                        v === 'grid'
+                                            ? 'Tampilan foto'
+                                            : 'Tampilan daftar'
+                                    }
+                                    className={`grid size-9 place-items-center rounded-full transition-colors ${view === v ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}
+                                >
+                                    <Ico
+                                        name={v === 'grid' ? 'grid' : 'list'}
+                                        className="size-[18px]"
+                                    />
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
@@ -563,7 +617,13 @@ export default function QrMenu({
                                     {c.products.length}
                                 </span>
                             </h2>
-                            <ul className="mt-1 divide-y divide-border/70">
+                            <ul
+                                className={
+                                    view === 'grid'
+                                        ? 'mt-3 grid grid-cols-2 gap-x-3 gap-y-5'
+                                        : 'mt-1 divide-y divide-border/70'
+                                }
+                            >
                                 {c.products.map((p) => {
                                     const hasOptions =
                                         p.variants.length > 0 ||
@@ -573,6 +633,101 @@ export default function QrMenu({
                                     const inCart = cart
                                         .filter((l) => l.product.id === p.id)
                                         .reduce((a, l) => a + l.qty, 0);
+                                    const control = (pos: string) => (
+                                        <div className={`absolute ${pos}`}>
+                                            {out ? (
+                                                <span className="inline-flex h-8 items-center rounded-full bg-foreground/85 px-3 text-xs font-semibold text-background">
+                                                    Habis
+                                                </span>
+                                            ) : hasOptions ? (
+                                                <button
+                                                    onClick={() =>
+                                                        setPicking(p)
+                                                    }
+                                                    aria-label={`Pilih ${p.name}`}
+                                                    className="flex h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-md active:scale-95"
+                                                >
+                                                    {inCart > 0 && (
+                                                        <span className="grid min-w-5 place-items-center rounded-full bg-white/25 px-1 text-xs tabular-nums">
+                                                            {inCart}
+                                                        </span>
+                                                    )}
+                                                    Pilih
+                                                </button>
+                                            ) : inCart === 0 ? (
+                                                <button
+                                                    onClick={() => bump(p, 1)}
+                                                    aria-label={`Tambah ${p.name}`}
+                                                    className="grid size-10 place-items-center rounded-full bg-primary text-2xl leading-none text-primary-foreground shadow-md active:scale-90"
+                                                >
+                                                    +
+                                                </button>
+                                            ) : (
+                                                <div className="flex h-10 items-center rounded-full bg-primary text-primary-foreground shadow-md">
+                                                    <button
+                                                        onClick={() =>
+                                                            bump(p, -1)
+                                                        }
+                                                        aria-label={`Kurangi ${p.name}`}
+                                                        className="size-10 text-2xl leading-none active:scale-90"
+                                                    >
+                                                        −
+                                                    </button>
+                                                    <span
+                                                        className="min-w-5 text-center text-sm font-bold tabular-nums"
+                                                        aria-live="polite"
+                                                    >
+                                                        {inCart}
+                                                    </span>
+                                                    <button
+                                                        onClick={() =>
+                                                            bump(p, 1)
+                                                        }
+                                                        aria-label={`Tambah ${p.name}`}
+                                                        className="size-10 text-2xl leading-none active:scale-90"
+                                                    >
+                                                        +
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+
+                                    if (view === 'grid') {
+                                        return (
+                                            <li key={p.id} className="min-w-0">
+                                                <div
+                                                    className={`relative aspect-square w-full overflow-hidden rounded-2xl shadow-sm ring-1 ring-black/5 ${out ? 'opacity-45 grayscale' : ''}`}
+                                                >
+                                                    <ProductArt
+                                                        name={p.name}
+                                                        image={p.image}
+                                                        tint={
+                                                            tintOf.get(c.id) ??
+                                                            0
+                                                        }
+                                                    />
+                                                </div>
+                                                <div className="relative">
+                                                    {control(
+                                                        'right-1.5 -top-6',
+                                                    )}
+                                                </div>
+                                                <h3
+                                                    className={`mt-2 line-clamp-2 text-[15px] leading-snug font-semibold ${out ? 'text-muted-foreground' : ''}`}
+                                                >
+                                                    {p.name}
+                                                </h3>
+                                                <p
+                                                    className={`mt-0.5 text-[15px] font-bold tabular-nums ${out ? 'text-muted-foreground' : ''}`}
+                                                >
+                                                    {p.variants.length > 1
+                                                        ? `dari ${rp(Math.min(...p.variants.map((v) => v.price)))}`
+                                                        : rp(p.price)}
+                                                </p>
+                                            </li>
+                                        );
+                                    }
 
                                     return (
                                         <li
@@ -611,65 +766,9 @@ export default function QrMenu({
                                                         }
                                                     />
                                                 </div>
-                                                <div className="absolute right-1.5 -bottom-2.5">
-                                                    {out ? (
-                                                        <span className="inline-flex h-8 items-center rounded-full bg-foreground/85 px-3 text-xs font-semibold text-background">
-                                                            Habis
-                                                        </span>
-                                                    ) : hasOptions ? (
-                                                        <button
-                                                            onClick={() =>
-                                                                setPicking(p)
-                                                            }
-                                                            aria-label={`Pilih ${p.name}`}
-                                                            className="flex h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-md active:scale-95"
-                                                        >
-                                                            {inCart > 0 && (
-                                                                <span className="grid min-w-5 place-items-center rounded-full bg-white/25 px-1 text-xs tabular-nums">
-                                                                    {inCart}
-                                                                </span>
-                                                            )}
-                                                            Pilih
-                                                        </button>
-                                                    ) : inCart === 0 ? (
-                                                        <button
-                                                            onClick={() =>
-                                                                bump(p, 1)
-                                                            }
-                                                            aria-label={`Tambah ${p.name}`}
-                                                            className="grid size-10 place-items-center rounded-full bg-primary text-2xl leading-none text-primary-foreground shadow-md active:scale-90"
-                                                        >
-                                                            +
-                                                        </button>
-                                                    ) : (
-                                                        <div className="flex h-10 items-center rounded-full bg-primary text-primary-foreground shadow-md">
-                                                            <button
-                                                                onClick={() =>
-                                                                    bump(p, -1)
-                                                                }
-                                                                aria-label={`Kurangi ${p.name}`}
-                                                                className="size-10 text-2xl leading-none active:scale-90"
-                                                            >
-                                                                −
-                                                            </button>
-                                                            <span
-                                                                className="min-w-5 text-center text-sm font-bold tabular-nums"
-                                                                aria-live="polite"
-                                                            >
-                                                                {inCart}
-                                                            </span>
-                                                            <button
-                                                                onClick={() =>
-                                                                    bump(p, 1)
-                                                                }
-                                                                aria-label={`Tambah ${p.name}`}
-                                                                className="size-10 text-2xl leading-none active:scale-90"
-                                                            >
-                                                                +
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                {control(
+                                                    'right-1.5 -bottom-2.5',
+                                                )}
                                             </div>
                                         </li>
                                     );
@@ -1058,10 +1157,27 @@ export default function QrMenu({
                                     <span className="block font-semibold">
                                         {venue.wifi_name}
                                     </span>
+                                    {venue.wifi_username && (
+                                        <>
+                                            <span className="mt-1 block text-xs text-muted-foreground">
+                                                Username
+                                            </span>
+                                            <CopyField
+                                                value={venue.wifi_username}
+                                            />
+                                        </>
+                                    )}
                                     {venue.wifi_password && (
-                                        <CopyField
-                                            value={venue.wifi_password}
-                                        />
+                                        <>
+                                            {venue.wifi_username && (
+                                                <span className="mt-1 block text-xs text-muted-foreground">
+                                                    Password
+                                                </span>
+                                            )}
+                                            <CopyField
+                                                value={venue.wifi_password}
+                                            />
+                                        </>
                                     )}
                                 </InfoRow>
                             )}

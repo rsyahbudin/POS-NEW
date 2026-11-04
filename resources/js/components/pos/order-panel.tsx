@@ -55,6 +55,8 @@ export type PanelActions = {
     voidOrder: () => void;
     move: () => void;
     reprint: (b: Bill) => void;
+    /** Print the guest's bill of one split bill. */
+    billOf: (b: Bill) => void;
     refund: (p: Payment) => void;
     clear: () => void;
 };
@@ -381,6 +383,20 @@ export function OrderPanel({
                                                 {t('Struk')}
                                             </Button>
                                         )}
+                                        {b.status === 'unpaid' &&
+                                            !b.is_unallocated && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-9"
+                                                    onClick={() =>
+                                                        actions.billOf(b)
+                                                    }
+                                                >
+                                                    {t('Bill')}
+                                                </Button>
+                                            )}
                                         {b.status === 'unpaid' &&
                                             b.is_unallocated && (
                                                 <span className="text-xs text-amber-700 dark:text-amber-400">

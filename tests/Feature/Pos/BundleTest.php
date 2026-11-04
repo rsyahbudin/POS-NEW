@@ -9,6 +9,7 @@ use App\Domain\Ordering\StockService;
 use App\Domain\Printing\Models\Printer;
 use App\Domain\Printing\Models\PrintJob;
 use App\Domain\Printing\PrintDispatcher;
+use App\Domain\Reporting\SalesReports;
 use App\Domain\Settings\Models\Outlet;
 use App\Http\Presenters\MenuPresenter;
 use App\Models\User;
@@ -227,4 +228,22 @@ it('takes the kitchen or bar screen from the category unless the menu item has i
     $manager = userWithRole('manager');
     $this->actingAs($manager)->put("/admin/categories/{$americano->category_id}", ['name' => $americano->category->name, 'station_id' => null])->assertRedirect();
     expect($americano->category->fresh()->station_id)->toBeNull();
+});
+
+it('reports how often each variant and each option was sold', function () {
+    $latte = product('Caffe Latte');
+    $variant = $latte->variants()->first();
+    $group = $latte->modifierGroups()->with('modifiers')->first();
+    $option = $group->modifiers->first();
+
+    openShiftFor($cashier = userWithRole('cashier'), 0);
+    $order = placeOrder($cashier, [['product_id' => $latte->id, 'variant_id' => $variant->id, 'qty' => 2, 'modifier_ids' => [$option->id]]], 'takeaway');
+    pay($order, $cashier);
+    $today = now()->toDateString();
+
+    $variants = app(SalesReports::class)->by('variant', $today, $today);
+    expect($variants->first()->orders)->toBe(2)->and($variants->first()->label)->toContain($variant->name);
+
+    $options = app(SalesReports::class)->by('modifier', $today, $today);
+    expect($options->first()->label)->toBe("{$group->name}: {$option->name}")->and($options->first()->orders)->toBe(2)->and($options->first()->total)->toBe(2 * $option->price_delta);
 });

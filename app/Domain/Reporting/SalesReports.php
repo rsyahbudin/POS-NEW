@@ -21,7 +21,7 @@ use stdClass;
  */
 class SalesReports
 {
-    public const DIMENSIONS = ['day', 'hour', 'product', 'category', 'method', 'cashier', 'receiver', 'type'];
+    public const DIMENSIONS = ['day', 'hour', 'product', 'variant', 'modifier', 'category', 'method', 'cashier', 'receiver', 'type'];
 
     /** Dimensions counted per order, which can show the full money breakdown (menu, discount, tax, refund). */
     public const ORDER_DIMENSIONS = ['day', 'hour', 'cashier', 'type'];
@@ -138,6 +138,13 @@ class SalesReports
             'type' => $this->paidOrders($from, $to)->selectRaw('orders.type label, COUNT(*) orders, SUM(grand_total - refunded_total) total, SUM(orders.subtotal) subtotal, SUM(orders.discount_total) discount, SUM(orders.charge_total) charges, SUM(orders.rounding) rounding, SUM(orders.refunded_total) refunds, '.self::netSalesSql())->groupByRaw('1')->orderByRaw('3 desc'),
             'cashier' => $this->paidOrders($from, $to)->join('users', 'users.id', '=', 'orders.opened_by')->selectRaw('users.name label, COUNT(*) orders, SUM(grand_total - refunded_total) total, SUM(orders.subtotal) subtotal, SUM(orders.discount_total) discount, SUM(orders.charge_total) charges, SUM(orders.rounding) rounding, SUM(orders.refunded_total) refunds, '.self::netSalesSql())->groupByRaw('1')->orderByRaw('3 desc'),
             'product' => $this->itemQuery($from, $to)->selectRaw('order_items.name_snapshot label, SUM(order_items.qty) orders, SUM(order_items.line_total) total')->groupByRaw('1')->orderByRaw('3 desc'),
+            // sold variants, one row per menu item and variant ("Americano (Large)"); items without a variant are left out
+            'variant' => $this->itemQuery($from, $to)->whereNotNull('order_items.variant_id')->selectRaw('order_items.name_snapshot label, SUM(order_items.qty) orders, SUM(order_items.line_total) total')->groupByRaw('1')->orderByRaw('2 desc, 3 desc'),
+            // chosen options (sugar level, topping...) and the picks inside bundles: how often, and the extra money they brought in
+            'modifier' => $this->itemQuery($from, $to)->whereRaw("jsonb_typeof(order_items.modifiers_snapshot) = 'array'")
+                ->crossJoin(DB::raw('lateral jsonb_array_elements(order_items.modifiers_snapshot) as m(opt)'))
+                ->selectRaw("CASE WHEN COALESCE(m.opt->>'group', '') = '' THEN m.opt->>'name' ELSE (m.opt->>'group') || ': ' || (m.opt->>'name') END label, SUM(order_items.qty) orders, SUM(order_items.qty * COALESCE((m.opt->>'price_delta')::int, 0)) total")
+                ->groupByRaw('1')->orderByRaw('2 desc, 3 desc'),
             'category' => $this->itemQuery($from, $to)->join('products', 'products.id', '=', 'order_items.product_id')->join('categories', 'categories.id', '=', 'products.category_id')
                 ->selectRaw('categories.name label, SUM(order_items.qty) orders, SUM(order_items.line_total) total')->groupByRaw('1')->orderByRaw('3 desc'),
             'method' => DB::table('payments')->join('orders', 'orders.id', '=', 'payments.order_id')->join('payment_methods', 'payment_methods.id', '=', 'payments.payment_method_id')

@@ -78,9 +78,11 @@ it('reports sales per order not per bill and nets out refunds', function () {
         ->and($s->dashboard($d)['revenue'])->toBe(40000)
         ->and($s->by('product', $d, $d)->first()->total)->toBe(44000)
         ->and($s->by('method', $d, $d)->first()->total)->toBe(40000);
-    foreach (SalesReports::DIMENSIONS as $dim) {
+    // variants and options only exist when the order had some; BundleTest covers them
+    foreach (array_diff(SalesReports::DIMENSIONS, ['variant', 'modifier']) as $dim) {
         expect($s->by($dim, $d, $d))->not->toBeEmpty();
     }
+    expect($s->by('variant', $d, $d))->toBeEmpty()->and($s->by('modifier', $d, $d))->toBeEmpty();
 });
 
 it('opens the tables page and the QR print on a fresh outlet with no areas or tables', function () {

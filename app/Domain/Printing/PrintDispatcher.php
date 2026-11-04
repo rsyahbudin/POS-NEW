@@ -62,11 +62,12 @@ class PrintDispatcher
         return $this->queue($bill->order->outlet_id, 'receipt', $bill->order->number, $payload, $this->printers($bill->order->outlet_id, 'receipt'));
     }
 
-    /** Bill for the guest (pre-bill), usually printed by the waiter's printer. */
-    public function bill(Order $order): int
+    /** Bill for the guest (pre-bill), usually printed by the waiter's printer. After a split, one bill can be printed on its own. */
+    public function bill(Order $order, ?int $billId = null): int
     {
         $count = 0;
-        $bills = $order->bills()->where('status', BillStatus::Unpaid->value)->where('is_unallocated', false)->get();
+        $bills = $order->bills()->where('status', BillStatus::Unpaid->value)->where('is_unallocated', false)
+            ->when($billId !== null, fn ($q) => $q->whereKey($billId))->get();
         foreach ($bills as $bill) {
             $payload = ReceiptPresenter::forBill($bill) + ['title' => 'TAGIHAN'];
             $count += $this->queue($order->outlet_id, 'bill', $order->number, $payload, $this->printers($order->outlet_id, 'bill'));

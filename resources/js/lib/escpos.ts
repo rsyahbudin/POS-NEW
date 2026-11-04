@@ -151,6 +151,16 @@ export type TicketData = {
         bundle?: string | null;
     }[];
     time: string;
+    /** Dine-in, take away or online. */
+    type?: string | null;
+    /** Guest name, when one was given or the guest typed it in the QR menu. */
+    customer?: string | null;
+    /** Where the order came from: the guest's phone (QR) or a staff member (POS). */
+    source?: string | null;
+    /** Staff member who entered the order; empty for QR. */
+    by?: string | null;
+    /** Which batch of the open order this is; the second one onward prints as an addition. */
+    batch?: number | null;
 };
 
 export function kitchenEscPos(t: TicketData, paper: PaperWidth): string[] {
@@ -162,9 +172,37 @@ export function kitchenEscPos(t: TicketData, paper: PaperWidth): string[] {
         `${t.label}\n`,
         ESC + '!' + '\x00',
         `${t.number}  ${t.time}\n`,
-        ESC + 'a' + '\x00',
-        '-'.repeat(w) + '\n',
     ];
+
+    if (t.type) {
+        out.push(ESC + '!' + '\x08', `${t.type}\n`, ESC + '!' + '\x00');
+    }
+
+    if (t.batch && t.batch > 1) {
+        out.push(
+            ESC + '!' + '\x08',
+            `** TAMBAHAN #${t.batch} **\n`,
+            ESC + '!' + '\x00',
+        );
+    }
+
+    out.push(ESC + 'a' + '\x00');
+
+    if (t.customer) {
+        out.push(
+            ESC + '!' + '\x10',
+            `Nama: ${t.customer}\n`,
+            ESC + '!' + '\x00',
+        );
+    }
+
+    if (t.source) {
+        out.push(
+            `Dari: ${t.source === 'QR' ? 'QR pelanggan' : (t.by ?? 'Kasir')}\n`,
+        );
+    }
+
+    out.push('-'.repeat(w) + '\n');
 
     for (const i of t.items) {
         out.push(
@@ -182,10 +220,18 @@ export function kitchenEscPos(t: TicketData, paper: PaperWidth): string[] {
         }
 
         if (i.note) {
-            out.push(`   * ${i.note}\n`);
+            out.push(
+                ESC + '!' + '\x08',
+                `   CATATAN: ${i.note}\n`,
+                ESC + '!' + '\x00',
+            );
         }
     }
 
+    out.push(
+        '-'.repeat(w) + '\n',
+        `Total ${t.items.reduce((n, i) => n + i.qty, 0)} item\n`,
+    );
     out.push('\n\n\n', GS + 'V' + '\x00');
 
     return out;

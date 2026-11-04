@@ -195,3 +195,15 @@ it('lets the guest choose variant and options inside a bundle, adds paid options
     expect($jobs[$kitchen->id]->payload['items'][0])->toMatchArray(['name' => 'Nasi Goreng', 'qty' => 2, 'modifiers' => ['Matah']])
         ->and($jobs[$bar->id]->payload['items'][0])->toMatchArray(['name' => 'Americano (Ice)', 'qty' => 2, 'modifiers' => ['Manis']]);
 });
+
+it('puts who ordered, from where, the order type, the batch and the item notes on the ticket', function () {
+    $printer = bundlePrinter();
+    openShiftFor($cashier = userWithRole('cashier'), 0);
+    $order = placeOrder($cashier, [['product_id' => product('Americano')->id, 'qty' => 1, 'note' => 'less ice']], 'takeaway', null, ['customer_name' => 'Rani']);
+
+    $payload = PrintJob::query()->where('printer_id', $printer->id)->firstOrFail()->payload;
+
+    expect($payload['customer'])->toBe('Rani')->and($payload['type'])->toBe('TAKE AWAY')->and($payload['source'])->toBe('POS')
+        ->and($payload['by'])->toBe($cashier->name)->and($payload['batch'])->toBe(1)
+        ->and($payload['items'][0]['note'])->toBe('less ice');
+});

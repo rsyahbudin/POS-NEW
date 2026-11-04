@@ -3,6 +3,7 @@
 namespace App\Domain\Printing;
 
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Ordering\Enums\RoundSource;
 use App\Domain\Ordering\Models\Order;
 use App\Domain\Ordering\Models\OrderRound;
 use App\Domain\Payment\Enums\BillStatus;
@@ -25,6 +26,8 @@ use Throwable;
  */
 class PrintDispatcher
 {
+    private const TYPES = ['dine_in' => 'DINE IN', 'takeaway' => 'TAKE AWAY', 'online' => 'ONLINE'];
+
     /** Runs after the surrounding transaction commits and never breaks the order or payment. */
     public static function later(Closure $fn): void
     {
@@ -79,7 +82,7 @@ class PrintDispatcher
      */
     public function tickets(OrderRound $round): int
     {
-        $round->loadMissing('order.table', 'items');
+        $round->loadMissing('order.table', 'items', 'creator');
         $order = $round->order;
         $items = $round->items->filter(fn ($i) => in_array($i->status->value, ['new', 'preparing'], true));
         $ticketPrinters = $this->printers($order->outlet_id, 'ticket')->keyBy('id');
@@ -117,10 +120,18 @@ class PrintDispatcher
         }
 
         $label = $order->table->name ?? ($order->call_number ? ($order->type->value === 'dine_in' ? "Dine-in {$order->call_number}" : "Takeaway {$order->call_number}") : ($order->platform ? "Online {$order->platform}" : $order->number));
+        // who ordered and how, so the bar and the kitchen know whom to call and which batch of an open table this is
+        $isQr = $round->source === RoundSource::Qr;
+        $batch = OrderRound::query()->where('order_id', $order->id)->where('id', '<=', $round->id)->count();
         $count = 0;
         foreach ($byPrinter as $printerId => $group) {
             $payload = [
                 'label' => $label, 'number' => $order->number, 'time' => now()->setTimezone('Asia/Jakarta')->format('H:i'),
+                'type' => self::TYPES[$order->type->value],
+                'customer' => $order->customer_name ?: $round->customer_name,
+                'source' => $isQr ? 'QR' : 'POS',
+                'by' => $isQr ? null : $round->creator?->name,
+                'batch' => $batch,
                 'items' => collect($group)->map(fn ($l) => [
                     'qty' => $l['qty'], 'name' => $l['name'], 'note' => $l['note'], 'modifiers' => $l['modifiers'], 'bundle' => $l['bundle'],
                 ])->values()->all(),

@@ -487,3 +487,14 @@ it('marks a whole kitchen ticket ready in one tap and shows who ordered it', fun
     $this->actingAs($kitchen)->postJson("/kds/{$stationId}/rounds/{$roundId}/ready")->assertOk();
     expect($order->items()->where('station_id', $stationId)->where('status', '!=', 'ready')->count())->toBe(0);
 });
+
+it('tells the floor view how many items a table has, how many are ready and who is waiting', function () {
+    openShiftFor($cashier = userWithRole('cashier'), 0);
+    $order = placeOrder($cashier, [['product_id' => product('Americano')->id, 'qty' => 2]], 'dine_in', null, ['customer_name' => 'Rani']);
+    $order->items()->update(['status' => 'ready']);
+
+    $page = $this->actingAs($cashier)->get('/pos')->assertOk()->viewData('page');
+    $table = collect($page['props']['state']['floor'])->flatMap(fn ($a) => $a['tables'])->firstWhere('order.id', $order->id);
+
+    expect($table['order'])->toMatchArray(['customer_name' => 'Rani', 'items' => 2, 'ready' => 2, 'pending_qr' => 0]);
+});

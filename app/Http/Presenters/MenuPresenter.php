@@ -7,6 +7,8 @@ use App\Domain\Catalog\Models\ModifierGroup;
 use App\Domain\Floor\Models\Area;
 use App\Domain\Floor\Models\ServiceCall;
 use App\Domain\Ordering\Models\Order;
+use App\Domain\Ordering\Models\OrderItem;
+use App\Domain\Ordering\Models\OrderRound;
 use App\Support\MediaUrl;
 
 class MenuPresenter
@@ -63,6 +65,11 @@ class MenuPresenter
     {
         $open = Order::query()->where('outlet_id', $outletId)->whereIn('status', ['open', 'partially_paid'])->whereNotNull('table_id')->get()->keyBy('table_id');
         $calling = ServiceCall::query()->where('outlet_id', $outletId)->where('status', 'pending')->pluck('table_id')->flip();
+        // what the floor view shows on a busy table: how many items, how many are ready to serve, how many QR rounds wait for the cashier
+        $orderIds = $open->pluck('id');
+        $lines = OrderItem::query()->whereIn('order_id', $orderIds)->whereIn('status', ['new', 'preparing', 'ready'])
+            ->selectRaw("order_id, SUM(qty) AS qty, SUM(CASE WHEN status = 'ready' THEN qty ELSE 0 END) AS ready")->groupBy('order_id')->get()->keyBy('order_id');
+        $waiting = OrderRound::query()->whereIn('order_id', $orderIds)->where('status', 'pending')->selectRaw('order_id, COUNT(*) AS n')->groupBy('order_id')->pluck('n', 'order_id');
 
         return Area::query()->where('outlet_id', $outletId)->orderBy('sort')->with('tables')->get()->map(fn ($a) => [
             'id' => $a->id,
@@ -70,7 +77,10 @@ class MenuPresenter
             'tables' => $a->tables->map(fn ($t) => [
                 'id' => $t->id, 'public_id' => $t->public_id, 'name' => $t->name, 'capacity' => $t->capacity,
                 'status' => $t->status->value, 'qr_enabled' => $t->qr_enabled, 'calling' => $calling->has($t->id),
-                'order' => ($o = $open->get($t->id)) ? ['id' => $o->id, 'number' => $o->number, 'grand_total' => $o->grand_total, 'bill_requested' => $o->bill_requested_at !== null, 'opened_at' => $o->created_at?->toIso8601String()] : null,
+                'order' => ($o = $open->get($t->id)) ? [
+                    'id' => $o->id, 'number' => $o->number, 'grand_total' => $o->grand_total, 'bill_requested' => $o->bill_requested_at !== null, 'opened_at' => $o->created_at?->toIso8601String(),
+                    'customer_name' => $o->customer_name, 'items' => (int) ($lines->get($o->id)->qty ?? 0), 'ready' => (int) ($lines->get($o->id)->ready ?? 0), 'pending_qr' => (int) ($waiting[$o->id] ?? 0),
+                ] : null,
             ])->all(),
         ])->all();
     }

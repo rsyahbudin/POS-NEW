@@ -166,6 +166,11 @@ export type FloorTable = {
         grand_total: number;
         bill_requested: boolean;
         opened_at: string | null;
+        customer_name: string | null;
+        /** Items still on the order, how many of them are ready to serve, and QR rounds waiting for the cashier. */
+        items: number;
+        ready: number;
+        pending_qr: number;
     } | null;
 };
 

@@ -1,5 +1,5 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { Printer, Volume2, VolumeX, WifiOff } from 'lucide-react';
+import { CheckCheck, Printer, Volume2, VolumeX, WifiOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AccountMenu } from '@/components/pos/account-menu';
@@ -27,6 +27,7 @@ type Ticket = {
     round_id: number;
     order_number: string;
     label: string;
+    customer: string | null;
     source: 'pos' | 'qr';
     since: string;
     done: boolean;
@@ -44,6 +45,19 @@ type Props = {
     repeatSeconds: number;
     thresholds: { warn: number; danger: number };
 };
+
+/** Minutes as people read them on a wall screen: 8′, 2 j 5 m, 3 hari. */
+function ageText(min: number): string {
+    if (min < 60) {
+        return `${min}′`;
+    }
+
+    if (min < 1440) {
+        return `${Math.floor(min / 60)} j ${min % 60} m`;
+    }
+
+    return `${Math.floor(min / 1440)} hari`;
+}
 
 const NEXT: Record<string, string> = {
     new: 'Mulai dibuat',
@@ -189,6 +203,31 @@ export default function KdsPage({
 
         try {
             await api('POST', `/kds/items/${item.id}/advance`);
+        } catch (e) {
+            toast.error(e instanceof ApiError ? e.message : t('Gagal.'));
+        }
+
+        void refresh();
+    };
+
+    const readyAll = async (tk: Ticket) => {
+        setTickets((ts) =>
+            ts.map((x) =>
+                x.round_id === tk.round_id
+                    ? {
+                          ...x,
+                          items: x.items.map((i) =>
+                              i.status === 'voided'
+                                  ? i
+                                  : { ...i, status: 'ready' as const },
+                          ),
+                      }
+                    : x,
+            ),
+        );
+
+        try {
+            await api('POST', `/kds/${station.id}/rounds/${tk.round_id}/ready`);
         } catch (e) {
             toast.error(e instanceof ApiError ? e.message : t('Gagal.'));
         }
@@ -345,6 +384,11 @@ export default function KdsPage({
                                         <h2 className="text-xl font-bold">
                                             {tk.label}
                                         </h2>
+                                        {tk.customer && (
+                                            <p className="text-base font-semibold text-sky-300">
+                                                {tk.customer}
+                                            </p>
+                                        )}
                                         <p className="text-xs text-muted-foreground">
                                             {tk.order_number} ·{' '}
                                             {timeId(tk.since)}{' '}
@@ -366,7 +410,7 @@ export default function KdsPage({
                                         )}
                                         aria-label={`${age} ${t('menit')}`}
                                     >
-                                        {age}′
+                                        {ageText(age)}
                                     </span>
                                 </header>
                                 <ul className="grid gap-2">
@@ -419,20 +463,55 @@ export default function KdsPage({
                                                     </span>
                                                 )}
                                                 {it.status !== 'voided' && (
-                                                    <span className="mt-1 block text-xs opacity-80">
-                                                        {it.status === 'new'
-                                                            ? t('Baru')
-                                                            : it.status ===
-                                                                'preparing'
-                                                              ? t('Dibuat')
-                                                              : t('Siap')}{' '}
-                                                        · {t(NEXT[it.status])}
+                                                    <span className="mt-1.5 flex items-center gap-2 text-xs">
+                                                        <span
+                                                            className={cn(
+                                                                'rounded-full px-2 py-0.5 font-semibold',
+                                                                it.status ===
+                                                                    'new' &&
+                                                                    'bg-muted text-foreground',
+                                                                it.status ===
+                                                                    'preparing' &&
+                                                                    'bg-amber-400 text-black',
+                                                                it.status ===
+                                                                    'ready' &&
+                                                                    'bg-emerald-500 text-white',
+                                                            )}
+                                                        >
+                                                            {it.status === 'new'
+                                                                ? t('Baru')
+                                                                : it.status ===
+                                                                    'preparing'
+                                                                  ? t('Dibuat')
+                                                                  : t('Siap')}
+                                                        </span>
+                                                        {it.status !==
+                                                            'ready' && (
+                                                            <span className="opacity-70">
+                                                                {t('Ketuk')}:{' '}
+                                                                {t(
+                                                                    NEXT[
+                                                                        it
+                                                                            .status
+                                                                    ],
+                                                                )}
+                                                            </span>
+                                                        )}
                                                     </span>
                                                 )}
                                             </button>
                                         </li>
                                     ))}
                                 </ul>
+                                {!tk.done && (
+                                    <Button
+                                        type="button"
+                                        className="mt-3 h-12 w-full text-base"
+                                        onClick={() => void readyAll(tk)}
+                                    >
+                                        <CheckCheck /> {t('Semua siap')}
+                                    </Button>
+                                )}
                                 <Button
                                     type="button"
                                     variant="ghost"

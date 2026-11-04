@@ -51,6 +51,19 @@ class KdsController extends Controller
         return response()->json(['tickets' => $this->tickets($station)]);
     }
 
+    /** Marks everything of one ticket on this station as ready in one tap (new items go through "preparing" first). */
+    public function readyRound(Station $station, int $round, Request $request, UpdateItemStatusAction $action): JsonResponse
+    {
+        $items = OrderItem::query()->where('station_id', $station->id)->where('order_round_id', $round)->whereIn('status', ['new', 'preparing'])->orderBy('id')->get();
+        foreach ($items as $item) {
+            while (in_array($item->status->value, ['new', 'preparing'], true)) {
+                $item = $action->handle($item, $this->actor($request));
+            }
+        }
+
+        return response()->json(['ready' => $items->count()]);
+    }
+
     public function advance(OrderItem $item, Request $request, UpdateItemStatusAction $action): JsonResponse
     {
         $item = $action->handle($item, $this->actor($request));
@@ -91,6 +104,7 @@ class KdsController extends Controller
                 'round_id' => $first->order_round_id,
                 'order_number' => $order->number,
                 'label' => $order->table->name ?? ($order->call_number ? "Takeaway {$order->call_number}" : ($order->platform ? "Online {$order->platform}" : $order->number)),
+                'customer' => $order->customer_name ?: $round->customer_name,
                 'source' => $round->source->value,
                 'since' => ($round->confirmed_at ?? $round->created_at)?->toIso8601String(),
                 'done' => ! $open,

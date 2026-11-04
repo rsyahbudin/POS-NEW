@@ -11,6 +11,8 @@ export const en: Record<string, string> = {
     Simpan: 'Save',
     'Pembayaran di kasir': 'Pay at the cashier',
     'Kirim Pesanan': 'Send order',
+    'Kirim pesanan': 'Send order',
+    'Tambah pesanan': 'Add to order',
     'Nama panggilan': 'Your name',
     Habis: 'Sold out',
     Kosong: 'Empty',

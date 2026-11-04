@@ -258,6 +258,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::get('{station}', [KdsController::class, 'show'])->name('show');
         Route::get('{station}/tickets', [KdsController::class, 'ticketsJson'])->name('tickets');
         Route::post('items/{item}/advance', [KdsController::class, 'advance'])->name('advance');
+        Route::post('{station}/rounds/{round}/ready', [KdsController::class, 'readyRound'])->name('ready-round');
     });
 
     // Back office

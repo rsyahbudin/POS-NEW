@@ -471,3 +471,19 @@ it('prints one bill of a split order on its own, or all of them', function () {
     $this->actingAs($cashier)->postJson("/pos/orders/{$order->id}/print-bill", ['bill_id' => $bills->first()->id])->assertOk()->assertJsonPath('queued', 1);
     $this->actingAs($cashier)->postJson("/pos/orders/{$order->id}/print-bill")->assertOk()->assertJsonPath('queued', 2);
 });
+
+it('marks a whole kitchen ticket ready in one tap and shows who ordered it', function () {
+    setting('kitchen.enabled', true);
+    $kitchen = userWithRole('kitchen');
+    openShiftFor($cashier = userWithRole('cashier'), 0);
+    $order = placeOrder($cashier, [['product_id' => product('Americano')->id, 'qty' => 1], ['product_id' => product('Croissant')->id, 'qty' => 1]], 'takeaway', null, ['customer_name' => 'Rani']);
+    $item = $order->items()->firstOrFail();
+    $stationId = (int) $item->station_id;
+    $roundId = $item->order_round_id;
+
+    $ticket = $this->actingAs($kitchen)->getJson("/kds/{$stationId}/tickets")->assertOk()->json('tickets.0');
+    expect($ticket['customer'])->toBe('Rani');
+
+    $this->actingAs($kitchen)->postJson("/kds/{$stationId}/rounds/{$roundId}/ready")->assertOk();
+    expect($order->items()->where('station_id', $stationId)->where('status', '!=', 'ready')->count())->toBe(0);
+});

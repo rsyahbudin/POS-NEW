@@ -544,8 +544,8 @@ export function OrderPanel({
                             {actions.sending
                                 ? t('Mengirim…')
                                 : order
-                                  ? t('Tambah ronde ke dapur')
-                                  : t('Kirim ke dapur')}
+                                  ? t('Tambah pesanan')
+                                  : t('Kirim pesanan')}
                         </Button>
                         {can.pay && (
                             <Button

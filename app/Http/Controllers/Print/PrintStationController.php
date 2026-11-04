@@ -7,6 +7,7 @@ use App\Domain\Ordering\Models\Order;
 use App\Domain\Payment\Models\Bill;
 use App\Domain\Printing\Models\Printer;
 use App\Domain\Printing\Models\PrintJob;
+use App\Domain\Printing\PrintBridge;
 use App\Domain\Printing\PrintDispatcher;
 use App\Domain\Settings\OutletContext;
 use App\Http\Controllers\Controller;
@@ -24,12 +25,14 @@ class PrintStationController extends Controller
 {
     public function __construct(private OutletContext $outlet) {}
 
-    public function show(Request $request): Response
+    public function show(Request $request, PrintBridge $bridge): Response
     {
         $this->authorizeStation($request);
 
         return Inertia::render('print-station', [
             'outletId' => $this->outlet->id(),
+            // printers with an IP are served by the print bridge, not by a device, so they are only counted here
+            'lan' => ['count' => Printer::query()->where('outlet_id', $this->outlet->id())->where('is_active', true)->whereNotNull('host')->count(), 'bridge_online' => $bridge->online()],
             'printers' => Printer::query()->where('outlet_id', $this->outlet->id())->where('is_active', true)->whereNull('host')->orderBy('id')->get()->map(fn (Printer $p) => [
                 'id' => $p->id, 'name' => $p->name, 'kind' => $p->kind, 'paper_width' => $p->paper_width,
                 'station' => $p->station_id ? Station::query()->whereKey($p->station_id)->value('name') : null,

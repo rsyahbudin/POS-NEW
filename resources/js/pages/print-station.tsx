@@ -65,9 +65,11 @@ function render(job: Job, paper: PaperWidth): string[] {
 
 export default function PrintStation({
     outletId,
+    lan,
     printers,
 }: {
     outletId: number;
+    lan: { count: number; bridge_online: boolean };
     printers: PrinterRow[];
 }) {
     const [cfg, setCfg] = useState<Record<number, Cfg>>(loadCfg);
@@ -237,9 +239,21 @@ export default function PrintStation({
                         : `Melayani ${active} printer · antrean ${pending}`}
                 </p>
 
+                {lan.count > 0 && (
+                    <p className="rounded-lg border p-3 text-sm">
+                        {lan.count} printer LAN (pakai alamat IP) dilayani
+                        jembatan cetak, jadi tidak muncul di sini.{' '}
+                        {lan.bridge_online
+                            ? 'Jembatan cetak terhubung.'
+                            : 'Jembatan cetak belum terhubung: cek di Admin > Printer.'}
+                    </p>
+                )}
+
                 {printers.length === 0 && (
                     <p className="text-sm text-muted-foreground">
-                        Belum ada printer. Tambahkan di Admin &gt; Printer.
+                        {lan.count > 0
+                            ? 'Halaman ini hanya untuk printer Bluetooth atau USB yang tersambung ke perangkat ini (printer tanpa alamat IP). Semua printermu LAN, jadi tidak ada yang perlu dilakukan di sini.'
+                            : 'Belum ada printer. Tambahkan di Admin > Printer.'}
                     </p>
                 )}
 

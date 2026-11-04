@@ -198,6 +198,8 @@ export type PosState = {
         type: string;
         call_number: string | null;
         platform: string | null;
+        customer_name: string | null;
+        created_at: string | null;
         grand_total: number;
         status: string;
     }[];

@@ -31,7 +31,7 @@ const STATUS: Record<
     },
 };
 
-function since(iso: string | null | undefined): string | null {
+export function since(iso: string | null | undefined): string | null {
     if (!iso) {
         return null;
     }
@@ -49,7 +49,11 @@ function since(iso: string | null | undefined): string | null {
         return `${m} mnt`;
     }
 
-    return `${Math.floor(m / 60)} j ${m % 60} mnt`;
+    if (m < 1440) {
+        return `${Math.floor(m / 60)} j ${m % 60} mnt`;
+    }
+
+    return `${Math.floor(m / 1440)} hari`;
 }
 
 export function TableMap({

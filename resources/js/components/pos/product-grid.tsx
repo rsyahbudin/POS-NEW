@@ -44,6 +44,8 @@ export function ProductGrid({
     }, [menu, cat, q, tintOf]);
 
     const cats = [{ id: 'all' as const, name: t('Semua') }, ...menu];
+    // No photos at all: the monogram tiles only waste space, so show compact text tiles and fit more items per screen.
+    const compact = !menu.some((c) => c.products.some((p) => p.image));
 
     return (
         <div className="flex min-h-0 flex-1 flex-col gap-3 xl:flex-row xl:gap-4">
@@ -86,7 +88,9 @@ export function ProductGrid({
                     />
                 </div>
 
-                <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-3 overflow-y-auto pb-24 md:pb-2">
+                <div
+                    className={`grid min-h-0 flex-1 auto-rows-min gap-3 ${compact ? 'grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))]'} overflow-y-auto pb-24 md:pb-2`}
+                >
                     {products.map(({ p, tint }) => {
                         const out = !p.is_available || soldOut.includes(p.id);
                         const n = inCart[p.id] ?? 0;
@@ -102,20 +106,34 @@ export function ProductGrid({
                                         'border-primary/60 ring-1 ring-primary/30',
                                 )}
                             >
+                                {!compact && (
+                                    <div
+                                        className={cn(
+                                            'aspect-[4/3] w-full overflow-hidden',
+                                            out && 'opacity-40 grayscale',
+                                        )}
+                                    >
+                                        <ProductArt
+                                            name={p.name}
+                                            image={p.image}
+                                            tint={tint}
+                                        />
+                                    </div>
+                                )}
                                 <div
                                     className={cn(
-                                        'aspect-[4/3] w-full overflow-hidden',
-                                        out && 'opacity-40 grayscale',
+                                        'grid gap-1 p-2.5',
+                                        compact &&
+                                            'min-h-24 content-between p-3',
+                                        compact && out && 'opacity-40',
                                     )}
                                 >
-                                    <ProductArt
-                                        name={p.name}
-                                        image={p.image}
-                                        tint={tint}
-                                    />
-                                </div>
-                                <div className="grid gap-1 p-2.5">
-                                    <span className="line-clamp-2 min-h-9 text-sm leading-[1.15rem] font-medium">
+                                    <span
+                                        className={cn(
+                                            'line-clamp-2 min-h-9 text-sm leading-[1.15rem] font-medium',
+                                            compact && 'text-base',
+                                        )}
+                                    >
                                         {p.name}
                                     </span>
                                     <span className="flex items-end justify-between gap-1">

@@ -92,7 +92,7 @@ class PosController extends Controller
 
         $orders = Order::query()->where('outlet_id', $outletId)->whereIn('status', ['open', 'partially_paid'])
             ->whereNull('table_id')->latest('id')->limit(30)->get()
-            ->map(fn ($o) => ['id' => $o->id, 'number' => $o->number, 'type' => $o->type->value, 'call_number' => $o->call_number, 'platform' => $o->platform, 'grand_total' => $o->grand_total, 'status' => $o->status->value])->all();
+            ->map(fn ($o) => ['id' => $o->id, 'number' => $o->number, 'type' => $o->type->value, 'call_number' => $o->call_number, 'platform' => $o->platform, 'customer_name' => $o->customer_name, 'created_at' => $o->created_at?->toIso8601String(), 'grand_total' => $o->grand_total, 'status' => $o->status->value])->all();
 
         return [
             'floor' => MenuPresenter::floor($outletId),

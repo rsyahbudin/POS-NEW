@@ -32,7 +32,7 @@ import { QrInbox } from '@/components/pos/qr-inbox';
 import { ReasonDialog } from '@/components/pos/reason-dialog';
 import { ReceiptView } from '@/components/pos/receipt-view';
 import { SplitDialog } from '@/components/pos/split-dialog';
-import { TableMap } from '@/components/pos/table-map';
+import { since, TableMap } from '@/components/pos/table-map';
 import { Field, MoneyInput, Select } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -939,11 +939,18 @@ export default function PosPage(props: Props) {
                                     : 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200',
                             )}
                         >
-                            {props.shift
-                                ? props.shift.mine || !props.shift.owner
-                                    ? t('Shift terbuka')
-                                    : `${t('Shift terbuka')} · ${props.shift.owner}`
-                                : t('Shift belum dibuka')}
+                            <span className="hidden sm:inline">
+                                {props.shift
+                                    ? props.shift.mine || !props.shift.owner
+                                        ? t('Shift terbuka')
+                                        : `${t('Shift terbuka')} · ${props.shift.owner}`
+                                    : t('Shift belum dibuka')}
+                            </span>
+                            <span className="sm:hidden">
+                                {props.shift
+                                    ? t('Shift buka')
+                                    : t('Belum buka')}
+                            </span>
                         </span>
                     )}
                     {!online && (
@@ -1199,15 +1206,30 @@ export default function PosPage(props: Props) {
                                                     key={o.id}
                                                     type="button"
                                                     variant="outline"
-                                                    className="h-12"
+                                                    className="h-14 flex-col items-start justify-center gap-0 px-3 text-left"
                                                     onClick={() =>
                                                         openExisting(o.id)
                                                     }
                                                 >
-                                                    {o.call_number ??
-                                                        o.platform ??
-                                                        o.number}{' '}
-                                                    · {rupiah(o.grand_total)}
+                                                    <span className="font-semibold">
+                                                        {o.customer_name ||
+                                                            o.call_number ||
+                                                            o.platform ||
+                                                            o.number}
+                                                    </span>
+                                                    <span className="text-xs font-normal text-muted-foreground">
+                                                        {o.type === 'dine_in'
+                                                            ? t('Dine-in')
+                                                            : o.type ===
+                                                                'online'
+                                                              ? 'Online'
+                                                              : 'Takeaway'}
+                                                        {since(o.created_at)
+                                                            ? ` · ${since(o.created_at)}`
+                                                            : ''}{' '}
+                                                        ·{' '}
+                                                        {rupiah(o.grand_total)}
+                                                    </span>
                                                 </Button>
                                             ))}
                                         </div>

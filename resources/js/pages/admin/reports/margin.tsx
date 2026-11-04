@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { dateId, rupiah } from '@/lib/format';
+import { InfoNote } from '@/components/pos/info-tip';
 
 const LABELS: Record<string, string> = {
     product: 'Per produk',
@@ -112,7 +113,7 @@ export default function MarginReport({
                     </p>
                 )}
                 <form
-                    className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3"
+                    className="grid grid-cols-2 items-end gap-3 rounded-xl border bg-card p-3 sm:flex sm:flex-wrap [&>button]:col-span-2 sm:[&>button]:col-span-1"
                     onSubmit={(e) => {
                         e.preventDefault();
                         router.get(
@@ -227,10 +228,10 @@ export default function MarginReport({
                     ])}
                 />
                 {rows.some((r) => r.uncosted_qty > 0) && (
-                    <p className="text-xs text-muted-foreground">
+                    <InfoNote>
                         * Ada porsi yang terjual tanpa resep atau sebelum stok
                         diaktifkan, jadi HPP-nya belum terhitung penuh.
-                    </p>
+                    </InfoNote>
                 )}
 
                 <h2 className="mt-2 font-semibold">Stok bahan saat ini</h2>

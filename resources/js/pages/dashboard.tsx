@@ -1,6 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { TrendingDown, TrendingUp } from 'lucide-react';
+import { InfoNote } from '@/components/pos/info-tip';
 import { BarList, ChartCard, ColumnChart } from '@/components/pos/charts';
 import { Field, PageHeader, ResponsiveTable, Stat } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
@@ -245,14 +246,14 @@ export default function Dashboard({
                         }
                     />
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <InfoNote label="Arti angka">
                     Net Sales = penjualan menu setelah diskon, tanpa pajak dan
                     service charge. Total diterima = yang dibayar tamu (Net
                     Sales + pajak + service + pembulatan, setelah refund).
                     Pembanding: periode sama panjang sebelumnya (
                     {previous.orders} order, Net Sales{' '}
                     {rupiah(previous.net_sales)}).
-                </p>
+                </InfoNote>
 
                 <div className="grid gap-4 lg:grid-cols-2">
                     <ChartCard

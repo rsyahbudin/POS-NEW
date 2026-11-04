@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Combobox, Field, PageHeader, Select } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InfoNote } from '@/components/pos/info-tip';
 
 type MenuChoices = {
     categories: { id: number; name: string }[];
@@ -75,12 +76,12 @@ function DiscountPresets({ presets }: { presets: DPreset[] }) {
         <section className="grid max-w-2xl gap-3">
             <div>
                 <h2 className="text-lg font-semibold">Daftar diskon kasir</h2>
-                <p className="text-sm text-muted-foreground">
+                <InfoNote>
                     Diskon bernama yang tinggal diketuk kasir, misalnya Staff
                     10% atau Owner 20%. Untuk membuat kasir hanya bisa memilih
                     dari daftar ini, cabut izin "Diskon manual" dari peran Kasir
                     di Peran & Akses.
-                </p>
+                </InfoNote>
             </div>
             {presets.map((p) => (
                 <div
@@ -335,7 +336,7 @@ function Promos({ promos, menu }: { promos: Promo[]; menu: MenuChoices }) {
         <div className="grid max-w-2xl gap-3">
             <div>
                 <h2 className="text-lg font-semibold">Promo terjadwal</h2>
-                <p className="text-sm text-muted-foreground">
+                <InfoNote>
                     Diskon otomatis pada jam, hari, dan tanggal yang Anda
                     tentukan, misalnya Happy Hour Senin–Jumat 15.00–17.00.
                     Diterapkan sekali pada order saat pesanan dikirim di dalam
@@ -343,7 +344,7 @@ function Promos({ promos, menu }: { promos: Promo[]; menu: MenuChoices }) {
                     bisa untuk seluruh order, kategori, atau menu tertentu. Yang
                     boleh digabung dijumlahkan; yang tidak boleh digabung
                     berdiri sendiri.
-                </p>
+                </InfoNote>
             </div>
             {promos.map((p) => (
                 <div

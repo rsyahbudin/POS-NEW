@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { dateId, rupiah } from '@/lib/format';
 import { SpendingTabs } from '@/components/pos/section-tabs';
+import { InfoNote } from '@/components/pos/info-tip';
 
 type Props = {
     filters: { from: string; to: string };
@@ -94,11 +95,11 @@ export default function ExpensesPage({
 
                 <section className="grid max-w-2xl gap-3 rounded-xl border bg-card p-4">
                     <h2 className="font-semibold">Catat pengeluaran</h2>
-                    <p className="text-sm text-muted-foreground">
+                    <InfoNote>
                         Untuk uang yang bukan dari laci kasir (transfer, kartu,
                         kas besar). Belanja dengan uang laci dicatat kasir di
                         halaman Shift, supaya kas laci tetap cocok.
-                    </p>
+                    </InfoNote>
                     <div className="grid gap-3 sm:grid-cols-2">
                         <Field label="Tanggal">
                             <Input
@@ -200,7 +201,7 @@ export default function ExpensesPage({
                 </section>
 
                 <form
-                    className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3"
+                    className="grid grid-cols-2 items-end gap-3 rounded-xl border bg-card p-3 sm:flex sm:flex-wrap [&>button]:col-span-2 sm:[&>button]:col-span-1"
                     onSubmit={(e) => {
                         e.preventDefault();
                         const d = new FormData(e.currentTarget);

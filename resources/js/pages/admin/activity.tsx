@@ -62,7 +62,7 @@ export default function ActivityPage({ filters, rows, users, groups }: Props) {
                     }
                 />
                 <form
-                    className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3"
+                    className="grid grid-cols-2 items-end gap-3 rounded-xl border bg-card p-3 sm:flex sm:flex-wrap [&>button]:col-span-2 sm:[&>button]:col-span-1"
                     onSubmit={(e) => {
                         e.preventDefault();
                         const data = Object.fromEntries(

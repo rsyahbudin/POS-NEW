@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { rupiah } from '@/lib/format';
+import { InfoNote } from '@/components/pos/info-tip';
 
 type Reason = { id: number; name: string; is_active: boolean };
 type Ingredient = {
@@ -219,11 +220,11 @@ export default function WastePage({
                     </section>
                 ) : (
                     <section className="grid max-w-xl gap-3 rounded-xl border bg-card p-4">
-                        <p className="text-sm text-muted-foreground">
+                        <InfoNote>
                             Untuk menu yang sudah jadi (salah buat, tumpah,
                             tidak jadi diambil). Bahan di resepnya ikut
                             dikurangi.
-                        </p>
+                        </InfoNote>
                         <Field label="Menu">
                             <Combobox
                                 aria-label="Menu"
@@ -371,11 +372,11 @@ export default function WastePage({
                 {canManage && (
                     <section className="grid max-w-xl gap-3 rounded-xl border bg-card p-4">
                         <h2 className="font-semibold">Alasan waste</h2>
-                        <p className="text-xs text-muted-foreground">
+                        <InfoNote>
                             Daftar ini yang dipilih staf. Alasan yang
                             dinonaktifkan tidak muncul lagi, tapi catatan lama
                             tetap utuh.
-                        </p>
+                        </InfoNote>
                         <ul className="grid gap-1.5">
                             {reasons.map((r) => (
                                 <li

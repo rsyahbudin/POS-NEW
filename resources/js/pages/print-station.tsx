@@ -1,3 +1,4 @@
+import { InfoNote } from '@/components/pos/info-tip';
 import { Head } from '@inertiajs/react';
 import { Printer, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -240,13 +241,13 @@ export default function PrintStation({
                 </p>
 
                 {lan.count > 0 && (
-                    <p className="rounded-lg border p-3 text-sm">
-                        {lan.count} printer LAN (pakai alamat IP) dilayani
-                        jembatan cetak, jadi tidak muncul di sini.{' '}
+                    <InfoNote label={`${lan.count} printer LAN`}>
+                        Printer LAN (pakai alamat IP) dilayani jembatan cetak,
+                        jadi tidak muncul di sini.{' '}
                         {lan.bridge_online
                             ? 'Jembatan cetak terhubung.'
                             : 'Jembatan cetak belum terhubung: cek di Admin > Printer.'}
-                    </p>
+                    </InfoNote>
                 )}
 
                 {printers.length === 0 && (

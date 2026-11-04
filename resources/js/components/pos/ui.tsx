@@ -17,6 +17,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import type { ComponentProps, ReactNode } from 'react';
+import { InfoTip } from '@/components/pos/info-tip';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
@@ -292,11 +293,18 @@ export function Field({
     hint?: string;
     error?: string;
 }) {
+    const long = !!hint && hint.length > 48;
+
     return (
-        <div className="grid content-start gap-2">
-            <Label>{label}</Label>
+        <div className="grid min-w-0 content-start gap-2">
+            <div className="flex items-center gap-1">
+                <Label>{label}</Label>
+                {long && <InfoTip label={`Info ${label}`}>{hint}</InfoTip>}
+            </div>
             {children}
-            {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+            {hint && !long && (
+                <p className="text-xs text-muted-foreground">{hint}</p>
+            )}
             {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
     );
@@ -354,10 +362,15 @@ export function PageHeader({
     return (
         <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
             <div>
-                <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-                    {title}
-                </h1>
-                {subtitle && (
+                <div className="flex items-center gap-1.5">
+                    <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+                        {title}
+                    </h1>
+                    {subtitle && subtitle.length > 60 && (
+                        <InfoTip label={`Info ${title}`}>{subtitle}</InfoTip>
+                    )}
+                </div>
+                {subtitle && subtitle.length <= 60 && (
                     <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">
                         {subtitle}
                     </p>

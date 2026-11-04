@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { dateId, timeId } from '@/lib/format';
 import { Input } from '@/components/ui/input';
+import { InfoNote } from '@/components/pos/info-tip';
 
 type PrinterRow = {
     id: number;
@@ -149,7 +150,7 @@ export default function PrintersPage({
                     }
                 />
 
-                <p className="rounded-lg bg-muted p-3 text-sm">
+                <InfoNote>
                     Belum ada printer di sini = struk dicetak langsung dari
                     perangkat kasir (pengaturan printer di layar kasir). Setelah
                     ada printer, pesanan, bill, dan struk masuk antrean cetak
@@ -158,7 +159,7 @@ export default function PrintersPage({
                     Bluetooth waiter jangan didaftarkan di sini: pairing di
                     tablet masing-masing agar pre-bill keluar dari printer
                     waiter yang menekannya.
-                </p>
+                </InfoNote>
 
                 <ResponsiveTable
                     headers={[
@@ -215,13 +216,13 @@ export default function PrintersPage({
                             <h2 className="font-semibold">
                                 Jembatan cetak (printer LAN)
                             </h2>
-                            <p className="text-sm text-muted-foreground">
+                            <InfoNote>
                                 iPad dan tablet Android tidak bisa mencetak ke
                                 printer LAN. Jalankan jembatan di satu perangkat
                                 yang selalu menyala di cafe (mini PC, Raspberry
                                 Pi, laptop); ia mengambil antrean dari server
                                 dan mengirimnya ke printer lewat IP.
-                            </p>
+                            </InfoNote>
                         </div>
                         <span
                             className={`rounded-full border px-3 py-1 text-sm font-medium ${bridge.online ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'}`}
@@ -274,9 +275,9 @@ export default function PrintersPage({
                     </div>
                     {token && (
                         <div className="grid gap-2 rounded-lg bg-muted p-3">
-                            <p className="text-xs text-muted-foreground">
+                            <InfoNote>
                                 Token hanya tampil sekali. Salin sekarang.
-                            </p>
+                            </InfoNote>
                             <div className="flex flex-wrap gap-2">
                                 <Button
                                     className="h-10 w-fit"
@@ -285,9 +286,9 @@ export default function PrintersPage({
                                     Unduh start-print-bridge.bat
                                 </Button>
                             </div>
-                            <p className="text-xs text-muted-foreground">
+                            <InfoNote>
                                 Atau jalankan manual dari folder jembatan:
-                            </p>
+                            </InfoNote>
                             <code className="text-sm break-all">{command}</code>
                             <Button
                                 variant="outline"

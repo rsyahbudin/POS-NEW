@@ -7,6 +7,7 @@ import { ReceiptView } from '@/components/pos/receipt-view';
 import { Button } from '@/components/ui/button';
 import type { Receipt } from '@/types/pos';
 import { Input } from '@/components/ui/input';
+import { InfoNote } from '@/components/pos/info-tip';
 
 type Field_ = {
     key: string;
@@ -154,10 +155,10 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
                     <h2 className="font-semibold">
                         Tampil di halaman QR pelanggan
                     </h2>
-                    <p className="text-sm text-muted-foreground">
+                    <InfoNote>
                         Semua kolom opsional. Yang diisi akan tampil sebagai
                         banner dan tombol Info kafe di HP pelanggan.
-                    </p>
+                    </InfoNote>
                 </div>
                 <Field
                     label="Banner"
@@ -241,11 +242,11 @@ function OutletForm({ outlet }: { outlet: Props['outlet'] }) {
                 )}
                 <div className="grid gap-2 rounded-xl border p-3">
                     <p className="text-sm font-medium">Titik lokasi kafe</p>
-                    <p className="text-xs text-muted-foreground">
+                    <InfoNote>
                         Dipakai untuk membatasi absen di sekitar kafe. Buka
                         halaman ini dari tablet atau HP yang berada di dalam
                         kafe, lalu tekan tombol di bawah. Perlu izin lokasi.
-                    </p>
+                    </InfoNote>
                     <div className="grid grid-cols-2 gap-2">
                         {text('latitude', 'Latitude', undefined, '-6.2000000')}
                         {text(
@@ -555,10 +556,10 @@ function NotificationTests() {
     return (
         <section className="grid gap-3 rounded-xl border bg-card p-4">
             <h2 className="font-semibold">Uji pengiriman</h2>
-            <p className="text-sm text-muted-foreground">
+            <InfoNote>
                 Simpan pengaturan di bawah dulu, lalu kirim pesan uji supaya
                 token, email, atau nomor yang salah ketahuan sekarang.
-            </p>
+            </InfoNote>
             <div className="flex flex-wrap gap-2">
                 {[
                     ['telegram', 'Telegram'],

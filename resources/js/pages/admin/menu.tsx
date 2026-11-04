@@ -17,6 +17,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api, ApiError } from '@/lib/api';
 import { rupiah } from '@/lib/format';
+import { InfoNote } from '@/components/pos/info-tip';
+import {
+    CategoriesTab,
+    ModifiersTab,
+    StationsTab,
+} from '@/pages/admin/menu-setup';
 
 type Variant = { id?: number; name: string; price: number };
 type Component = {
@@ -419,174 +425,17 @@ export default function MenuPage({
                 )}
 
                 {tab === 'categories' && (
-                    <Simple
-                        items={categories}
-                        addUrl="/admin/categories"
-                        editUrl={(id) => `/admin/categories/${id}`}
-                        delUrl={(id) => `/admin/categories/${id}`}
-                        label="Kategori"
+                    <CategoriesTab
+                        categories={categories}
+                        stations={stations}
+                        printers={printers}
                     />
                 )}
-                {tab === 'categories' &&
-                    (printers.length > 0 || stations.length > 0) && (
-                        <section className="grid gap-2 rounded-xl border bg-card p-3">
-                            <h2 className="font-semibold">
-                                Station dan printer tiket per kategori
-                            </h2>
-                            <p className="text-sm text-muted-foreground">
-                                Atur sekali per kategori, semua menunya ikut.
-                                Station = layar dapur atau bar yang menampilkan
-                                kategori ini. Printer = tempat tiketnya
-                                tercetak; boleh lebih dari satu (mis. minuman di
-                                Bar dan Kasir). Satu menu bisa menimpa keduanya
-                                di form menu.
-                            </p>
-                            {categories.map((c) => (
-                                <div
-                                    key={c.id}
-                                    className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2"
-                                >
-                                    <span className="w-40 font-medium">
-                                        {c.name}
-                                    </span>
-                                    {stations.length > 0 && (
-                                        <Select
-                                            aria-label={`Station ${c.name}`}
-                                            className="h-11 w-44"
-                                            value={c.station_id ?? ''}
-                                            onChange={(e) =>
-                                                router.put(
-                                                    `/admin/categories/${c.id}`,
-                                                    {
-                                                        name: c.name,
-                                                        sort: c.sort,
-                                                        station_id: e.target
-                                                            .value
-                                                            ? Number(
-                                                                  e.target
-                                                                      .value,
-                                                              )
-                                                            : null,
-                                                    },
-                                                    { preserveScroll: true },
-                                                )
-                                            }
-                                        >
-                                            <option value="">
-                                                Tanpa station
-                                            </option>
-                                            {stations.map((s) => (
-                                                <option key={s.id} value={s.id}>
-                                                    {s.name}
-                                                </option>
-                                            ))}
-                                        </Select>
-                                    )}
-                                    {printers.map((pr) => (
-                                        <label
-                                            key={pr.id}
-                                            className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                className="size-5"
-                                                checked={c.printer_ids.includes(
-                                                    pr.id,
-                                                )}
-                                                onChange={(e) =>
-                                                    router.post(
-                                                        `/admin/categories/${c.id}/printers`,
-                                                        {
-                                                            printer_ids: e
-                                                                .target.checked
-                                                                ? [
-                                                                      ...c.printer_ids,
-                                                                      pr.id,
-                                                                  ]
-                                                                : c.printer_ids.filter(
-                                                                      (x) =>
-                                                                          x !==
-                                                                          pr.id,
-                                                                  ),
-                                                        },
-                                                        {
-                                                            preserveScroll: true,
-                                                        },
-                                                    )
-                                                }
-                                            />
-                                            {pr.name}
-                                        </label>
-                                    ))}
-                                </div>
-                            ))}
-                        </section>
-                    )}
                 {tab === 'stations' && (
-                    <p className="text-sm text-muted-foreground">
-                        Station = pos kerja tempat pesanan disiapkan, mis. Dapur
-                        dan Bar. Dipakai untuk layar dapur dan laporan waktu
-                        penyajian. Dipilih per kategori di tab Kategori.
-                    </p>
+                    <StationsTab stations={stations} categories={categories} />
                 )}
-                {tab === 'stations' && (
-                    <Simple
-                        items={stations}
-                        addUrl="/admin/stations"
-                        editUrl={(id) => `/admin/stations/${id}`}
-                        label="Station"
-                    />
-                )}
-
                 {tab === 'modifiers' && (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                        {modifierGroups.map((g) => (
-                            <div
-                                key={g.id}
-                                className="rounded-xl border bg-card p-3"
-                            >
-                                <p className="font-medium">
-                                    {g.name}{' '}
-                                    <span className="text-xs text-muted-foreground">
-                                        · {g.is_required ? 'wajib' : 'opsional'}{' '}
-                                        · {g.min_select}-{g.max_select}
-                                    </span>
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                    {g.modifiers
-                                        .map(
-                                            (m) =>
-                                                `${m.name}${m.price_delta ? ` (+${rupiah(m.price_delta)})` : ''}`,
-                                        )
-                                        .join(', ')}
-                                </p>
-                                <div className="mt-2 flex gap-2">
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-10"
-                                        onClick={() => setGroup(g)}
-                                    >
-                                        Ubah
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className="h-10"
-                                        onClick={() =>
-                                            confirm('Hapus grup?') &&
-                                            router.delete(
-                                                `/admin/modifier-groups/${g.id}`,
-                                                { preserveScroll: true },
-                                            )
-                                        }
-                                    >
-                                        Hapus
-                                    </Button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                    <ModifiersTab groups={modifierGroups} onEdit={setGroup} />
                 )}
             </div>
 
@@ -762,7 +611,7 @@ export default function MenuPage({
                             </label>
                             {draft.is_bundle && (
                                 <>
-                                    <p className="text-xs text-muted-foreground">
+                                    <InfoNote>
                                         Harga paket = harga dasar di atas. Tiket
                                         dipecah per isi: tiap menu tercetak di
                                         printer menu itu sendiri (Bar, Dapur,
@@ -774,7 +623,7 @@ export default function MenuPage({
                                         pelanggan menentukan opsi menu itu
                                         (sambal, manis atau tidak); opsi
                                         berbayar menambah harga paket.
-                                    </p>
+                                    </InfoNote>
                                     {draft.components.map((c, i) => (
                                         <div
                                             key={i}
@@ -1323,105 +1172,5 @@ export default function MenuPage({
                 />
             )}
         </>
-    );
-}
-
-function Simple({
-    items,
-    addUrl,
-    editUrl,
-    delUrl,
-    label,
-}: {
-    items: { id: number; name: string }[];
-    addUrl: string;
-    editUrl: (id: number) => string;
-    delUrl?: (id: number) => string;
-    label: string;
-}) {
-    const [name, setName] = useState('');
-
-    return (
-        <div className="grid max-w-xl gap-2">
-            {items.map((c) => (
-                <Row
-                    key={c.id}
-                    item={c}
-                    editUrl={editUrl(c.id)}
-                    delUrl={delUrl?.(c.id)}
-                />
-            ))}
-            <div className="flex gap-2">
-                <Input
-                    className="h-11"
-                    placeholder={`${label} baru`}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                />
-                <Button
-                    className="h-11"
-                    disabled={!name.trim()}
-                    onClick={() =>
-                        router.post(
-                            addUrl,
-                            { name },
-                            {
-                                preserveScroll: true,
-                                onSuccess: () => setName(''),
-                            },
-                        )
-                    }
-                >
-                    Tambah
-                </Button>
-            </div>
-        </div>
-    );
-}
-
-function Row({
-    item,
-    editUrl,
-    delUrl,
-}: {
-    item: { id: number; name: string };
-    editUrl: string;
-    delUrl?: string;
-}) {
-    const [name, setName] = useState(item.name);
-
-    return (
-        <div className="flex gap-2">
-            <Input
-                className="h-11"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                aria-label="Nama"
-            />
-            <Button
-                variant="outline"
-                className="h-11"
-                disabled={name === item.name}
-                onClick={() =>
-                    router.put(editUrl, { name }, { preserveScroll: true })
-                }
-            >
-                Simpan
-            </Button>
-            {delUrl && (
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-11"
-                    aria-label="Hapus"
-                    onClick={() =>
-                        confirm('Hapus?') &&
-                        router.delete(delUrl, { preserveScroll: true })
-                    }
-                >
-                    <Trash2 />
-                </Button>
-            )}
-        </div>
     );
 }

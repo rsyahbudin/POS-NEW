@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { dateId, rupiah } from '@/lib/format';
+import { InfoNote } from '@/components/pos/info-tip';
 
 type Bal = {
     id: number;
@@ -155,7 +156,7 @@ export default function Accounting(p: Props) {
                 />
 
                 <form
-                    className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3"
+                    className="grid grid-cols-2 items-end gap-3 rounded-xl border bg-card p-3 sm:flex sm:flex-wrap [&>button]:col-span-2 sm:[&>button]:col-span-1"
                     onSubmit={(e) => {
                         e.preventDefault();
                         router.get(
@@ -594,11 +595,11 @@ function Manual({
 
     return (
         <section className="grid max-w-3xl gap-3 rounded-xl border bg-card p-4">
-            <p className="text-sm text-muted-foreground">
+            <InfoNote>
                 Untuk koreksi dan saldo awal go-live (jurnal pembuka terhadap
                 Modal Pemilik). Jurnal yang diposting tidak bisa diedit, hanya
                 dibalik.
-            </p>
+            </InfoNote>
             <div className="grid gap-2 sm:grid-cols-2">
                 <Field label="Tanggal">
                     <Input
@@ -769,10 +770,10 @@ function Close({ periods }: { periods: Props['periods'] }) {
 
     return (
         <section className="grid max-w-xl gap-3">
-            <p className="text-sm text-muted-foreground">
+            <InfoNote>
                 Tutup buku mengunci periode dari jurnal baru. Tidak bisa dibuka
                 lagi dari aplikasi.
-            </p>
+            </InfoNote>
             <div className="flex items-end gap-2">
                 <Field label="Bulan">
                     <Input

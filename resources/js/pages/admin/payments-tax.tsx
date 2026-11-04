@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Field, PageHeader, Select } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InfoNote } from '@/components/pos/info-tip';
 
 type Acc = { id: number; code: string; name: string };
 type PM = {
@@ -102,10 +103,10 @@ function Methods({ methods, accounts }: { methods: PM[]; accounts: Acc[] }) {
                         ))}
                     </Select>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <InfoNote>
                     Akun penerima menentukan uang masuk ke rekening mana. Tambah
                     rekening baru di menu Akuntansi › Akun.
-                </p>
+                </InfoNote>
                 <Button
                     className="h-11"
                     disabled={!n.name.trim()}
@@ -201,11 +202,11 @@ function Taxes({ rules }: { rules: Tax[] }) {
 
     return (
         <div className="grid max-w-3xl gap-3">
-            <p className="text-sm text-muted-foreground">
+            <InfoNote>
                 Urutan default: Subtotal → Diskon → Service Charge → Pajak.
                 Tarif dalam basis poin (1000 = 10%). Semua nonaktif saat
                 go-live.
-            </p>
+            </InfoNote>
             {rules.map((r) => (
                 <TaxRow key={r.id} r={r} />
             ))}

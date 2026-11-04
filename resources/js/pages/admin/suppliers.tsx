@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
 import { dateId, rupiah } from '@/lib/format';
+import { InfoNote } from '@/components/pos/info-tip';
 
 type Supplier = {
     id: number;
@@ -191,11 +192,11 @@ export default function SuppliersPage({
 
                 {tab === 'compare' && (
                     <>
-                        <p className="text-sm text-muted-foreground">
+                        <InfoNote>
                             Harga beli terakhir tiap bahan dari tiap pemasok
                             (per satuan dasar), dari yang termurah. Hanya bahan
                             yang pernah dibeli dengan pemasok tercatat.
-                        </p>
+                        </InfoNote>
                         <ResponsiveTable
                             headers={['Bahan', 'Termurah', 'Harga lain']}
                             empty="Belum ada belanja dengan pemasok tercatat."

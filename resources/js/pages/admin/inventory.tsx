@@ -177,6 +177,11 @@ export default function InventoryPage({
                             <Button asChild variant="outline" className="h-11">
                                 <Link href="/admin/recipes">Resep & HPP</Link>
                             </Button>
+                            <Button asChild variant="outline" className="h-11">
+                                <Link href="/admin/reports/purchases">
+                                    Laporan belanja
+                                </Link>
+                            </Button>
                             <Button
                                 className="h-11"
                                 onClick={() =>

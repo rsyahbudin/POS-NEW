@@ -300,6 +300,10 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::put('suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
         });
 
+        Route::middleware('permission:view-purchase-report')->group(function () {
+            Route::get('reports/purchases', [ReportController::class, 'purchases'])->name('reports.purchases');
+            Route::get('reports/purchases/export', [ReportController::class, 'purchasesExport'])->name('reports.purchases.export');
+        });
         Route::middleware('permission:view-waste-report')->group(function () {
             Route::get('reports/waste', [ReportController::class, 'waste'])->name('reports.waste');
             Route::get('reports/waste/export', [ReportController::class, 'wasteExport'])->name('reports.waste.export');

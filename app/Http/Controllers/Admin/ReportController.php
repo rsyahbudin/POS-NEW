@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Inventory\Models\Supplier;
 use App\Domain\Notification\ReportDelivery;
 use App\Domain\Reporting\KitchenReports;
 use App\Domain\Reporting\MarginReports;
+use App\Domain\Reporting\PurchaseReports;
 use App\Domain\Reporting\SalesDetailReport;
 use App\Domain\Reporting\SalesReports;
 use App\Domain\Reporting\WasteReports;
+use App\Domain\Settings\OutletContext;
 use App\Domain\Settings\SettingsRepository;
 use App\Exports\ReportSheet;
 use App\Http\Controllers\Controller;
@@ -191,6 +194,55 @@ class ReportController extends Controller
                 array_map(fn ($e) => [$e['at'], $e['label'], $e['qty'], $e['unit'], $e['reason'], $e['note'] ?? '', $e['cost'], $e['user'] ?? '-'], $waste->entries($from, $to, 5000))),
             new ReportSheet('Ringkasan', $sub, ['Keterangan', 'Nilai'], [['Total nilai terbuang', $s['cost']], ['Jumlah kejadian', $s['entries']], ['Item terbanyak', $s['top_item'] ?? '-'], ['Alasan terbanyak', $s['top_reason'] ?? '-']]),
         ]);
+    }
+
+    public function purchases(Request $request, PurchaseReports $purchases): Response
+    {
+        [$from, $to, $dimension, $status, $supplier] = $this->purchaseParams($request);
+
+        return Inertia::render('admin/reports/purchases', [
+            'filters' => ['from' => $from, 'to' => $to, 'dimension' => $dimension, 'status' => $status, 'supplier_id' => $supplier],
+            'summary' => $purchases->summary($from, $to, $status, $supplier),
+            'rows' => $purchases->by($dimension, $from, $to, $status, $supplier),
+            'entries' => $purchases->entries($from, $to, $status, $supplier),
+            'dimensions' => PurchaseReports::DIMENSIONS,
+            'statuses' => PurchaseReports::STATUSES,
+            'suppliers' => Supplier::query()->where('outlet_id', app(OutletContext::class)->id())->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
+    public function purchasesExport(Request $request, PurchaseReports $purchases): \Symfony\Component\HttpFoundation\Response
+    {
+        [$from, $to, $dimension, $status, $supplier] = $this->purchaseParams($request);
+        $labels = ['ingredient' => 'Bahan', 'supplier' => 'Pemasok', 'day' => 'Hari', 'person' => 'Pencatat'];
+        $sub = 'Periode '.$this->rangeLabel($from, $to).' · '.['approved' => 'disetujui', 'pending' => 'menunggu persetujuan', 'rejected' => 'ditolak', 'all' => 'semua status'][$status];
+        $s = $purchases->summary($from, $to, $status, $supplier);
+        $by = $purchases->by($dimension, $from, $to, $status, $supplier);
+        $head = $dimension === 'ingredient'
+            ? [$labels[$dimension], 'Jumlah beli', 'Satuan', 'Kali beli', 'Harga rata-rata/satuan (Rp)', 'Termurah (Rp)', 'Termahal (Rp)', 'Total (Rp)', '% dari total']
+            : [$labels[$dimension], 'Jumlah nota', 'Total (Rp)', '% dari total'];
+        $rows = array_map(fn ($r) => $dimension === 'ingredient'
+            ? [$r->label, $r->qty, $r->unit, $r->notes, $r->average, $r->low, $r->high, $r->total, $r->share_pct]
+            : [$this->pretty($dimension, $r->label), $r->notes, $r->total, $r->share_pct], $by);
+        $total = (int) array_sum(array_map(fn ($r) => $r->total, $by));
+
+        return ReportFile::download((string) $request->input('format', 'xlsx'), "Belanja {$labels[$dimension]} {$from} {$to}", [
+            new ReportSheet("Belanja per {$labels[$dimension]}", $sub, $head, $rows, $dimension === 'ingredient' ? ['Total', '', '', '', '', '', '', $total, ''] : ['Total', '', $total, '']),
+            new ReportSheet('Rincian belanja', $sub, ['Tanggal', 'Pemasok', 'Bahan', 'Jumlah', 'Satuan', 'Harga/satuan (Rp)', 'Total (Rp)', 'Dicatat oleh', 'Status', 'Catatan'],
+                array_map(fn ($e) => [$e['date'], $e['supplier'], $e['ingredient'], $e['qty'], $e['unit'], $e['unit_cost'], $e['total'], $e['user'] ?? '-', $e['status'], $e['note'] ?? ''], $purchases->entries($from, $to, $status, $supplier, 5000))),
+            new ReportSheet('Ringkasan', $sub, ['Keterangan', 'Nilai'], [['Total belanja', $s['total']], ['Jumlah nota', $s['notes']], ['Jenis bahan dibeli', $s['ingredients']], ['Rata-rata per nota', $s['average']], ['Bahan termahal', $s['top_ingredient'] ?? '-'], ['Pemasok terbesar', $s['top_supplier'] ?? '-']]),
+        ]);
+    }
+
+    /** @return array{0: string, 1: string, 2: string, 3: string, 4: int|null} */
+    private function purchaseParams(Request $request): array
+    {
+        [$from, $to] = $this->params($request);
+        $dimension = (string) $request->input('dimension', 'ingredient');
+        $status = (string) $request->input('status', 'approved');
+        abort_unless(in_array($dimension, PurchaseReports::DIMENSIONS, true) && in_array($status, PurchaseReports::STATUSES, true), 422);
+
+        return [$from, $to, $dimension, $status, $request->integer('supplier_id') ?: null];
     }
 
     public function adjustments(Request $request): Response
@@ -411,7 +463,7 @@ class ReportController extends Controller
     /** @return array{0: string, 1: string, 2: string} */
     private function params(Request $request): array
     {
-        $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date', 'dimension' => 'nullable|in:'.implode(',', array_unique([...SalesReports::DIMENSIONS, ...KitchenReports::DIMENSIONS, ...MarginReports::DIMENSIONS, ...WasteReports::DIMENSIONS]))]);
+        $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date', 'dimension' => 'nullable|in:'.implode(',', array_unique([...SalesReports::DIMENSIONS, ...KitchenReports::DIMENSIONS, ...MarginReports::DIMENSIONS, ...WasteReports::DIMENSIONS, ...PurchaseReports::DIMENSIONS]))]);
 
         return [
             $request->input('from', CarbonImmutable::parse(BusinessDate::for())->subDays(29)->toDateString()),

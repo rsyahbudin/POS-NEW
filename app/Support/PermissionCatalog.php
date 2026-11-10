@@ -72,6 +72,7 @@ final class PermissionCatalog
                 'mark-sold-out' => ['label' => 'Tandai menu habis', 'hint' => 'Menandai menu habis / tersedia lagi dari layar kasir. Menu habis ikut hilang dari QR pelanggan.'],
                 'record-waste' => ['label' => 'Catat bahan / menu terbuang', 'hint' => 'Mencatat waste dengan alasan. Stok berkurang dan nilainya masuk laporan waste.'],
                 'export-receipts' => ['label' => 'Unduh struk satu bulan (PDF)', 'hint' => 'Membuat satu PDF berisi semua struk di bulan dan tahun yang dipilih, termasuk bulan yang sudah lewat.'],
+                'view-purchase-report' => ['label' => 'Lihat laporan belanja', 'hint' => 'Membaca laporan belanja bahan: apa yang dibeli, dari siapa, berapa jumlah dan harganya, per bahan, pemasok, hari, dan pencatat.'],
                 'view-waste-report' => ['label' => 'Laporan waste', 'hint' => 'Nilai rupiah dan penyebab bahan terbuang.'],
                 'manage-online-payments' => ['label' => 'Pembayaran QRIS online', 'hint' => 'Melihat daftar pembayaran QRIS dari HP pelanggan, mencatat ulang yang tertahan, dan menerima peringatannya.'],
                 'manage-discount-presets' => ['label' => 'Kelola diskon & promo', 'hint' => 'Halaman Diskon & Promo: diskon bernama yang dipilih kasir (mis. Staff 10%) dan promo terjadwal (Happy Hour).'],
@@ -98,7 +99,7 @@ final class PermissionCatalog
      * @var list<string>
      */
     public const OFFICE = [
-        'view-sales-reports', 'view-accounting', 'manage-accounting', 'view-margin-report', 'view-kitchen-report', 'view-activity-log', 'view-waste-report',
+        'view-sales-reports', 'view-accounting', 'manage-accounting', 'view-margin-report', 'view-kitchen-report', 'view-activity-log', 'view-waste-report', 'view-purchase-report',
         'manage-menu', 'manage-bundles', 'manage-inventory', 'manage-pricing', 'manage-discount-presets', 'manage-settings', 'manage-users', 'manage-roles', 'manage-tables',
         'manage-printers', 'manage-online-payments', 'manage-suppliers', 'manage-assets', 'import-data', 'export-receipts',
         'manage-fixed-expenses', 'view-cash-ledger', 'manage-attendance',

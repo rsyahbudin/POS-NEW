@@ -185,6 +185,12 @@ export const sections: (Omit<NavSection, 'items'> & { items: Item[] })[] = [
                 feature: 'kds',
             },
             {
+                title: 'Laporan Belanja',
+                href: '/admin/reports/purchases',
+                icon: ShoppingBasket,
+                permission: 'view-purchase-report',
+            },
+            {
                 title: 'Laporan Waste',
                 href: '/admin/reports/waste',
                 icon: Trash2,

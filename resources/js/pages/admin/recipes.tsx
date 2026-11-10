@@ -30,6 +30,7 @@ type Product = {
     name: string;
     category: string;
     price: number;
+    is_active: boolean;
     cost: number;
     variants: Variant[];
     lines: { variant_id: number | null; ingredient_id: number; qty: number }[];
@@ -47,12 +48,14 @@ const pct = (price: number, cost: number) =>
 export default function RecipesPage({
     enabled,
     targetFoodCost,
+    canSetPrice,
     ingredients,
     products,
     modifiers,
 }: {
     enabled: boolean;
     targetFoodCost: number;
+    canSetPrice: boolean;
     ingredients: Ingredient[];
     products: Product[];
     modifiers: Modifier[];
@@ -89,6 +92,30 @@ export default function RecipesPage({
     const shown = products.filter((p) =>
         p.name.toLowerCase().includes(q.toLowerCase()),
     );
+
+    const applyPrice = (
+        productId: number,
+        price: number,
+        variantId: number | null,
+    ) =>
+        router.post(
+            `/admin/recipes/products/${productId}/price`,
+            { price, variant_id: variantId },
+            {
+                preserveScroll: true,
+                onSuccess: () =>
+                    setEdit((e) =>
+                        e && variantId
+                            ? {
+                                  ...e,
+                                  variants: e.variants.map((v) =>
+                                      v.id === variantId ? { ...v, price } : v,
+                                  ),
+                              }
+                            : e,
+                    ),
+            },
+        );
 
     const save = () => {
         if (!edit) {
@@ -555,6 +582,18 @@ export default function RecipesPage({
                                     price={r.price}
                                     cost={r.cost}
                                     target={targetFoodCost}
+                                    onApply={
+                                        canSetPrice
+                                            ? (rec) =>
+                                                  applyPrice(
+                                                      edit.id,
+                                                      rec,
+                                                      edit.variants.length > 0
+                                                          ? r.key
+                                                          : null,
+                                                  )
+                                            : undefined
+                                    }
                                 />
                             ))}
                         </div>
@@ -598,7 +637,11 @@ function Advice({
                         : 'text-amber-700 dark:text-amber-400',
                 )}
             >
-                {v === 'good' ? 'Harga sudah cukup' : 'Harga terlalu rendah'}
+                {price <= 0
+                    ? 'Belum ada harga'
+                    : v === 'good'
+                      ? 'Harga sudah cukup'
+                      : 'Harga terlalu rendah'}
             </span>
         </span>
     );
@@ -610,11 +653,14 @@ function PriceCard({
     price,
     cost,
     target,
+    onApply,
 }: {
     title: string | null;
     price: number;
     cost: number;
     target: number;
+    /** Takes the suggested price as the selling price. */
+    onApply?: (price: number) => void;
 }) {
     const rec = suggestedPrice(cost, target);
     const food = foodCostPct(price, cost);
@@ -644,7 +690,7 @@ function PriceCard({
                 <dd className="text-right font-medium">{money(price)}</dd>
                 <dt className="text-muted-foreground">Laba per porsi</dt>
                 <dd className="text-right font-medium">
-                    {cost > 0 ? money(profit) : '-'}
+                    {cost > 0 && price > 0 ? money(profit) : '-'}
                 </dd>
                 <dt className="text-muted-foreground">Margin</dt>
                 <dd className="text-right font-medium">
@@ -677,10 +723,22 @@ function PriceCard({
                     )}
                 >
                     Harga disarankan {rupiah(rec)}
-                    {v === 'good'
-                        ? ` · harga sekarang sudah cukup (food cost ${Math.round(food ?? 0)}%)`
-                        : ` · harga sekarang ${rupiah(price)} terlalu rendah, naikkan ${rupiah(rec - price)}`}
+                    {price <= 0
+                        ? ' · menu ini belum punya harga jual'
+                        : v === 'good'
+                          ? ` · harga sekarang sudah cukup (food cost ${Math.round(food ?? 0)}%)`
+                          : ` · harga sekarang ${rupiah(price)} terlalu rendah, naikkan ${rupiah(rec - price)}`}
                 </p>
+            )}
+            {rec !== null && onApply && rec !== price && (
+                <Button
+                    type="button"
+                    variant={price <= 0 || v === 'low' ? 'default' : 'outline'}
+                    className="h-11"
+                    onClick={() => onApply(rec)}
+                >
+                    Pakai {rupiah(rec)} sebagai harga jual
+                </Button>
             )}
         </section>
     );

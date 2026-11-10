@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Catalog\Models\Modifier;
+use App\Domain\Catalog\Models\Product;
 use App\Domain\Floor\Models\Table;
 use App\Domain\Inventory\InventoryService;
 use App\Domain\Inventory\Models\Ingredient;
@@ -197,4 +198,27 @@ it('gives the recipe page the target food cost used to suggest selling prices, 3
     $this->actingAs($owner)->get('/admin/recipes')->assertInertia(fn ($p) => $p->where('targetFoodCost', 30));
     setting('pricing.target_food_cost', 5);                                       // silly values stay inside 10 to 90
     $this->actingAs($owner)->get('/admin/recipes')->assertInertia(fn ($p) => $p->where('targetFoodCost', 10));
+});
+
+it('saves a new menu item without a price as not sold yet, and starts selling it with the suggested price', function () {
+    $owner = userWithRole('owner');
+    $category = product('Americano')->category_id;
+
+    $this->actingAs($owner)->post('/admin/products', ['name' => 'Ayam Bakar', 'category_id' => $category, 'base_price' => 0])->assertSessionHasNoErrors()->assertSessionHas('success');
+    $menu = Product::query()->where('name', 'Ayam Bakar')->firstOrFail();
+    expect($menu->base_price)->toBe(0)->and($menu->is_active)->toBeFalse();
+
+    // a priced menu item is sold at once
+    $this->actingAs($owner)->post('/admin/products', ['name' => 'Es Jeruk', 'category_id' => $category, 'base_price' => 8000])->assertSessionHasNoErrors();
+    expect(Product::query()->where('name', 'Es Jeruk')->firstOrFail()->is_active)->toBeTrue();
+
+    // the suggested price becomes the selling price, and the item starts being sold
+    $this->actingAs($owner)->post("/admin/recipes/products/{$menu->id}/price", ['price' => 46500])->assertSessionHasNoErrors()->assertSessionHas('success');
+    expect($menu->fresh()->base_price)->toBe(46500)->and($menu->fresh()->is_active)->toBeTrue();
+
+    // later price changes leave the item as it is; a cashier may not set prices
+    $this->actingAs($owner)->post("/admin/recipes/products/{$menu->id}/price", ['price' => 50000])->assertSessionHasNoErrors();
+    expect($menu->fresh()->base_price)->toBe(50000);
+    $this->actingAs(userWithRole('cashier'))->post("/admin/recipes/products/{$menu->id}/price", ['price' => 1000])->assertForbidden();
+    $this->actingAs($owner)->post("/admin/recipes/products/{$menu->id}/price", ['price' => 0])->assertSessionHasErrors('price');
 });

@@ -323,6 +323,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
             Route::post('inventory/purchases', [InventoryController::class, 'purchase'])->name('inventory.purchase');
             Route::get('recipes', [RecipeController::class, 'index'])->name('recipes');
             Route::post('recipes/products/{product}', [RecipeController::class, 'saveProduct'])->name('recipes.product');
+            Route::post('recipes/products/{product}/price', [RecipeController::class, 'applyPrice'])->name('recipes.price');
             Route::post('recipes/modifiers/{modifier}', [RecipeController::class, 'saveModifier'])->name('recipes.modifier');
         });
 

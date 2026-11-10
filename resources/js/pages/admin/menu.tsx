@@ -327,7 +327,10 @@ export default function MenuPage({
                                         key="n"
                                         className="font-semibold text-muted-foreground"
                                     >
-                                        NONAKTIF
+                                        {p.base_price === 0 &&
+                                        p.variants.every((v) => v.price === 0)
+                                            ? 'BELUM ADA HARGA'
+                                            : 'NONAKTIF'}
                                     </span>
                                 ) : on ? (
                                     <span
@@ -537,7 +540,10 @@ export default function MenuPage({
                                 </div>
                             </Field>
                         )}
-                        <Field label="Harga dasar">
+                        <Field
+                            label="Harga dasar"
+                            hint="Boleh dikosongkan. Menu baru tanpa harga belum dijual: isi resepnya, lalu pakai harga yang disarankan di Resep & HPP."
+                        >
                             <MoneyInput
                                 value={draft.base_price}
                                 onChange={(v) =>

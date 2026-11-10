@@ -122,7 +122,11 @@ class MenuController extends Controller
         $bundle = $canBundle ? (bool) ($data['is_bundle'] ?? false) : (bool) $product?->is_bundle;
         $parts = $canBundle && $bundle ? $this->bundleParts($data['components'] ?? [], $product) : null;
 
-        DB::transaction(function () use ($request, $images, $product, $data, $outletId, $canBundle, $bundle, $parts) {
+        // a new menu item without a price is not sold yet: fill the recipe first, then take the suggested price (Resep & HPP)
+        $isEdit = $product !== null;
+        $priced = (int) $data['base_price'] > 0 || $bundle || array_sum(array_map(fn (array $v): int => (int) $v['price'], $data['variants'] ?? [])) > 0;
+
+        DB::transaction(function () use ($request, $images, $product, $data, $outletId, $canBundle, $bundle, $parts, $priced) {
             $fields = Arr::except($data, ['image', 'variants', 'modifier_group_ids', 'printer_ids', 'is_bundle', 'components']);
             if ($canBundle) {
                 $fields['is_bundle'] = $bundle;
@@ -132,7 +136,7 @@ class MenuController extends Controller
             }
 
             $oldPrice = $product?->base_price;
-            $product = $product ? tap($product)->update($fields) : Product::create($fields + ['outlet_id' => $outletId]);
+            $product = $product ? tap($product)->update($fields) : Product::create($fields + ['outlet_id' => $outletId, 'is_active' => $priced]);
             if ($oldPrice !== null && $oldPrice !== $product->base_price) {
                 Audit::log('product.price_changed', $product, ['from' => $oldPrice, 'to' => $product->base_price]);
             }
@@ -151,7 +155,7 @@ class MenuController extends Controller
             }
         });
 
-        return back()->with('success', 'Produk disimpan.');
+        return back()->with('success', $priced || $isEdit ? 'Produk disimpan.' : 'Produk disimpan. Belum dijual karena belum ada harga: isi resepnya, lalu pakai harga yang disarankan di Resep & HPP.');
     }
 
     /**

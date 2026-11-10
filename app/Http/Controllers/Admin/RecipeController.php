@@ -36,13 +36,14 @@ class RecipeController extends Controller
         return Inertia::render('admin/recipes', [
             'enabled' => $this->inventory->enabled(),
             'targetFoodCost' => max(10, min(90, (int) $this->settings->get('pricing.target_food_cost', 35))),
+            'canSetPrice' => $this->canSetPrice(),
             'ingredients' => Ingredient::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'unit', 'avg_cost'])->all(),
             'products' => Product::query()->where('outlet_id', $id)->with('variants')->orderBy('category_id')->orderBy('sort')->get()->map(function (Product $p) use ($lines, $costs, $categories) {
                 $own = $lines->get($p->id, collect());
                 $cost = fn (?int $variantId) => (int) round($own->filter(fn ($l) => $l->variant_id === null || $l->variant_id === $variantId)->sum(fn ($l) => $l->qty * (float) ($costs[$l->ingredient_id] ?? 0)));
 
                 return [
-                    'id' => $p->id, 'name' => $p->name, 'category' => $categories[$p->category_id] ?? '', 'price' => $p->base_price,
+                    'id' => $p->id, 'name' => $p->name, 'category' => $categories[$p->category_id] ?? '', 'price' => $p->base_price, 'is_active' => $p->is_active,
                     'variants' => $p->variants->map(fn ($v) => ['id' => $v->id, 'name' => $v->name, 'price' => $v->price, 'cost' => $cost($v->id)])->all(),
                     'lines' => $own->map(fn ($l) => ['variant_id' => $l->variant_id, 'ingredient_id' => $l->ingredient_id, 'qty' => $l->qty])->values()->all(),
                     'cost' => $cost(null),
@@ -53,6 +54,38 @@ class RecipeController extends Controller
                 'lines' => ModifierIngredient::query()->where('modifier_id', $m->id)->get()->map(fn ($l) => ['ingredient_id' => $l->ingredient_id, 'qty' => $l->qty])->all(),
             ]))->values()->all(),
         ]);
+    }
+
+    private function canSetPrice(): bool
+    {
+        return (bool) auth()->user()?->canAny(['manage-menu', 'manage-pricing']);
+    }
+
+    /**
+     * Takes the suggested price as the selling price of the menu item or of one of its variants. A menu saved without a price
+     * (not sold yet) starts being sold with its first price.
+     */
+    public function applyPrice(Request $request, Product $product): RedirectResponse
+    {
+        abort_unless($product->outlet_id === $this->outlet->id() && $this->canSetPrice(), 403);
+        $data = $request->validate(['price' => 'required|integer|min:1|max:100000000', 'variant_id' => ['nullable', 'integer', Rule::exists('product_variants', 'id')->where('product_id', $product->id)]]);
+        $price = (int) $data['price'];
+
+        $waiting = ! $product->is_active && $product->base_price === 0 && ! $product->variants()->where('price', '>', 0)->exists();
+        if (! empty($data['variant_id'])) {
+            $variant = $product->variants()->findOrFail((int) $data['variant_id']);
+            $old = $variant->price;
+            $variant->update(['price' => $price]);
+        } else {
+            $old = $product->base_price;
+            $product->update(['base_price' => $price]);
+        }
+        Audit::log('product.price_changed', $product, ['from' => $old, 'to' => $price, 'variant' => $data['variant_id'] ?? null, 'via' => 'recipe']);
+        if ($waiting) {
+            $product->update(['is_active' => true]);
+        }
+
+        return back()->with('success', $waiting ? "Harga jual diatur. {$product->name} mulai dijual." : 'Harga jual diubah.');
     }
 
     public function saveProduct(Request $request, Product $product): RedirectResponse

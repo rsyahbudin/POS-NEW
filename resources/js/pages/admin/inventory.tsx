@@ -20,6 +20,7 @@ import {
 } from '@/components/pos/ui';
 import { NewIngredientDialog } from '@/components/pos/new-ingredient';
 import { StationChips } from '@/components/pos/station-chips';
+import { useFeatures } from '@/hooks/use-features';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { rupiah } from '@/lib/format';
@@ -117,6 +118,7 @@ export default function InventoryPage({
     wasteReasons,
 }: Props) {
     const errors = usePage().props.errors as Record<string, string>;
+    const features = useFeatures();
     const [tab, setTab] = useState<
         'stock' | 'purchases' | 'counts' | 'history'
     >(() => {
@@ -656,18 +658,20 @@ export default function InventoryPage({
                             />
                         </Field>
                     </div>
-                    <Field
-                        label="Station penanggung jawab"
-                        hint="Station yang menghitung dan membelanjakan bahan ini. Boleh lebih dari satu untuk bahan bersama seperti gula. Dipakai bila Pengaturan > Stok per station aktif."
-                    >
-                        <StationChips
-                            stations={stations}
-                            value={edit.station_ids}
-                            onChange={(station_ids) =>
-                                setEdit({ ...edit, station_ids })
-                            }
-                        />
-                    </Field>
+                    {features.stockByStation && (
+                        <Field
+                            label="Station penanggung jawab"
+                            hint="Station yang menghitung dan membelanjakan bahan ini. Boleh lebih dari satu untuk bahan bersama seperti gula. Dipakai bila Pengaturan > Stok per station aktif."
+                        >
+                            <StationChips
+                                stations={stations}
+                                value={edit.station_ids}
+                                onChange={(station_ids) =>
+                                    setEdit({ ...edit, station_ids })
+                                }
+                            />
+                        </Field>
+                    )}
                     {!edit.id && (
                         <div className="grid grid-cols-2 gap-2">
                             <Field label="Stok awal">

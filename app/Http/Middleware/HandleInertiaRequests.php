@@ -55,6 +55,9 @@ class HandleInertiaRequests extends Middleware
             ],
             'features' => [
                 'kds' => (bool) app(SettingsRepository::class)->get('kitchen.enabled', false),
+                // stations only matter for the kitchen screen and for stock held per station; everywhere else they stay out of sight
+                'stations' => (bool) app(SettingsRepository::class)->get('kitchen.enabled', false) || (bool) app(SettingsRepository::class)->get('stock.by_station', false),
+                'stock_by_station' => (bool) app(SettingsRepository::class)->get('stock.by_station', false),
                 'inventory' => (bool) app(SettingsRepository::class)->get('inventory.enabled', false),
                 'schedule' => (bool) app(SettingsRepository::class)->get('schedule.enabled', false),
                 'attendance' => (bool) app(SettingsRepository::class)->get('attendance.enabled', false),

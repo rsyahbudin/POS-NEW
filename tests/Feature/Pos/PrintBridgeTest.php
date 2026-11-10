@@ -82,7 +82,7 @@ it('keeps network printers off the print station page so no device prints them t
 
 it('saves the LAN address of a printer and rejects nonsense addresses', function () {
     $manager = userWithRole('owner');
-    $base = ['name' => 'Bar', 'kind' => 'ticket', 'paper_width' => 80, 'copies' => 1, 'is_active' => true];
+    $base = ['name' => 'Bar', 'roles' => ['ticket'], 'paper_width' => 80, 'copies' => 1, 'is_active' => true];
 
     $this->actingAs($manager)->post('/admin/printers', $base + ['host' => '192.168.1.60', 'port' => 9100])->assertSessionHasNoErrors();
     $this->actingAs($manager)->post('/admin/printers', $base + ['host' => 'http://x/;rm'])->assertSessionHasErrors('host');
@@ -115,4 +115,18 @@ it('tells staff when a ticket fails or waits too long, and clears the alert once
     $stuck->update(['status' => 'printed']);
     $this->artisan('print:watch')->assertSuccessful();
     expect($open('print.stuck'))->toBe(0);
+});
+
+it('registers one printer with several roles and routes receipt, bill and ticket to it', function () {
+    $owner = userWithRole('owner');
+    $this->actingAs($owner)->post('/admin/printers', ['name' => 'Kasir', 'roles' => ['receipt', 'bill', 'ticket'], 'paper_width' => 58, 'copies' => 1, 'is_active' => true])->assertSessionHasNoErrors();
+    $this->actingAs($owner)->post('/admin/printers', ['name' => 'Kosong', 'roles' => [], 'paper_width' => 58, 'copies' => 1])->assertSessionHasErrors('roles');
+
+    $printer = Printer::query()->where('name', 'Kasir')->firstOrFail();
+    expect($printer->roleList())->toBe(['ticket', 'receipt', 'bill'])
+        ->and(Printer::query()->forRole('bill')->pluck('id')->all())->toBe([$printer->id])
+        ->and(Printer::query()->forRole('ticket')->count())->toBe(1);
+
+    $old = Printer::create(['outlet_id' => $printer->outlet_id, 'name' => 'Lama', 'kind' => 'bill', 'paper_width' => 58, 'copies' => 1]);
+    expect($old->roleList())->toBe(['bill'])->and(Printer::query()->forRole('bill')->count())->toBe(2)->and(Printer::query()->forRole('receipt')->count())->toBe(1);
 });

@@ -10,6 +10,7 @@ import {
     Select,
 } from '@/components/pos/ui';
 import { StationChips } from '@/components/pos/station-chips';
+import { useFeatures } from '@/hooks/use-features';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -38,6 +39,7 @@ export default function UsersPage({
     face: boolean;
 }) {
     const errors = usePage().props.errors as Record<string, string>;
+    const features = useFeatures();
     const [form, setForm] = useState<{
         id?: number;
         name: string;
@@ -312,18 +314,20 @@ export default function UsersPage({
                             ))}
                         </Select>
                     </Field>
-                    <Field
-                        label="Station"
-                        hint="Station tempat orang ini bekerja. Bila Pengaturan > Stok per station aktif, ia hanya menghitung dan membelanjakan bahan station-nya."
-                    >
-                        <StationChips
-                            stations={stations}
-                            value={form.station_ids}
-                            onChange={(station_ids) =>
-                                setForm({ ...form, station_ids })
-                            }
-                        />
-                    </Field>
+                    {features.stockByStation && (
+                        <Field
+                            label="Station"
+                            hint="Station tempat orang ini bekerja. Bila Pengaturan > Stok per station aktif, ia hanya menghitung dan membelanjakan bahan station-nya."
+                        >
+                            <StationChips
+                                stations={stations}
+                                value={form.station_ids}
+                                onChange={(station_ids) =>
+                                    setForm({ ...form, station_ids })
+                                }
+                            />
+                        </Field>
+                    )}
                     {!form.id && (
                         <>
                             <Field label="Password (min 8)">

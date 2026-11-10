@@ -154,10 +154,13 @@ export function CategoriesTab({
     categories,
     stations,
     printers,
+    showStations,
 }: {
     categories: CategoryRow[];
     stations: Station[];
     printers: PrinterRow[];
+    /** Stations are shown only when the kitchen screen or per-station stock is on. */
+    showStations: boolean;
 }) {
     return (
         <div className="grid gap-4">
@@ -198,7 +201,7 @@ export function CategoriesTab({
                                 }
                             />
                         </div>
-                        {stations.length > 0 && (
+                        {showStations && stations.length > 0 && (
                             <div className="grid gap-1.5">
                                 <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
                                     Station

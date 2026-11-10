@@ -45,9 +45,9 @@ class PrintDispatcher
     public static function routing(int $outletId): array
     {
         return Cache::remember("print.routing.{$outletId}", 300, fn () => [
-            'receipt' => Printer::query()->where('outlet_id', $outletId)->where('is_active', true)->where('kind', 'receipt')->exists(),
-            'bill' => Printer::query()->where('outlet_id', $outletId)->where('is_active', true)->where('kind', 'bill')->exists(),
-            'ticket' => Printer::query()->where('outlet_id', $outletId)->where('is_active', true)->where('kind', 'ticket')->exists(),
+            'receipt' => Printer::query()->where('outlet_id', $outletId)->where('is_active', true)->forRole('receipt')->exists(),
+            'bill' => Printer::query()->where('outlet_id', $outletId)->where('is_active', true)->forRole('bill')->exists(),
+            'ticket' => Printer::query()->where('outlet_id', $outletId)->where('is_active', true)->forRole('ticket')->exists(),
         ]);
     }
 
@@ -200,7 +200,7 @@ class PrintDispatcher
     /** @return Collection<int, Printer> */
     private function printers(int $outletId, string $kind): Collection
     {
-        return Printer::query()->where('outlet_id', $outletId)->where('is_active', true)->where('kind', $kind)->get();
+        return Printer::query()->where('outlet_id', $outletId)->where('is_active', true)->forRole($kind)->get();
     }
 
     /**

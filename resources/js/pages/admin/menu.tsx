@@ -13,6 +13,8 @@ import {
     Tabs,
     TextArea,
 } from '@/components/pos/ui';
+import { FormSection } from '@/components/pos/form-section';
+import { useFeatures } from '@/hooks/use-features';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api, ApiError } from '@/lib/api';
@@ -117,6 +119,7 @@ export default function MenuPage({
     modifierGroups,
     canBundles,
 }: Props) {
+    const features = useFeatures();
     const [tab, setTab] = useState<
         'products' | 'categories' | 'modifiers' | 'stations'
     >('products');
@@ -239,7 +242,9 @@ export default function MenuPage({
                         { id: 'products', label: 'Produk' },
                         { id: 'categories', label: 'Kategori' },
                         { id: 'modifiers', label: 'Modifier' },
-                        { id: 'stations', label: 'Station' },
+                        ...(features.stations
+                            ? [{ id: 'stations' as const, label: 'Station' }]
+                            : []),
                     ]}
                 />
                 {Object.values(errors ?? {})[0] && (
@@ -433,9 +438,10 @@ export default function MenuPage({
                         categories={categories}
                         stations={stations}
                         printers={printers}
+                        showStations={features.stations}
                     />
                 )}
-                {tab === 'stations' && (
+                {tab === 'stations' && features.stations && (
                     <StationsTab stations={stations} categories={categories} />
                 )}
                 {tab === 'modifiers' && (
@@ -478,28 +484,513 @@ export default function MenuPage({
                             </Select>
                         </Field>
                         <Field
-                            label="Station"
-                            hint="Kosong = ikut station kategori (diatur di tab Kategori). Isi hanya bila menu ini tampil di layar dapur atau bar yang berbeda dari kategorinya."
+                            label="Harga dasar"
+                            hint="Boleh dikosongkan. Menu baru tanpa harga belum dijual: isi resepnya, lalu pakai harga yang disarankan di Resep & HPP."
                         >
-                            <Select
-                                value={draft.station_id}
+                            <MoneyInput
+                                value={draft.base_price}
+                                onChange={(v) =>
+                                    setDraft({ ...draft, base_price: v })
+                                }
+                            />
+                        </Field>
+                    </div>
+
+                    <Field label="Foto menu">
+                        <ImagePicker
+                            file={draft.image}
+                            current={
+                                products.find((p) => p.id === draft.id)?.image
+                            }
+                            recommend={{ w: 800, h: 800 }}
+                            previewClass="max-w-40"
+                            note="Disarankan persegi. Otomatis diubah ke WebP, sisi terpanjang maks 800 px."
+                            onChange={(image) => setDraft({ ...draft, image })}
+                        />
+                    </Field>
+
+                    <FormSection
+                        title="Pilihan menu"
+                        hint="Varian, modifier, dan paket"
+                        defaultOpen={
+                            draft.variants.length > 0 ||
+                            draft.modifier_group_ids.length > 0 ||
+                            draft.is_bundle
+                        }
+                    >
+                        {!draft.is_bundle && (
+                            <>
+                                <fieldset className="grid gap-2">
+                                    <legend className="text-sm font-medium">
+                                        Varian (mengganti harga dasar)
+                                    </legend>
+                                    {draft.variants.map((v, i) => (
+                                        <div key={i} className="flex gap-2">
+                                            <Input
+                                                className="h-11"
+                                                placeholder="Hot / Iced"
+                                                value={v.name}
+                                                onChange={(e) =>
+                                                    setDraft({
+                                                        ...draft,
+                                                        variants:
+                                                            draft.variants.map(
+                                                                (x, j) =>
+                                                                    j === i
+                                                                        ? {
+                                                                              ...x,
+                                                                              name: e
+                                                                                  .target
+                                                                                  .value,
+                                                                          }
+                                                                        : x,
+                                                            ),
+                                                    })
+                                                }
+                                            />
+                                            <MoneyInput
+                                                value={v.price}
+                                                onChange={(n) =>
+                                                    setDraft({
+                                                        ...draft,
+                                                        variants:
+                                                            draft.variants.map(
+                                                                (x, j) =>
+                                                                    j === i
+                                                                        ? {
+                                                                              ...x,
+                                                                              price:
+                                                                                  n ===
+                                                                                  ''
+                                                                                      ? 0
+                                                                                      : n,
+                                                                          }
+                                                                        : x,
+                                                            ),
+                                                    })
+                                                }
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="size-11"
+                                                aria-label="Hapus varian"
+                                                onClick={() =>
+                                                    setDraft({
+                                                        ...draft,
+                                                        variants:
+                                                            draft.variants.filter(
+                                                                (_, j) =>
+                                                                    j !== i,
+                                                            ),
+                                                    })
+                                                }
+                                            >
+                                                <Trash2 />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="h-10"
+                                        onClick={() =>
+                                            setDraft({
+                                                ...draft,
+                                                variants: [
+                                                    ...draft.variants,
+                                                    {
+                                                        name: '',
+                                                        price:
+                                                            draft.base_price ===
+                                                            ''
+                                                                ? 0
+                                                                : draft.base_price,
+                                                    },
+                                                ],
+                                            })
+                                        }
+                                    >
+                                        + Varian
+                                    </Button>
+                                </fieldset>
+
+                                <fieldset className="grid gap-2 sm:grid-cols-2">
+                                    <legend className="mb-2 text-sm font-medium">
+                                        Grup modifier
+                                    </legend>
+                                    {modifierGroups.map((g) => (
+                                        <label
+                                            key={g.id}
+                                            className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                className="size-5"
+                                                checked={draft.modifier_group_ids.includes(
+                                                    g.id,
+                                                )}
+                                                onChange={(e) =>
+                                                    setDraft({
+                                                        ...draft,
+                                                        modifier_group_ids: e
+                                                            .target.checked
+                                                            ? [
+                                                                  ...draft.modifier_group_ids,
+                                                                  g.id,
+                                                              ]
+                                                            : draft.modifier_group_ids.filter(
+                                                                  (x) =>
+                                                                      x !==
+                                                                      g.id,
+                                                              ),
+                                                    })
+                                                }
+                                            />
+                                            {g.name}
+                                        </label>
+                                    ))}
+                                </fieldset>
+                            </>
+                        )}
+                        {(canBundles || draft.is_bundle) && (
+                            <fieldset className="grid gap-2 rounded-xl border p-3">
+                                <legend className="px-1 text-sm font-medium">
+                                    Paket
+                                </legend>
+                                <label className="flex min-h-11 items-center gap-2 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        className="size-5"
+                                        disabled={!canBundles}
+                                        checked={draft.is_bundle}
+                                        onChange={(e) =>
+                                            setDraft({
+                                                ...draft,
+                                                is_bundle: e.target.checked,
+                                            })
+                                        }
+                                    />
+                                    Produk ini paket (isinya beberapa menu)
+                                </label>
+                                {draft.is_bundle && (
+                                    <>
+                                        <InfoNote>
+                                            Harga paket = harga dasar di atas.
+                                            Tiket dipecah per isi: tiap menu
+                                            tercetak di printer menu itu sendiri
+                                            (Bar, Dapur, dst). Paket sendiri
+                                            tidak punya varian atau modifier.
+                                            Menu yang punya varian: pilih varian
+                                            tetap, atau biarkan &quot;Pelanggan
+                                            memilih&quot;. Centang
+                                            &quot;Pelanggan memilih opsi&quot;
+                                            agar pelanggan menentukan opsi menu
+                                            itu (sambal, manis atau tidak); opsi
+                                            berbayar menambah harga paket.
+                                        </InfoNote>
+                                        {draft.components.map((c, i) => (
+                                            <div
+                                                key={i}
+                                                className="flex flex-wrap items-center gap-2"
+                                            >
+                                                <Select
+                                                    value={c.product_id}
+                                                    onChange={(e) =>
+                                                        setDraft({
+                                                            ...draft,
+                                                            components:
+                                                                draft.components.map(
+                                                                    (x, j) =>
+                                                                        j === i
+                                                                            ? {
+                                                                                  ...x,
+                                                                                  variant_id:
+                                                                                      null,
+                                                                                  product_id:
+                                                                                      e
+                                                                                          .target
+                                                                                          .value
+                                                                                          ? Number(
+                                                                                                e
+                                                                                                    .target
+                                                                                                    .value,
+                                                                                            )
+                                                                                          : '',
+                                                                              }
+                                                                            : x,
+                                                                ),
+                                                        })
+                                                    }
+                                                >
+                                                    <option value="">
+                                                        Pilih menu
+                                                    </option>
+                                                    {products
+                                                        .filter(
+                                                            (p) =>
+                                                                !p.is_bundle &&
+                                                                p.id !==
+                                                                    draft.id,
+                                                        )
+                                                        .map((p) => (
+                                                            <option
+                                                                key={p.id}
+                                                                value={p.id}
+                                                            >
+                                                                {p.name}
+                                                            </option>
+                                                        ))}
+                                                </Select>
+                                                {(products.find(
+                                                    (p) =>
+                                                        p.id === c.product_id,
+                                                )?.variants.length ?? 0) >
+                                                    0 && (
+                                                    <Select
+                                                        value={
+                                                            c.variant_id ?? ''
+                                                        }
+                                                        aria-label="Varian"
+                                                        onChange={(e) =>
+                                                            setDraft({
+                                                                ...draft,
+                                                                components:
+                                                                    draft.components.map(
+                                                                        (
+                                                                            x,
+                                                                            j,
+                                                                        ) =>
+                                                                            j ===
+                                                                            i
+                                                                                ? {
+                                                                                      ...x,
+                                                                                      variant_id:
+                                                                                          e
+                                                                                              .target
+                                                                                              .value
+                                                                                              ? Number(
+                                                                                                    e
+                                                                                                        .target
+                                                                                                        .value,
+                                                                                                )
+                                                                                              : null,
+                                                                                  }
+                                                                                : x,
+                                                                    ),
+                                                            })
+                                                        }
+                                                    >
+                                                        <option value="">
+                                                            Pelanggan memilih
+                                                        </option>
+                                                        {products
+                                                            .find(
+                                                                (p) =>
+                                                                    p.id ===
+                                                                    c.product_id,
+                                                            )
+                                                            ?.variants.map(
+                                                                (v) => (
+                                                                    <option
+                                                                        key={
+                                                                            v.id
+                                                                        }
+                                                                        value={
+                                                                            v.id
+                                                                        }
+                                                                    >
+                                                                        {v.name}
+                                                                    </option>
+                                                                ),
+                                                            )}
+                                                    </Select>
+                                                )}
+                                                <MoneyInput
+                                                    value={c.qty}
+                                                    onChange={(n) =>
+                                                        setDraft({
+                                                            ...draft,
+                                                            components:
+                                                                draft.components.map(
+                                                                    (x, j) =>
+                                                                        j === i
+                                                                            ? {
+                                                                                  ...x,
+                                                                                  qty:
+                                                                                      n ===
+                                                                                      ''
+                                                                                          ? 1
+                                                                                          : n,
+                                                                              }
+                                                                            : x,
+                                                                ),
+                                                        })
+                                                    }
+                                                />
+                                                {(products.find(
+                                                    (p) =>
+                                                        p.id === c.product_id,
+                                                )?.modifier_group_ids.length ??
+                                                    0) > 0 && (
+                                                    <label className="flex min-h-11 items-center gap-2 text-xs">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="size-5"
+                                                            checked={
+                                                                c.ask_modifiers
+                                                            }
+                                                            onChange={(e) =>
+                                                                setDraft({
+                                                                    ...draft,
+                                                                    components:
+                                                                        draft.components.map(
+                                                                            (
+                                                                                x,
+                                                                                j,
+                                                                            ) =>
+                                                                                j ===
+                                                                                i
+                                                                                    ? {
+                                                                                          ...x,
+                                                                                          ask_modifiers:
+                                                                                              e
+                                                                                                  .target
+                                                                                                  .checked,
+                                                                                      }
+                                                                                    : x,
+                                                                        ),
+                                                                })
+                                                            }
+                                                        />
+                                                        Pelanggan memilih opsi
+                                                    </label>
+                                                )}
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="size-11 shrink-0"
+                                                    aria-label="Hapus isi paket"
+                                                    onClick={() =>
+                                                        setDraft({
+                                                            ...draft,
+                                                            components:
+                                                                draft.components.filter(
+                                                                    (_, j) =>
+                                                                        j !== i,
+                                                                ),
+                                                        })
+                                                    }
+                                                >
+                                                    <Trash2 />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                        {errors?.components && (
+                                            <p className="text-sm text-destructive">
+                                                {errors.components}
+                                            </p>
+                                        )}
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="h-10"
+                                            onClick={() =>
+                                                setDraft({
+                                                    ...draft,
+                                                    components: [
+                                                        ...draft.components,
+                                                        {
+                                                            product_id: '',
+                                                            variant_id: null,
+                                                            ask_modifiers: false,
+                                                            qty: 1,
+                                                        },
+                                                    ],
+                                                })
+                                            }
+                                        >
+                                            + Isi paket
+                                        </Button>
+                                    </>
+                                )}
+                            </fieldset>
+                        )}
+                    </FormSection>
+                    <FormSection
+                        title="Pengaturan lanjutan"
+                        hint="Deskripsi, kode, stok porsi, dan lainnya"
+                        defaultOpen={
+                            !!draft.sku ||
+                            draft.stock_qty !== '' ||
+                            !!draft.description ||
+                            !!draft.station_id ||
+                            draft.printer_ids.length > 0
+                        }
+                    >
+                        <Field label="Deskripsi">
+                            <TextArea
+                                value={draft.description}
                                 onChange={(e) =>
                                     setDraft({
                                         ...draft,
-                                        station_id: e.target.value
-                                            ? Number(e.target.value)
-                                            : '',
+                                        description: e.target.value,
                                     })
                                 }
-                            >
-                                <option value="">—</option>
-                                {stations.map((s) => (
-                                    <option key={s.id} value={s.id}>
-                                        {s.name}
-                                    </option>
-                                ))}
-                            </Select>
+                            />
                         </Field>
+                        <div className="grid grid-cols-2 gap-3">
+                            <Field label="SKU / kode" error={errors?.sku}>
+                                <Input
+                                    className="h-11"
+                                    value={draft.sku}
+                                    onChange={(e) =>
+                                        setDraft({
+                                            ...draft,
+                                            sku: e.target.value,
+                                        })
+                                    }
+                                />
+                            </Field>
+                            <Field
+                                label="Stok porsi"
+                                hint="Kosong = tidak terbatas"
+                            >
+                                <MoneyInput
+                                    value={draft.stock_qty}
+                                    onChange={(v) =>
+                                        setDraft({ ...draft, stock_qty: v })
+                                    }
+                                />
+                            </Field>
+                        </div>
+                        {features.stations && (
+                            <Field
+                                label="Station"
+                                hint="Kosong = ikut station kategori (diatur di tab Kategori). Isi hanya bila menu ini tampil di layar dapur atau bar yang berbeda dari kategorinya."
+                            >
+                                <Select
+                                    value={draft.station_id}
+                                    onChange={(e) =>
+                                        setDraft({
+                                            ...draft,
+                                            station_id: e.target.value
+                                                ? Number(e.target.value)
+                                                : '',
+                                        })
+                                    }
+                                >
+                                    <option value="">—</option>
+                                    {stations.map((s) => (
+                                        <option key={s.id} value={s.id}>
+                                            {s.name}
+                                        </option>
+                                    ))}
+                                </Select>
+                            </Field>
+                        )}
                         {printers.length > 0 && (
                             <Field
                                 label="Printer khusus menu ini (opsional)"
@@ -540,447 +1031,7 @@ export default function MenuPage({
                                 </div>
                             </Field>
                         )}
-                        <Field
-                            label="Harga dasar"
-                            hint="Boleh dikosongkan. Menu baru tanpa harga belum dijual: isi resepnya, lalu pakai harga yang disarankan di Resep & HPP."
-                        >
-                            <MoneyInput
-                                value={draft.base_price}
-                                onChange={(v) =>
-                                    setDraft({ ...draft, base_price: v })
-                                }
-                            />
-                        </Field>
-                        <Field label="SKU / kode" error={errors?.sku}>
-                            <Input
-                                className="h-11"
-                                value={draft.sku}
-                                onChange={(e) =>
-                                    setDraft({ ...draft, sku: e.target.value })
-                                }
-                            />
-                        </Field>
-                        <Field
-                            label="Stok porsi"
-                            hint="Kosong = tidak terbatas"
-                        >
-                            <MoneyInput
-                                value={draft.stock_qty}
-                                onChange={(v) =>
-                                    setDraft({ ...draft, stock_qty: v })
-                                }
-                            />
-                        </Field>
-                        <div className="col-span-2">
-                            <Field label="Foto menu">
-                                <ImagePicker
-                                    file={draft.image}
-                                    current={
-                                        products.find((p) => p.id === draft.id)
-                                            ?.image
-                                    }
-                                    recommend={{ w: 800, h: 800 }}
-                                    previewClass="max-w-40"
-                                    note="Disarankan persegi. Otomatis diubah ke WebP, sisi terpanjang maks 800 px."
-                                    onChange={(image) =>
-                                        setDraft({ ...draft, image })
-                                    }
-                                />
-                            </Field>
-                        </div>
-                    </div>
-                    <Field label="Deskripsi">
-                        <TextArea
-                            value={draft.description}
-                            onChange={(e) =>
-                                setDraft({
-                                    ...draft,
-                                    description: e.target.value,
-                                })
-                            }
-                        />
-                    </Field>
-
-                    {(canBundles || draft.is_bundle) && (
-                        <fieldset className="grid gap-2 rounded-xl border p-3">
-                            <legend className="px-1 text-sm font-medium">
-                                Paket
-                            </legend>
-                            <label className="flex min-h-11 items-center gap-2 text-sm">
-                                <input
-                                    type="checkbox"
-                                    className="size-5"
-                                    disabled={!canBundles}
-                                    checked={draft.is_bundle}
-                                    onChange={(e) =>
-                                        setDraft({
-                                            ...draft,
-                                            is_bundle: e.target.checked,
-                                        })
-                                    }
-                                />
-                                Produk ini paket (isinya beberapa menu)
-                            </label>
-                            {draft.is_bundle && (
-                                <>
-                                    <InfoNote>
-                                        Harga paket = harga dasar di atas. Tiket
-                                        dipecah per isi: tiap menu tercetak di
-                                        printer menu itu sendiri (Bar, Dapur,
-                                        dst). Paket sendiri tidak punya varian
-                                        atau modifier. Menu yang punya varian:
-                                        pilih varian tetap, atau biarkan
-                                        &quot;Pelanggan memilih&quot;. Centang
-                                        &quot;Pelanggan memilih opsi&quot; agar
-                                        pelanggan menentukan opsi menu itu
-                                        (sambal, manis atau tidak); opsi
-                                        berbayar menambah harga paket.
-                                    </InfoNote>
-                                    {draft.components.map((c, i) => (
-                                        <div
-                                            key={i}
-                                            className="flex flex-wrap items-center gap-2"
-                                        >
-                                            <Select
-                                                value={c.product_id}
-                                                onChange={(e) =>
-                                                    setDraft({
-                                                        ...draft,
-                                                        components:
-                                                            draft.components.map(
-                                                                (x, j) =>
-                                                                    j === i
-                                                                        ? {
-                                                                              ...x,
-                                                                              variant_id:
-                                                                                  null,
-                                                                              product_id:
-                                                                                  e
-                                                                                      .target
-                                                                                      .value
-                                                                                      ? Number(
-                                                                                            e
-                                                                                                .target
-                                                                                                .value,
-                                                                                        )
-                                                                                      : '',
-                                                                          }
-                                                                        : x,
-                                                            ),
-                                                    })
-                                                }
-                                            >
-                                                <option value="">
-                                                    Pilih menu
-                                                </option>
-                                                {products
-                                                    .filter(
-                                                        (p) =>
-                                                            !p.is_bundle &&
-                                                            p.id !== draft.id,
-                                                    )
-                                                    .map((p) => (
-                                                        <option
-                                                            key={p.id}
-                                                            value={p.id}
-                                                        >
-                                                            {p.name}
-                                                        </option>
-                                                    ))}
-                                            </Select>
-                                            {(products.find(
-                                                (p) => p.id === c.product_id,
-                                            )?.variants.length ?? 0) > 0 && (
-                                                <Select
-                                                    value={c.variant_id ?? ''}
-                                                    aria-label="Varian"
-                                                    onChange={(e) =>
-                                                        setDraft({
-                                                            ...draft,
-                                                            components:
-                                                                draft.components.map(
-                                                                    (x, j) =>
-                                                                        j === i
-                                                                            ? {
-                                                                                  ...x,
-                                                                                  variant_id:
-                                                                                      e
-                                                                                          .target
-                                                                                          .value
-                                                                                          ? Number(
-                                                                                                e
-                                                                                                    .target
-                                                                                                    .value,
-                                                                                            )
-                                                                                          : null,
-                                                                              }
-                                                                            : x,
-                                                                ),
-                                                        })
-                                                    }
-                                                >
-                                                    <option value="">
-                                                        Pelanggan memilih
-                                                    </option>
-                                                    {products
-                                                        .find(
-                                                            (p) =>
-                                                                p.id ===
-                                                                c.product_id,
-                                                        )
-                                                        ?.variants.map((v) => (
-                                                            <option
-                                                                key={v.id}
-                                                                value={v.id}
-                                                            >
-                                                                {v.name}
-                                                            </option>
-                                                        ))}
-                                                </Select>
-                                            )}
-                                            <MoneyInput
-                                                value={c.qty}
-                                                onChange={(n) =>
-                                                    setDraft({
-                                                        ...draft,
-                                                        components:
-                                                            draft.components.map(
-                                                                (x, j) =>
-                                                                    j === i
-                                                                        ? {
-                                                                              ...x,
-                                                                              qty:
-                                                                                  n ===
-                                                                                  ''
-                                                                                      ? 1
-                                                                                      : n,
-                                                                          }
-                                                                        : x,
-                                                            ),
-                                                    })
-                                                }
-                                            />
-                                            {(products.find(
-                                                (p) => p.id === c.product_id,
-                                            )?.modifier_group_ids.length ?? 0) >
-                                                0 && (
-                                                <label className="flex min-h-11 items-center gap-2 text-xs">
-                                                    <input
-                                                        type="checkbox"
-                                                        className="size-5"
-                                                        checked={
-                                                            c.ask_modifiers
-                                                        }
-                                                        onChange={(e) =>
-                                                            setDraft({
-                                                                ...draft,
-                                                                components:
-                                                                    draft.components.map(
-                                                                        (
-                                                                            x,
-                                                                            j,
-                                                                        ) =>
-                                                                            j ===
-                                                                            i
-                                                                                ? {
-                                                                                      ...x,
-                                                                                      ask_modifiers:
-                                                                                          e
-                                                                                              .target
-                                                                                              .checked,
-                                                                                  }
-                                                                                : x,
-                                                                    ),
-                                                            })
-                                                        }
-                                                    />
-                                                    Pelanggan memilih opsi
-                                                </label>
-                                            )}
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="size-11 shrink-0"
-                                                aria-label="Hapus isi paket"
-                                                onClick={() =>
-                                                    setDraft({
-                                                        ...draft,
-                                                        components:
-                                                            draft.components.filter(
-                                                                (_, j) =>
-                                                                    j !== i,
-                                                            ),
-                                                    })
-                                                }
-                                            >
-                                                <Trash2 />
-                                            </Button>
-                                        </div>
-                                    ))}
-                                    {errors?.components && (
-                                        <p className="text-sm text-destructive">
-                                            {errors.components}
-                                        </p>
-                                    )}
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        className="h-10"
-                                        onClick={() =>
-                                            setDraft({
-                                                ...draft,
-                                                components: [
-                                                    ...draft.components,
-                                                    {
-                                                        product_id: '',
-                                                        variant_id: null,
-                                                        ask_modifiers: false,
-                                                        qty: 1,
-                                                    },
-                                                ],
-                                            })
-                                        }
-                                    >
-                                        + Isi paket
-                                    </Button>
-                                </>
-                            )}
-                        </fieldset>
-                    )}
-
-                    {!draft.is_bundle && (
-                        <>
-                            <fieldset className="grid gap-2">
-                                <legend className="text-sm font-medium">
-                                    Varian (mengganti harga dasar)
-                                </legend>
-                                {draft.variants.map((v, i) => (
-                                    <div key={i} className="flex gap-2">
-                                        <Input
-                                            className="h-11"
-                                            placeholder="Hot / Iced"
-                                            value={v.name}
-                                            onChange={(e) =>
-                                                setDraft({
-                                                    ...draft,
-                                                    variants:
-                                                        draft.variants.map(
-                                                            (x, j) =>
-                                                                j === i
-                                                                    ? {
-                                                                          ...x,
-                                                                          name: e
-                                                                              .target
-                                                                              .value,
-                                                                      }
-                                                                    : x,
-                                                        ),
-                                                })
-                                            }
-                                        />
-                                        <MoneyInput
-                                            value={v.price}
-                                            onChange={(n) =>
-                                                setDraft({
-                                                    ...draft,
-                                                    variants:
-                                                        draft.variants.map(
-                                                            (x, j) =>
-                                                                j === i
-                                                                    ? {
-                                                                          ...x,
-                                                                          price:
-                                                                              n ===
-                                                                              ''
-                                                                                  ? 0
-                                                                                  : n,
-                                                                      }
-                                                                    : x,
-                                                        ),
-                                                })
-                                            }
-                                        />
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="size-11"
-                                            aria-label="Hapus varian"
-                                            onClick={() =>
-                                                setDraft({
-                                                    ...draft,
-                                                    variants:
-                                                        draft.variants.filter(
-                                                            (_, j) => j !== i,
-                                                        ),
-                                                })
-                                            }
-                                        >
-                                            <Trash2 />
-                                        </Button>
-                                    </div>
-                                ))}
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="h-10"
-                                    onClick={() =>
-                                        setDraft({
-                                            ...draft,
-                                            variants: [
-                                                ...draft.variants,
-                                                {
-                                                    name: '',
-                                                    price:
-                                                        draft.base_price === ''
-                                                            ? 0
-                                                            : draft.base_price,
-                                                },
-                                            ],
-                                        })
-                                    }
-                                >
-                                    + Varian
-                                </Button>
-                            </fieldset>
-
-                            <fieldset className="grid gap-2 sm:grid-cols-2">
-                                <legend className="mb-2 text-sm font-medium">
-                                    Grup modifier
-                                </legend>
-                                {modifierGroups.map((g) => (
-                                    <label
-                                        key={g.id}
-                                        className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm"
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            className="size-5"
-                                            checked={draft.modifier_group_ids.includes(
-                                                g.id,
-                                            )}
-                                            onChange={(e) =>
-                                                setDraft({
-                                                    ...draft,
-                                                    modifier_group_ids: e.target
-                                                        .checked
-                                                        ? [
-                                                              ...draft.modifier_group_ids,
-                                                              g.id,
-                                                          ]
-                                                        : draft.modifier_group_ids.filter(
-                                                              (x) => x !== g.id,
-                                                          ),
-                                                })
-                                            }
-                                        />
-                                        {g.name}
-                                    </label>
-                                ))}
-                            </fieldset>
-                        </>
-                    )}
+                    </FormSection>
                     <label className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm">
                         <input
                             type="checkbox"

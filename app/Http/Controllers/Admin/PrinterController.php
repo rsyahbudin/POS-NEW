@@ -26,7 +26,7 @@ class PrinterController extends Controller
     {
         return Inertia::render('admin/printers', [
             'printers' => Printer::query()->where('outlet_id', $this->outlet->id())->orderBy('id')->get()->map(fn (Printer $p) => [
-                'id' => $p->id, 'name' => $p->name, 'kind' => $p->kind, 'station_id' => $p->station_id,
+                'id' => $p->id, 'name' => $p->name, 'roles' => $p->roleList(), 'station_id' => $p->station_id,
                 'paper_width' => $p->paper_width, 'copies' => $p->copies, 'is_active' => $p->is_active, 'host' => $p->host, 'port' => $p->port,
             ])->all(),
             'stations' => Station::query()->where('outlet_id', $this->outlet->id())->orderBy('sort')->get(['id', 'name'])->all(),
@@ -44,7 +44,7 @@ class PrinterController extends Controller
     {
         $printer = Printer::create($this->data($request) + ['outlet_id' => $this->outlet->id()]);
         PrintDispatcher::forgetRouting($this->outlet->id());
-        Audit::log('printer.created', $printer, ['name' => $printer->name, 'kind' => $printer->kind]);
+        Audit::log('printer.created', $printer, ['name' => $printer->name, 'roles' => $printer->roleList()]);
 
         return back()->with('success', 'Printer ditambahkan.');
     }
@@ -54,7 +54,7 @@ class PrinterController extends Controller
         abort_unless($printer->outlet_id === $this->outlet->id(), 404);
         $printer->update($this->data($request));
         PrintDispatcher::forgetRouting($this->outlet->id());
-        Audit::log('printer.updated', $printer, ['name' => $printer->name, 'kind' => $printer->kind]);
+        Audit::log('printer.updated', $printer, ['name' => $printer->name, 'roles' => $printer->roleList()]);
 
         return back()->with('success', 'Printer disimpan.');
     }
@@ -92,7 +92,8 @@ class PrinterController extends Controller
     {
         $data = $request->validate([
             'name' => 'required|string|max:60',
-            'kind' => ['required', Rule::in(array_keys(Printer::KINDS))],
+            'roles' => ['required', 'array', 'min:1'],
+            'roles.*' => [Rule::in(array_keys(Printer::KINDS))],
             'station_id' => ['nullable', 'integer', Rule::exists('stations', 'id')->where('outlet_id', $this->outlet->id())],
             'paper_width' => ['required', Rule::in([58, 80])],
             'copies' => 'required|integer|min:1|max:5',
@@ -100,7 +101,11 @@ class PrinterController extends Controller
             'port' => 'nullable|integer|min:1|max:65535',
             'is_active' => 'boolean',
         ]);
-        $data['station_id'] = $data['kind'] === 'ticket' ? ($data['station_id'] ?? null) : null;
+        // the kind column keeps the main role for older code; tickets win over bills over receipts
+        $roles = array_values(array_intersect(['ticket', 'receipt', 'bill'], $data['roles']));
+        $data['roles'] = $roles;
+        $data['kind'] = $roles[0];
+        $data['station_id'] = in_array('ticket', $roles, true) ? ($data['station_id'] ?? null) : null;
         $data['host'] = ($data['host'] ?? '') === '' ? null : $data['host'];
         $data['port'] = (int) ($data['port'] ?? 9100);
         $data['is_active'] = (bool) ($data['is_active'] ?? true);

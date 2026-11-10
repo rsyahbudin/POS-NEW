@@ -381,7 +381,7 @@ it('reprints a receipt to the printer as a COPY and manages printers from the ad
     expect(PrintJob::query()->first()->payload['copy'])->toBeTrue();
 
     $owner = userWithRole('owner');
-    $this->actingAs($owner)->post('/admin/printers', ['name' => 'Bar', 'kind' => 'ticket', 'station_id' => Station::query()->value('id'), 'paper_width' => 58, 'copies' => 1])->assertSessionHasNoErrors();
+    $this->actingAs($owner)->post('/admin/printers', ['name' => 'Bar', 'roles' => ['ticket'], 'station_id' => Station::query()->value('id'), 'paper_width' => 58, 'copies' => 1])->assertSessionHasNoErrors();
     $this->actingAs($owner)->get('/admin/printers')->assertInertia(fn ($p) => $p->has('printers', 2));
     $this->actingAs($cashier)->get('/admin/printers')->assertForbidden();
     $this->actingAs($owner)->delete('/admin/printers/'.$receipt->id)->assertSessionHasNoErrors();

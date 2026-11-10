@@ -13,11 +13,12 @@ import { api } from '@/lib/api';
 import { dateId, timeId } from '@/lib/format';
 import { Input } from '@/components/ui/input';
 import { InfoNote } from '@/components/pos/info-tip';
+import { useFeatures } from '@/hooks/use-features';
 
 type PrinterRow = {
     id: number;
     name: string;
-    kind: string;
+    roles: string[];
     station_id: number | null;
     paper_width: number;
     copies: number;
@@ -43,7 +44,7 @@ type Form = Omit<PrinterRow, 'id'> & { id?: number };
 
 const empty: Form = {
     name: '',
-    kind: 'receipt',
+    roles: ['receipt'],
     station_id: null,
     paper_width: 58,
     copies: 1,
@@ -65,6 +66,7 @@ export default function PrintersPage({
     bridge: Bridge;
     failed: Failed[];
 }) {
+    const features = useFeatures();
     const [token, setToken] = useState<string | null>(null);
     const [form, setForm] = useState<Form | null>(null);
     const label = (k: string) => kinds.find((x) => x.key === k)?.label ?? k;
@@ -165,23 +167,28 @@ export default function PrintersPage({
                     headers={[
                         'Printer',
                         'Mencetak',
-                        'Station',
+                        ...(features.stations ? ['Station'] : []),
                         'Koneksi',
                         'Kertas',
                         'Salinan',
                         'Status',
                         'Aksi',
                     ]}
-                    numeric={[5]}
+                    numeric={[features.stations ? 5 : 4]}
                     empty="Belum ada printer."
                     rows={printers.map((p) => [
                         <span key={p.id} className="font-medium">
                             {p.name}
                         </span>,
-                        label(p.kind),
-                        p.kind === 'ticket'
-                            ? stationName(p.station_id) || 'Semua station'
-                            : '-',
+                        p.roles.map(label).join(', '),
+                        ...(features.stations
+                            ? [
+                                  p.roles.includes('ticket')
+                                      ? stationName(p.station_id) ||
+                                        'Semua station'
+                                      : '-',
+                              ]
+                            : []),
                         p.host ? `LAN ${p.host}:${p.port}` : 'Perangkat',
                         `${p.paper_width} mm`,
                         `${p.copies}×`,
@@ -354,21 +361,37 @@ export default function PrintersPage({
                             }
                         />
                     </Field>
-                    <Field label="Mencetak">
-                        <Select
-                            value={form.kind}
-                            onChange={(e) =>
-                                setForm({ ...form, kind: e.target.value })
-                            }
-                        >
+                    <Field
+                        label="Mencetak apa"
+                        hint="Satu printer boleh mencetak beberapa hal. Centang semua yang dicetak printer ini."
+                    >
+                        <div className="grid gap-2">
                             {kinds.map((k) => (
-                                <option key={k.key} value={k.key}>
+                                <label
+                                    key={k.key}
+                                    className="flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        className="size-5"
+                                        checked={form.roles.includes(k.key)}
+                                        onChange={(e) =>
+                                            setForm({
+                                                ...form,
+                                                roles: e.target.checked
+                                                    ? [...form.roles, k.key]
+                                                    : form.roles.filter(
+                                                          (x) => x !== k.key,
+                                                      ),
+                                            })
+                                        }
+                                    />
                                     {k.label}
-                                </option>
+                                </label>
                             ))}
-                        </Select>
+                        </div>
                     </Field>
-                    {form.kind === 'ticket' && (
+                    {features.stations && form.roles.includes('ticket') && (
                         <Field
                             label="Station"
                             hint="Printer ini hanya mencetak pesanan dari station yang dipilih (mis. Bar atau Dapur)."
@@ -480,7 +503,9 @@ export default function PrintersPage({
                     </label>
                     <Button
                         className="h-12"
-                        disabled={form.name.trim() === ''}
+                        disabled={
+                            form.name.trim() === '' || form.roles.length === 0
+                        }
                         onClick={save}
                     >
                         Simpan

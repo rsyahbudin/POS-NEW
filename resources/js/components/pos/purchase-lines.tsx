@@ -1,4 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { NewIngredientDialog } from '@/components/pos/new-ingredient';
 import { Combobox, MoneyInput, Select } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,11 +50,20 @@ export function PurchaseLines({
     ingredients,
     lines,
     onChange,
+    canCreate = false,
+    onCreated,
 }: {
     ingredients: PIngredient[];
     lines: PLine[];
     onChange: (lines: PLine[]) => void;
+    /** Whoever may add ingredients can do it from the list while typing a purchase. */
+    canCreate?: boolean;
+    onCreated?: (ingredient: PIngredient) => void;
 }) {
+    const [creating, setCreating] = useState<{
+        idx: number;
+        name: string;
+    } | null>(null);
     const find = (id: number | '') => ingredients.find((i) => i.id === id);
     const patch = (idx: number, p: Partial<PLine>) =>
         onChange(lines.map((l, i) => (i === idx ? { ...l, ...p } : l)));
@@ -91,6 +102,12 @@ export function PurchaseLines({
                         <Combobox
                             aria-label={`Bahan ${idx + 1}`}
                             placeholder="Cari bahan…"
+                            onCreate={
+                                canCreate
+                                    ? (name) => setCreating({ idx, name })
+                                    : undefined
+                            }
+                            createLabel="Buat bahan baru"
                             options={ingredients.map((i) => ({
                                 value: i.id,
                                 label: i.name,
@@ -220,6 +237,16 @@ export function PurchaseLines({
                                         <Combobox
                                             aria-label="Bahan"
                                             placeholder="Cari bahan…"
+                                            onCreate={
+                                                canCreate
+                                                    ? (name) =>
+                                                          setCreating({
+                                                              idx,
+                                                              name,
+                                                          })
+                                                    : undefined
+                                            }
+                                            createLabel="Buat bahan baru"
                                             options={ingredients.map((i) => ({
                                                 value: i.id,
                                                 label: i.name,
@@ -349,6 +376,26 @@ export function PurchaseLines({
                     </tfoot>
                 </table>
             </div>
+            {creating && (
+                <NewIngredientDialog
+                    name={creating.name}
+                    onClose={() => setCreating(null)}
+                    onCreated={(i) => {
+                        onCreated?.(i);
+                        onChange(
+                            lines.map((l, k) =>
+                                k === creating.idx
+                                    ? {
+                                          ...l,
+                                          ingredient_id: i.id,
+                                          unit: i.unit,
+                                      }
+                                    : l,
+                            ),
+                        );
+                    }}
+                />
+            )}
         </>
     );
 }

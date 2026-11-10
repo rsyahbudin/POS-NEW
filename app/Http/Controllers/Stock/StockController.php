@@ -88,6 +88,7 @@ class StockController extends Controller
             'suppliers' => Supplier::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('name')->get(['id', 'name'])->all(),
             'needsApproval' => ! $user->can('manage-inventory') && (bool) $this->settings->get('inventory.purchase_needs_approval', true),
             'share' => $this->share($request),
+            'canCreateIngredient' => $user->can('manage-inventory'),
             'ingredients' => $this->ingredients($request)->orderBy('name')->get()->map(fn (Ingredient $i) => [
                 'id' => $i->id, 'name' => $i->name, 'unit' => $i->unit, 'choices' => Units::choices($i),
             ])->all(),

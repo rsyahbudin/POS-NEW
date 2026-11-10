@@ -308,6 +308,7 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::middleware('permission:manage-inventory')->group(function () {
             Route::get('inventory', [InventoryController::class, 'index'])->name('inventory');
             Route::post('inventory/ingredients', [InventoryController::class, 'storeIngredient'])->name('inventory.ingredients.store');
+            Route::post('inventory/ingredients/quick', [InventoryController::class, 'quickIngredient'])->name('inventory.ingredients.quick');
             Route::put('inventory/ingredients/{ingredient}', [InventoryController::class, 'updateIngredient'])->name('inventory.ingredients.update');
             Route::post('inventory/ingredients/{ingredient}/count', [InventoryController::class, 'count'])->name('inventory.count');
             Route::post('inventory/ingredients/{ingredient}/waste', [InventoryController::class, 'waste'])->name('inventory.waste');

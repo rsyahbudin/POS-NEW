@@ -3,6 +3,7 @@ import { FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { ImportDialog } from '@/components/pos/import-dialog';
 import { Modal } from '@/components/pos/modal';
+import { NewIngredientDialog } from '@/components/pos/new-ingredient';
 import {
     Combobox,
     PageHeader,
@@ -55,6 +56,10 @@ export default function RecipesPage({
     const [tab, setTab] = useState<'menu' | 'modifier'>('menu');
     const [q, setQ] = useState('');
     const [importing, setImporting] = useState(false);
+    const [creating, setCreating] = useState<{
+        idx: number;
+        name: string;
+    } | null>(null);
     const [edit, setEdit] = useState<{
         kind: 'product' | 'modifier';
         id: number;
@@ -272,6 +277,23 @@ export default function RecipesPage({
                 />
             )}
 
+            {creating && edit && (
+                <NewIngredientDialog
+                    name={creating.name}
+                    onClose={() => setCreating(null)}
+                    onCreated={(i) => {
+                        router.reload({ only: ['ingredients'] });
+                        setEdit({
+                            ...edit,
+                            lines: edit.lines.map((x, j) =>
+                                j === creating.idx
+                                    ? { ...x, ingredient_id: i.id }
+                                    : x,
+                            ),
+                        });
+                    }}
+                />
+            )}
             {edit && (
                 <Modal
                     open
@@ -334,6 +356,8 @@ export default function RecipesPage({
                             <Combobox
                                 aria-label="Bahan"
                                 placeholder="Cari bahan…"
+                                onCreate={(name) => setCreating({ idx, name })}
+                                createLabel="Buat bahan baru"
                                 options={ingredients.map((i) => ({
                                     value: i.id,
                                     label: i.name,

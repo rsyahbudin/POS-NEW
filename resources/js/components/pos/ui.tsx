@@ -4,6 +4,7 @@ import {
     ArrowUpDown,
     Check,
     ChevronDown,
+    Plus,
     Search,
 } from 'lucide-react';
 import {
@@ -64,6 +65,8 @@ export function Combobox({
     emptyText = 'Tidak ada yang cocok.',
     disabled,
     className,
+    onCreate,
+    createLabel = 'Buat baru',
     'aria-label': ariaLabel,
 }: {
     options: ComboOption[];
@@ -73,6 +76,9 @@ export function Combobox({
     emptyText?: string;
     disabled?: boolean;
     className?: string;
+    /** When given, the list ends with an entry that creates something new from what was typed. */
+    onCreate?: (query: string) => void;
+    createLabel?: string;
     'aria-label'?: string;
 }) {
     const id = useId();
@@ -267,6 +273,24 @@ export function Combobox({
                         {shown.length === 0 && (
                             <li className="px-2.5 py-2 text-muted-foreground">
                                 {emptyText}
+                            </li>
+                        )}
+                        {onCreate && (
+                            <li
+                                role="option"
+                                aria-selected={false}
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    const q = query.trim();
+                                    close();
+                                    input.current?.blur();
+                                    onCreate(q);
+                                }}
+                                className="mt-1 flex cursor-pointer items-center gap-2 rounded-md border-t px-2.5 py-2.5 font-medium text-primary hover:bg-accent"
+                            >
+                                <Plus className="size-4" />
+                                {createLabel}
+                                {query.trim() && ` “${query.trim()}”`}
                             </li>
                         )}
                         {shown.length > LIMIT && (

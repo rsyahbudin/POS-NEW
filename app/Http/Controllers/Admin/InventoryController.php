@@ -21,6 +21,7 @@ use App\Domain\Settings\SettingsRepository;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Audit;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -79,6 +80,21 @@ class InventoryController extends Controller
 
     public function storeIngredient(Request $request): RedirectResponse
     {
+        $this->createIngredient($request);
+
+        return back()->with('success', 'Bahan ditambahkan.');
+    }
+
+    /** The same, answering with the new ingredient so a purchase or recipe form can use it at once. */
+    public function quickIngredient(Request $request): JsonResponse
+    {
+        $i = $this->createIngredient($request)->load('packs');
+
+        return response()->json(['ingredient' => ['id' => $i->id, 'name' => $i->name, 'unit' => $i->unit, 'choices' => Units::choices($i)]], 201);
+    }
+
+    private function createIngredient(Request $request): Ingredient
+    {
         $outletId = $this->outlet->id();
         $data = $request->validate([
             'name' => ['required', 'string', 'max:80', Rule::unique('ingredients', 'name')->where('outlet_id', $outletId)],
@@ -99,7 +115,7 @@ class InventoryController extends Controller
         }
         Audit::log('ingredient.created', $ingredient, ['name' => $ingredient->name]);
 
-        return back()->with('success', 'Bahan ditambahkan.');
+        return $ingredient;
     }
 
     public function updateIngredient(Request $request, Ingredient $ingredient): RedirectResponse

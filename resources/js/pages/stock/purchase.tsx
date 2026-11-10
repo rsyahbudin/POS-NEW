@@ -49,11 +49,13 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 export default function PurchasePage({
     needsApproval,
     ingredients,
+    canCreateIngredient,
     history,
     suppliers,
 }: {
     needsApproval: boolean;
     ingredients: PIngredient[];
+    canCreateIngredient: boolean;
     history: History[];
     suppliers: { id: number; name: string }[];
 }) {
@@ -62,6 +64,12 @@ export default function PurchasePage({
     const [supplier, setSupplier] = useState<number | ''>('');
     const [lines, setLines] = useState<PLine[]>([blankLine()]);
     const [importing, setImporting] = useState(false);
+    // ingredients added from the list while typing this purchase
+    const [added, setAdded] = useState<PIngredient[]>([]);
+    const all = [
+        ...ingredients,
+        ...added.filter((a) => !ingredients.some((i) => i.id === a.id)),
+    ];
     const ready = readyLines(lines);
     const submit = () =>
         router.post(
@@ -143,9 +151,11 @@ export default function PurchasePage({
                 </div>
 
                 <PurchaseLines
-                    ingredients={ingredients}
+                    ingredients={all}
                     lines={lines}
                     onChange={setLines}
+                    canCreate={canCreateIngredient}
+                    onCreated={(i) => setAdded((a) => [...a, i])}
                 />
                 <div>
                     <Button

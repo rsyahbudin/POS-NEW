@@ -18,6 +18,7 @@ import {
     Stat,
     Tabs,
 } from '@/components/pos/ui';
+import { NewIngredientDialog } from '@/components/pos/new-ingredient';
 import { StationChips } from '@/components/pos/station-chips';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -127,6 +128,7 @@ export default function InventoryPage({
     });
     const pendingCounts = counts.filter((c) => c.status === 'submitted').length;
     const [importing, setImporting] = useState<string | null>(null);
+    const [adding, setAdding] = useState(false);
     const [edit, setEdit] = useState<{
         id?: number;
         name: string;
@@ -272,18 +274,7 @@ export default function InventoryPage({
                             <Button
                                 variant="outline"
                                 className="h-11"
-                                onClick={() =>
-                                    setEdit({
-                                        name: '',
-                                        unit: 'g',
-                                        min_stock: '',
-                                        stock: '',
-                                        unit_cost: '',
-                                        is_active: true,
-                                        packs: [],
-                                        station_ids: [],
-                                    })
-                                }
+                                onClick={() => setAdding(true)}
                             >
                                 <Plus /> Tambah bahan
                             </Button>
@@ -597,6 +588,12 @@ export default function InventoryPage({
                 />
             )}
 
+            {adding && (
+                <NewIngredientDialog
+                    onClose={() => setAdding(false)}
+                    onCreated={() => router.reload({ only: ['ingredients'] })}
+                />
+            )}
             {edit && (
                 <Modal
                     open
@@ -1061,6 +1058,10 @@ export default function InventoryPage({
                         ingredients={ingredients.filter((i) => i.is_active)}
                         lines={buy.items}
                         onChange={(items) => setBuy({ ...buy, items })}
+                        canCreate
+                        onCreated={() =>
+                            router.reload({ only: ['ingredients'] })
+                        }
                     />
                     <Button
                         className="h-12"

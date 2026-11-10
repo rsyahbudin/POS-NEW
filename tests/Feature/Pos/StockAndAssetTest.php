@@ -217,3 +217,19 @@ it('lets shopping staff import a purchase list but not create ingredients throug
     expect($purchase->status)->toBe('pending')->and($purchase->total)->toBe(15000)->and(Ingredient::query()->where('name', 'Teh')->exists())->toBeFalse();
     $this->actingAs(userWithRole('waiter'))->get('/import/purchase/template')->assertForbidden();
 });
+
+it('adds an ingredient from a purchase or recipe form and hands it straight back, for managers only', function () {
+    $manager = userWithRole('manager');
+    $body = ['name' => 'Ayam', 'unit' => 'g', 'stock' => 1400, 'unit_cost' => 50, 'packs' => [['name' => 'ekor', 'factor' => 700]]];
+
+    $res = $this->actingAs($manager)->postJson('/admin/inventory/ingredients/quick', $body)->assertCreated();
+    expect($res->json('ingredient.name'))->toBe('Ayam')->and($res->json('ingredient.unit'))->toBe('g')
+        ->and(collect($res->json('ingredient.choices'))->pluck('name')->all())->toContain('ekor');
+    $ayam = Ingredient::query()->where('name', 'Ayam')->firstOrFail();
+    expect($ayam->stock)->toBe(1400.0)->and($ayam->avg_cost)->toBe(50.0);
+
+    $this->actingAs($manager)->postJson('/admin/inventory/ingredients/quick', $body)->assertStatus(422);        // the name is taken
+    $this->actingAs(userWithRole('cashier'))->postJson('/admin/inventory/ingredients/quick', ['name' => 'Gula', 'unit' => 'g'])->assertForbidden();
+
+    $this->actingAs($manager)->get('/stock/purchase')->assertInertia(fn ($p) => $p->where('canCreateIngredient', true));
+});

@@ -260,7 +260,7 @@ export default function StockCount({
                                         </button>
                                     </th>
                                 )}
-                                <th className="w-44 px-3 py-2 font-medium">
+                                <th className="w-48 px-3 py-2 font-medium sm:w-56">
                                     <button
                                         type="button"
                                         className="inline-flex items-center gap-1 hover:text-primary"
@@ -280,7 +280,7 @@ export default function StockCount({
                                         values[i.id] ? 'bg-primary/5' : '',
                                     )}
                                 >
-                                    <td className="px-3 py-2 font-medium">
+                                    <td className="px-3 py-2 font-medium break-words">
                                         {i.name}
                                     </td>
                                     {!blind && (
@@ -293,7 +293,7 @@ export default function StockCount({
                                     <td className="p-2">
                                         <div className="flex items-center gap-2">
                                             <Input
-                                                className="h-11 text-right text-base"
+                                                className="h-11 min-w-0 flex-1 px-2 text-right text-base"
                                                 inputMode="decimal"
                                                 type="number"
                                                 min={0}
@@ -309,31 +309,34 @@ export default function StockCount({
                                                 }
                                             />
                                             {i.choices.length > 1 ? (
-                                                <Select
-                                                    aria-label={`Satuan ${i.name}`}
-                                                    className="h-11 w-24 px-2"
-                                                    value={
-                                                        units[i.id] ?? i.unit
-                                                    }
-                                                    onChange={(e) =>
-                                                        setUnits({
-                                                            ...units,
-                                                            [i.id]: e.target
-                                                                .value,
-                                                        })
-                                                    }
-                                                >
-                                                    {i.choices.map((c) => (
-                                                        <option
-                                                            key={c.name}
-                                                            value={c.name}
-                                                        >
-                                                            {c.name}
-                                                        </option>
-                                                    ))}
-                                                </Select>
+                                                <div className="w-20 shrink-0">
+                                                    <Select
+                                                        aria-label={`Satuan ${i.name}`}
+                                                        className="pr-7 pl-2"
+                                                        value={
+                                                            units[i.id] ??
+                                                            i.unit
+                                                        }
+                                                        onChange={(e) =>
+                                                            setUnits({
+                                                                ...units,
+                                                                [i.id]: e.target
+                                                                    .value,
+                                                            })
+                                                        }
+                                                    >
+                                                        {i.choices.map((c) => (
+                                                            <option
+                                                                key={c.name}
+                                                                value={c.name}
+                                                            >
+                                                                {c.name}
+                                                            </option>
+                                                        ))}
+                                                    </Select>
+                                                </div>
                                             ) : (
-                                                <span className="w-9 text-xs text-muted-foreground">
+                                                <span className="w-20 shrink-0 text-xs text-muted-foreground">
                                                     {i.unit}
                                                 </span>
                                             )}

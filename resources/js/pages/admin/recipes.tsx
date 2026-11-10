@@ -14,6 +14,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { rupiah } from '@/lib/format';
+import { foodCostPct, suggestedPrice, verdict } from '@/lib/pricing';
+import { InfoTip } from '@/components/pos/info-tip';
+import { cn } from '@/lib/utils';
 
 type Ingredient = { id: number; name: string; unit: string; avg_cost: number };
 type Line = {
@@ -43,11 +46,13 @@ const pct = (price: number, cost: number) =>
 
 export default function RecipesPage({
     enabled,
+    targetFoodCost,
     ingredients,
     products,
     modifiers,
 }: {
     enabled: boolean;
+    targetFoodCost: number;
     ingredients: Ingredient[];
     products: Product[];
     modifiers: Modifier[];
@@ -181,9 +186,10 @@ export default function RecipesPage({
                                 'Harga',
                                 'HPP',
                                 'Margin',
+                                'Harga disarankan',
                                 'Aksi',
                             ]}
-                            numeric={[2, 3, 4]}
+                            numeric={[2, 3, 4, 5]}
                             empty="Tidak ada menu."
                             rows={shown.map((p) => [
                                 <span key={p.id} className="font-medium">
@@ -205,6 +211,16 @@ export default function RecipesPage({
                                     '-'
                                 ) : (
                                     <b key="m">{pct(p.price, p.cost)}</b>
+                                ),
+                                p.lines.length === 0 ? (
+                                    '-'
+                                ) : (
+                                    <Advice
+                                        key="s"
+                                        price={p.price}
+                                        cost={p.cost}
+                                        target={targetFoodCost}
+                                    />
                                 ),
                                 <span key="a" className="flex justify-end">
                                     <Button
@@ -305,26 +321,116 @@ export default function RecipesPage({
                     }
                     description={
                         edit.kind === 'product'
-                            ? 'Jumlah bahan untuk 1 porsi. Baris dengan varian tertentu hanya dipakai saat varian itu dipesan.'
+                            ? 'Jumlah bahan untuk 1 porsi, dalam satuan di kanan kolom jumlah (g, ml, atau pcs).'
                             : 'Bahan ekstra yang terpakai tiap kali modifier ini dipilih.'
                     }
                     className="sm:max-w-2xl"
                 >
+                    {edit.kind === 'product' && edit.variants.length > 0 && (
+                        <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                            Menu ini punya varian
+                            <InfoTip label="Info varian di resep">
+                                Baris dengan varian tertentu hanya dipakai saat
+                                varian itu dipesan. Pilih Semua untuk bahan yang
+                                dipakai di semua varian.
+                            </InfoTip>
+                        </p>
+                    )}
                     {edit.lines.map((l, idx) => (
-                        <div
-                            key={idx}
-                            className={
-                                edit.kind === 'product' &&
-                                edit.variants.length > 0
-                                    ? 'grid grid-cols-[7rem_1fr_6.5rem_2.75rem] items-center gap-2'
-                                    : 'grid grid-cols-[1fr_6.5rem_2.75rem] items-center gap-2'
-                            }
-                        >
-                            {edit.kind === 'product' &&
-                                edit.variants.length > 0 && (
-                                    <Select
-                                        aria-label="Varian"
-                                        value={l.variant_id ?? ''}
+                        <div key={idx} className="grid gap-1">
+                            <div
+                                className={
+                                    edit.kind === 'product' &&
+                                    edit.variants.length > 0
+                                        ? 'grid grid-cols-[1fr_6.5rem_2.75rem] items-center gap-2 sm:grid-cols-[7rem_1fr_6.5rem_2.75rem]'
+                                        : 'grid grid-cols-[1fr_6.5rem_2.75rem] items-center gap-2'
+                                }
+                            >
+                                {edit.kind === 'product' &&
+                                    edit.variants.length > 0 && (
+                                        <div className="col-span-3 sm:col-span-1">
+                                            <Select
+                                                aria-label="Varian"
+                                                value={l.variant_id ?? ''}
+                                                onChange={(e) =>
+                                                    setEdit({
+                                                        ...edit,
+                                                        lines: edit.lines.map(
+                                                            (x, j) =>
+                                                                j === idx
+                                                                    ? {
+                                                                          ...x,
+                                                                          variant_id:
+                                                                              e
+                                                                                  .target
+                                                                                  .value
+                                                                                  ? Number(
+                                                                                        e
+                                                                                            .target
+                                                                                            .value,
+                                                                                    )
+                                                                                  : null,
+                                                                      }
+                                                                    : x,
+                                                        ),
+                                                    })
+                                                }
+                                            >
+                                                <option value="">Semua</option>
+                                                {edit.variants.map((v) => (
+                                                    <option
+                                                        key={v.id}
+                                                        value={v.id}
+                                                    >
+                                                        {v.name}
+                                                    </option>
+                                                ))}
+                                            </Select>
+                                        </div>
+                                    )}
+                                <Combobox
+                                    aria-label="Bahan"
+                                    placeholder="Cari bahan…"
+                                    onCreate={(name) =>
+                                        setCreating({ idx, name })
+                                    }
+                                    createLabel="Buat bahan baru"
+                                    options={ingredients.map((i) => ({
+                                        value: i.id,
+                                        label: i.name,
+                                        hint: i.unit,
+                                    }))}
+                                    value={l.ingredient_id}
+                                    onChange={(v) =>
+                                        setEdit({
+                                            ...edit,
+                                            lines: edit.lines.map((x, j) =>
+                                                j === idx
+                                                    ? {
+                                                          ...x,
+                                                          ingredient_id:
+                                                              v === ''
+                                                                  ? ''
+                                                                  : Number(v),
+                                                      }
+                                                    : x,
+                                            ),
+                                        })
+                                    }
+                                />
+                                <div className="relative">
+                                    <Input
+                                        className="h-11 pr-12"
+                                        aria-label="Jumlah"
+                                        placeholder={
+                                            ing(l.ingredient_id)
+                                                ? 'Jumlah'
+                                                : 'Pilih bahan'
+                                        }
+                                        type="number"
+                                        min={0}
+                                        step="any"
+                                        value={l.qty}
                                         onChange={(e) =>
                                             setEdit({
                                                 ...edit,
@@ -332,100 +438,70 @@ export default function RecipesPage({
                                                     j === idx
                                                         ? {
                                                               ...x,
-                                                              variant_id: e
-                                                                  .target.value
-                                                                  ? Number(
-                                                                        e.target
-                                                                            .value,
-                                                                    )
-                                                                  : null,
+                                                              qty:
+                                                                  e.target
+                                                                      .value ===
+                                                                  ''
+                                                                      ? ''
+                                                                      : Number(
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        ),
                                                           }
                                                         : x,
                                                 ),
                                             })
                                         }
+                                    />
+                                    <span
+                                        aria-hidden
+                                        className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm font-medium text-muted-foreground"
                                     >
-                                        <option value="">Semua</option>
-                                        {edit.variants.map((v) => (
-                                            <option key={v.id} value={v.id}>
-                                                {v.name}
-                                            </option>
-                                        ))}
-                                    </Select>
-                                )}
-                            <Combobox
-                                aria-label="Bahan"
-                                placeholder="Cari bahan…"
-                                onCreate={(name) => setCreating({ idx, name })}
-                                createLabel="Buat bahan baru"
-                                options={ingredients.map((i) => ({
-                                    value: i.id,
-                                    label: i.name,
-                                    hint: i.unit,
-                                }))}
-                                value={l.ingredient_id}
-                                onChange={(v) =>
-                                    setEdit({
-                                        ...edit,
-                                        lines: edit.lines.map((x, j) =>
-                                            j === idx
-                                                ? {
-                                                      ...x,
-                                                      ingredient_id:
-                                                          v === ''
-                                                              ? ''
-                                                              : Number(v),
-                                                  }
-                                                : x,
-                                        ),
-                                    })
-                                }
-                            />
-                            <Input
-                                className="h-11"
-                                aria-label="Jumlah"
-                                placeholder="Jumlah"
-                                type="number"
-                                min={0}
-                                step="any"
-                                value={l.qty}
-                                onChange={(e) =>
-                                    setEdit({
-                                        ...edit,
-                                        lines: edit.lines.map((x, j) =>
-                                            j === idx
-                                                ? {
-                                                      ...x,
-                                                      qty:
-                                                          e.target.value === ''
-                                                              ? ''
-                                                              : Number(
-                                                                    e.target
-                                                                        .value,
-                                                                ),
-                                                  }
-                                                : x,
-                                        ),
-                                    })
-                                }
-                            />
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="size-11"
-                                aria-label="Hapus baris"
-                                onClick={() =>
-                                    setEdit({
-                                        ...edit,
-                                        lines: edit.lines.filter(
-                                            (_, j) => j !== idx,
-                                        ),
-                                    })
-                                }
-                            >
-                                <Trash2 />
-                            </Button>
+                                        {ing(l.ingredient_id)?.unit ?? ''}
+                                    </span>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-11"
+                                    aria-label="Hapus baris"
+                                    onClick={() =>
+                                        setEdit({
+                                            ...edit,
+                                            lines: edit.lines.filter(
+                                                (_, j) => j !== idx,
+                                            ),
+                                        })
+                                    }
+                                >
+                                    <Trash2 />
+                                </Button>
+                            </div>
+                            {ing(l.ingredient_id) && Number(l.qty) > 0 && (
+                                <p className="pl-1 text-xs text-muted-foreground tabular-nums">
+                                    {l.qty} {ing(l.ingredient_id)?.unit} ×{' '}
+                                    {rupiah(
+                                        Math.round(
+                                            (ing(l.ingredient_id)?.avg_cost ??
+                                                0) * 100,
+                                        ) / 100,
+                                    )}
+                                    /{ing(l.ingredient_id)?.unit} ={' '}
+                                    <span className="font-medium text-foreground">
+                                        {rupiah(
+                                            Math.round(
+                                                Number(l.qty) *
+                                                    (ing(l.ingredient_id)
+                                                        ?.avg_cost ?? 0),
+                                            ),
+                                        )}
+                                    </span>
+                                    {(ing(l.ingredient_id)?.avg_cost ?? 0) ===
+                                        0 && ' · harga bahan belum diisi'}
+                                </p>
+                            )}
                         </div>
                     ))}
                     <Button
@@ -449,18 +525,39 @@ export default function RecipesPage({
                         <Plus /> Tambah bahan
                     </Button>
                     {edit.kind === 'product' && (
-                        <p className="rounded-lg bg-muted p-3 text-sm tabular-nums">
-                            HPP{' '}
-                            {edit.variants.length > 0 ? 'varian' : 'per porsi'}:{' '}
-                            {edit.variants.length === 0
-                                ? rupiah(Math.round(cost(edit.lines, null)))
-                                : edit.variants
-                                      .map(
-                                          (v) =>
-                                              `${v.name} ${rupiah(Math.round(cost(edit.lines, v.id)))} (harga ${rupiah(v.price)})`,
-                                      )
-                                      .join(' · ')}
-                        </p>
+                        <div className="grid gap-2">
+                            {(edit.variants.length === 0
+                                ? [
+                                      {
+                                          key: 0,
+                                          name: 'Per porsi',
+                                          price:
+                                              products.find(
+                                                  (x) => x.id === edit.id,
+                                              )?.price ?? 0,
+                                          cost: Math.round(
+                                              cost(edit.lines, null),
+                                          ),
+                                      },
+                                  ]
+                                : edit.variants.map((v) => ({
+                                      key: v.id,
+                                      name: v.name,
+                                      price: v.price,
+                                      cost: Math.round(cost(edit.lines, v.id)),
+                                  }))
+                            ).map((r) => (
+                                <PriceCard
+                                    key={r.key}
+                                    title={
+                                        edit.variants.length > 0 ? r.name : null
+                                    }
+                                    price={r.price}
+                                    cost={r.cost}
+                                    target={targetFoodCost}
+                                />
+                            ))}
+                        </div>
                     )}
                     <Button className="h-12" onClick={save}>
                         Simpan
@@ -468,5 +565,123 @@ export default function RecipesPage({
                 </Modal>
             )}
         </>
+    );
+}
+
+const money = (n: number) => rupiah(Math.round(n));
+
+/** Compact advice for the list: a plain verdict and the price to aim for. */
+function Advice({
+    price,
+    cost,
+    target,
+}: {
+    price: number;
+    cost: number;
+    target: number;
+}) {
+    const rec = suggestedPrice(cost, target);
+    const v = verdict(price, cost, target);
+
+    if (rec === null) {
+        return <span className="text-muted-foreground">-</span>;
+    }
+
+    return (
+        <span className="grid justify-items-end leading-tight">
+            <b className="tabular-nums">{rupiah(rec)}</b>
+            <span
+                className={cn(
+                    'text-xs font-medium',
+                    v === 'good'
+                        ? 'text-emerald-700 dark:text-emerald-400'
+                        : 'text-amber-700 dark:text-amber-400',
+                )}
+            >
+                {v === 'good' ? 'Harga sudah cukup' : 'Harga terlalu rendah'}
+            </span>
+        </span>
+    );
+}
+
+/** The whole picture for one price: cost, profit, margin, food cost, and what to charge to reach the target. */
+function PriceCard({
+    title,
+    price,
+    cost,
+    target,
+}: {
+    title: string | null;
+    price: number;
+    cost: number;
+    target: number;
+}) {
+    const rec = suggestedPrice(cost, target);
+    const food = foodCostPct(price, cost);
+    const v = verdict(price, cost, target);
+    const profit = price - cost;
+
+    return (
+        <section className="grid gap-2 rounded-xl border bg-muted/40 p-3 text-sm">
+            <div className="flex items-center justify-between gap-2">
+                <h3 className="font-semibold">
+                    {title ? `Varian ${title}` : 'Harga dan margin'}
+                </h3>
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    Target food cost {target}%
+                    <InfoTip label="Info rumus harga">
+                        Harga disarankan = HPP ÷ target food cost, dibulatkan ke
+                        atas per Rp500. Contoh: HPP Rp16.250 ÷ 35% = Rp46.429,
+                        jadi Rp46.500. Target diubah di Pengaturan &gt; Stok
+                        &amp; HPP.
+                    </InfoTip>
+                </span>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-1 tabular-nums">
+                <dt className="text-muted-foreground">HPP bahan</dt>
+                <dd className="text-right font-medium">{money(cost)}</dd>
+                <dt className="text-muted-foreground">Harga jual sekarang</dt>
+                <dd className="text-right font-medium">{money(price)}</dd>
+                <dt className="text-muted-foreground">Laba per porsi</dt>
+                <dd className="text-right font-medium">
+                    {cost > 0 ? money(profit) : '-'}
+                </dd>
+                <dt className="text-muted-foreground">Margin</dt>
+                <dd className="text-right font-medium">
+                    {cost > 0 && price > 0
+                        ? `${Math.round((profit / price) * 100)}%`
+                        : '-'}
+                </dd>
+                <dt className="text-muted-foreground">Food cost</dt>
+                <dd
+                    className={cn(
+                        'text-right font-medium',
+                        v === 'low' && 'text-amber-700 dark:text-amber-400',
+                    )}
+                >
+                    {food === null || cost <= 0 ? '-' : `${Math.round(food)}%`}
+                </dd>
+            </dl>
+            {rec === null ? (
+                <p className="text-muted-foreground">
+                    Isi bahan dan harganya dulu untuk melihat harga yang
+                    disarankan.
+                </p>
+            ) : (
+                <p
+                    className={cn(
+                        'rounded-lg p-2.5 font-medium',
+                        v === 'good'
+                            ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200'
+                            : 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200',
+                    )}
+                >
+                    Harga disarankan {rupiah(rec)}
+                    {v === 'good'
+                        ? ` · harga sekarang sudah cukup (food cost ${Math.round(food ?? 0)}%)`
+                        : ` · harga sekarang ${rupiah(price)} terlalu rendah, naikkan ${rupiah(rec - price)}`}
+                </p>
+            )}
+        </section>
     );
 }

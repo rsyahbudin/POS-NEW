@@ -11,6 +11,7 @@ use App\Domain\Inventory\Models\Ingredient;
 use App\Domain\Inventory\Models\ModifierIngredient;
 use App\Domain\Inventory\Models\RecipeLine;
 use App\Domain\Settings\OutletContext;
+use App\Domain\Settings\SettingsRepository;
 use App\Http\Controllers\Controller;
 use App\Support\Audit;
 use Illuminate\Http\RedirectResponse;
@@ -23,7 +24,7 @@ use Inertia\Response;
 /** What each menu item (and each modifier) uses, with the resulting cost and margin. */
 class RecipeController extends Controller
 {
-    public function __construct(private OutletContext $outlet, private InventoryService $inventory) {}
+    public function __construct(private OutletContext $outlet, private InventoryService $inventory, private SettingsRepository $settings) {}
 
     public function index(): Response
     {
@@ -34,6 +35,7 @@ class RecipeController extends Controller
 
         return Inertia::render('admin/recipes', [
             'enabled' => $this->inventory->enabled(),
+            'targetFoodCost' => max(10, min(90, (int) $this->settings->get('pricing.target_food_cost', 35))),
             'ingredients' => Ingredient::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'unit', 'avg_cost'])->all(),
             'products' => Product::query()->where('outlet_id', $id)->with('variants')->orderBy('category_id')->orderBy('sort')->get()->map(function (Product $p) use ($lines, $costs, $categories) {
                 $own = $lines->get($p->id, collect());

@@ -188,3 +188,13 @@ it('reports sales, cost and margin per product, category and day, with Excel and
     $this->actingAs($manager)->get("/admin/reports/margin/export?from={$d}&to={$d}&format=pdf")->assertOk();
     $this->actingAs(userWithRole('cashier'))->get('/admin/reports/margin')->assertForbidden();
 });
+
+it('gives the recipe page the target food cost used to suggest selling prices, 35 percent unless set', function () {
+    $owner = userWithRole('owner');
+    $this->actingAs($owner)->get('/admin/recipes')->assertInertia(fn ($p) => $p->where('targetFoodCost', 35));
+
+    setting('pricing.target_food_cost', 30);
+    $this->actingAs($owner)->get('/admin/recipes')->assertInertia(fn ($p) => $p->where('targetFoodCost', 30));
+    setting('pricing.target_food_cost', 5);                                       // silly values stay inside 10 to 90
+    $this->actingAs($owner)->get('/admin/recipes')->assertInertia(fn ($p) => $p->where('targetFoodCost', 10));
+});

@@ -43,6 +43,49 @@ const num = (n: number) =>
     n.toLocaleString('id-ID', { maximumFractionDigits: 3 });
 
 /**
+ * Under the price of a line: what this ingredient cost last time per the chosen unit, and a warning when the price
+ * typed now is well above it (the percent is the store's price alert setting).
+ */
+function PriceHint({
+    line,
+    ing,
+    lastPrices,
+    alertPercent,
+}: {
+    line: PLine;
+    ing: PIngredient | undefined;
+    lastPrices?: Record<number, number>;
+    alertPercent?: number;
+}) {
+    const base = ing ? lastPrices?.[ing.id] : undefined;
+
+    if (!ing || !base) {
+        return null;
+    }
+
+    const factor = ing.choices.find((c) => c.name === line.unit)?.factor ?? 1;
+    const last = base * factor;
+    const qty = Number(line.qty);
+    const now = qty > 0 && line.total !== '' ? Number(line.total) / qty : null;
+    const pct = now !== null ? Math.round((now / last - 1) * 100) : 0;
+    const up = now !== null && !!alertPercent && pct >= alertPercent;
+
+    return (
+        <p
+            className={
+                up
+                    ? 'mt-1 text-xs font-medium text-amber-800 dark:text-amber-300'
+                    : 'mt-1 text-xs text-muted-foreground'
+            }
+        >
+            {up
+                ? `Naik ${pct}% dari terakhir (${rupiah(Math.round(last))} per ${line.unit}). Cek lagi harganya.`
+                : `Terakhir ${rupiah(Math.round(last))} per ${line.unit}`}
+        </p>
+    );
+}
+
+/**
  * Purchase lines as a table. The unit of each line can only be one defined for that ingredient, so nobody
  * enters "1" meaning a bottle when the recipe works in ml: the conversion is shown under the quantity.
  */
@@ -52,6 +95,8 @@ export function PurchaseLines({
     onChange,
     canCreate = false,
     onCreated,
+    lastPrices,
+    alertPercent,
 }: {
     ingredients: PIngredient[];
     lines: PLine[];
@@ -59,6 +104,9 @@ export function PurchaseLines({
     /** Whoever may add ingredients can do it from the list while typing a purchase. */
     canCreate?: boolean;
     onCreated?: (ingredient: PIngredient) => void;
+    /** Last price per base unit by ingredient id, to show a hint and flag a jump. */
+    lastPrices?: Record<number, number>;
+    alertPercent?: number;
 }) {
     const [creating, setCreating] = useState<{
         idx: number;
@@ -178,6 +226,12 @@ export function PurchaseLines({
                             <MoneyInput
                                 value={l.total}
                                 onChange={(v) => patch(idx, { total: v })}
+                            />
+                            <PriceHint
+                                line={l}
+                                ing={ing}
+                                lastPrices={lastPrices}
+                                alertPercent={alertPercent}
                             />
                         </div>
                     </div>
@@ -326,6 +380,12 @@ export function PurchaseLines({
                                             onChange={(v) =>
                                                 patch(idx, { total: v })
                                             }
+                                        />
+                                        <PriceHint
+                                            line={l}
+                                            ing={ing}
+                                            lastPrices={lastPrices}
+                                            alertPercent={alertPercent}
                                         />
                                     </td>
                                     <td className="p-1 text-center">

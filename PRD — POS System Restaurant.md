@@ -773,3 +773,10 @@ Halaman publik (tanpa login):
 - Product form shows four essentials (name, category, price, photo); variants/modifiers/bundle and SKU, portion stock, description and per-item printers sit in collapsible sections that open by themselves when they hold data.
 - Station is hidden everywhere (menu tabs, category form, product form, ingredient and user forms, printers page) unless the kitchen display (`kitchen.enabled`) or stock per station (`stock.by_station`) is on. Ingredient/user station fields need `stock.by_station`.
 - One physical printer is registered once with several roles (receipt, bill, ticket) through `printers.roles` (jsonb). Older rows without roles fall back to `kind`. Ticket routing stays menu printers, then category printers, then station printers.
+
+### Stock, count and purchase flows closer to other POS
+
+- Purchase form: last price per chosen unit under each line and a warning when the typed price is at or above the price-alert percent; "repeat last purchase" (quantities only, prices typed again); unsent purchase kept on the device; "paid with" (not recorded, drawer, own money) and an optional receipt photo.
+- Paying from the drawer needs the new permission `pay-purchase-from-drawer` and an open shift. It books one cash-out (category Bahan Baku, must allow the drawer) together with the purchase, and the purchase skips its own inventory journal so the cost is not counted twice. Own money is a note for later reimbursement.
+- Stock count: filter "not filled yet", autosave about 1.5 s after the last change (quiet, no toast), and a review dialog with the differences to the system (hidden for blind counts) before sending.
+- Stock list: stock value and total (managers only), last count date, and a "buy what is low" shortcut that prefills the purchase form.

@@ -1,7 +1,8 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { ArrowDown, ArrowUp, ArrowUpDown, FileSpreadsheet } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ImportDialog } from '@/components/pos/import-dialog';
+import { Modal } from '@/components/pos/modal';
 import { PageHeader, Select } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,6 +68,10 @@ export default function StockCount({
     const [note, setNote] = useState(draft.note ?? '');
     const [q, setQ] = useState('');
     const [importing, setImporting] = useState(false);
+    const [onlyEmpty, setOnlyEmpty] = useState(false);
+    const [reviewing, setReviewing] = useState(false);
+    const [savedAt, setSavedAt] = useState<string | null>(null);
+    const first = useRef(true);
     const filled = Object.values(values).filter((v) => v !== '').length;
     const [sortBy, setSortBy] = useState<{
         key: 'name' | 'system' | 'filled';
@@ -80,8 +85,33 @@ export default function StockCount({
                   ? { key, dir: -1 }
                   : null,
         );
+    const empty = ingredients.filter(
+        (i) => values[i.id] === undefined || values[i.id] === '',
+    ).length;
+    // difference to the system for every filled line, in the ingredient's base unit
+    const diffs = ingredients
+        .filter((i) => values[i.id] !== undefined && values[i.id] !== '')
+        .map((i) => {
+            const factor =
+                i.choices.find((c) => c.name === (units[i.id] ?? i.unit))
+                    ?.factor ?? 1;
+            const counted = Number(values[i.id]) * factor;
+
+            return {
+                ing: i,
+                counted,
+                diff: i.system === null ? null : counted - i.system,
+            };
+        });
+    const off = diffs
+        .filter((d) => d.diff !== null && Math.abs(d.diff) > 0.0005)
+        .sort((a, b) => Math.abs(b.diff ?? 0) - Math.abs(a.diff ?? 0));
     const shown = ingredients
         .filter((i) => i.name.toLowerCase().includes(q.toLowerCase()))
+        .filter(
+            (i) =>
+                !onlyEmpty || values[i.id] === undefined || values[i.id] === '',
+        )
         .sort((a, b) => {
             if (!sortBy) {
                 return 0;
@@ -128,6 +158,37 @@ export default function StockCount({
         note: note || null,
     });
 
+    // Typing is saved by itself a moment after the last change, so a closed page does not lose the count.
+    useEffect(() => {
+        if (first.current) {
+            first.current = false;
+
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            router.post(
+                '/stock/count/save',
+                { ...body(), auto: true },
+                {
+                    preserveScroll: true,
+                    preserveState: true,
+                    only: [],
+                    onSuccess: () =>
+                        setSavedAt(
+                            new Date().toLocaleTimeString('id-ID', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                            }),
+                        ),
+                },
+            );
+        }, 1500);
+
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [values, units, note]);
+
     return (
         <>
             <Head title="Stok Opname" />
@@ -158,6 +219,15 @@ export default function StockCount({
                         value={q}
                         onChange={(e) => setQ(e.target.value)}
                     />
+                    <Button
+                        type="button"
+                        variant={onlyEmpty ? 'default' : 'outline'}
+                        className="h-11"
+                        aria-pressed={onlyEmpty}
+                        onClick={() => setOnlyEmpty((v) => !v)}
+                    >
+                        Belum diisi ({empty})
+                    </Button>
                     <Button
                         variant="outline"
                         className="h-11"
@@ -319,6 +389,7 @@ export default function StockCount({
                     <span className="flex-1 text-sm text-muted-foreground">
                         {filled} dari {ingredients.length} terisi
                         {needsApproval ? ' · perlu persetujuan manager' : ''}
+                        {savedAt ? ` · tersimpan ${savedAt}` : ''}
                     </span>
                     <Button
                         variant="outline"
@@ -334,19 +405,83 @@ export default function StockCount({
                     <Button
                         className="h-12"
                         disabled={filled === 0}
+                        onClick={() => setReviewing(true)}
+                    >
+                        Periksa dan kirim
+                    </Button>
+                </div>
+            </div>
+            {reviewing && (
+                <Modal
+                    open
+                    onClose={() => setReviewing(false)}
+                    title="Periksa hitungan"
+                >
+                    <p className="text-sm">
+                        {filled} bahan akan dikirim.
+                        {empty > 0 &&
+                            ` ${empty} bahan belum diisi dan tidak ikut dihitung.`}{' '}
+                        Setelah dikirim tidak bisa diubah.
+                    </p>
+                    {!blind && (
+                        <section className="grid gap-1">
+                            <h3 className="text-sm font-semibold">
+                                {off.length === 0
+                                    ? 'Semua sama dengan sistem.'
+                                    : `${off.length} bahan beda dari sistem`}
+                            </h3>
+                            <ul className="grid max-h-60 gap-1 overflow-y-auto text-sm">
+                                {off.map((d) => (
+                                    <li
+                                        key={d.ing.id}
+                                        className="flex items-center justify-between gap-2 rounded-lg border p-2"
+                                    >
+                                        <span className="font-medium">
+                                            {d.ing.name}
+                                        </span>
+                                        <span
+                                            className={cn(
+                                                'tabular-nums',
+                                                (d.diff ?? 0) < 0
+                                                    ? 'text-destructive'
+                                                    : 'text-emerald-700 dark:text-emerald-400',
+                                            )}
+                                        >
+                                            {(d.diff ?? 0) > 0 ? '+' : ''}
+                                            {num(d.diff ?? 0)} {d.ing.unit}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </section>
+                    )}
+                    <Button
+                        className="h-12"
                         onClick={() =>
-                            confirm(
-                                `Kirim hitungan ${filled} bahan? Setelah dikirim tidak bisa diubah.`,
-                            ) &&
                             router.post('/stock/count/submit', body(), {
                                 preserveScroll: true,
+                                onSuccess: () => {
+                                    setReviewing(false);
+                                    // the sent count is done: start clean and do not autosave the old numbers again
+                                    first.current = true;
+                                    setValues({});
+                                    setUnits({});
+                                    setNote('');
+                                },
                             })
                         }
                     >
                         Kirim hitungan
                     </Button>
-                </div>
-            </div>
+                    <Button
+                        variant="ghost"
+                        className="h-11"
+                        onClick={() => setReviewing(false)}
+                    >
+                        Kembali
+                    </Button>
+                </Modal>
+            )}
             {importing && (
                 <ImportDialog
                     type="count"

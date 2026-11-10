@@ -178,7 +178,7 @@ class InventoryService
     /**
      * Goods received, applied at once (managers). Raises stock and re-averages the cost.
      *
-     * @param  array{supplier?: string|null, supplier_id?: int|null, purchased_on: string, note?: string|null, items: list<array{ingredient_id: int, qty: float|int, unit_cost: float|int}>}  $data
+     * @param  array{supplier?: string|null, supplier_id?: int|null, purchased_on: string, note?: string|null, paid_from?: string|null, receipt_path?: string|null, items: list<array{ingredient_id: int, qty: float|int, unit_cost: float|int}>}  $data
      */
     public function receive(int $outletId, array $data, User $user): Purchase
     {
@@ -194,7 +194,7 @@ class InventoryService
      * Staff shopping: applied at once when the user manages inventory or approval is off, otherwise saved as
      * "pending" and applied only after a manager approves. Stock and costs do not move before that.
      *
-     * @param  array{supplier?: string|null, supplier_id?: int|null, purchased_on: string, note?: string|null, items: list<array{ingredient_id: int, qty: float|int, unit_cost: float|int}>}  $data
+     * @param  array{supplier?: string|null, supplier_id?: int|null, purchased_on: string, note?: string|null, paid_from?: string|null, receipt_path?: string|null, items: list<array{ingredient_id: int, qty: float|int, unit_cost: float|int}>}  $data
      */
     public function submitPurchase(int $outletId, array $data, User $user): Purchase
     {
@@ -261,13 +261,14 @@ class InventoryService
     }
 
     /**
-     * @param  array{supplier?: string|null, supplier_id?: int|null, purchased_on: string, note?: string|null, items: list<array{ingredient_id: int, qty: float|int, unit_cost: float|int}>}  $data
+     * @param  array{supplier?: string|null, supplier_id?: int|null, purchased_on: string, note?: string|null, paid_from?: string|null, receipt_path?: string|null, items: list<array{ingredient_id: int, qty: float|int, unit_cost: float|int}>}  $data
      */
     private function record(int $outletId, array $data, User $user): Purchase
     {
         $purchase = Purchase::create([
             'outlet_id' => $outletId, 'supplier' => $data['supplier'] ?? null, 'supplier_id' => $data['supplier_id'] ?? null, 'purchased_on' => $data['purchased_on'],
             'note' => $data['note'] ?? null, 'user_id' => $user->id, 'status' => 'pending',
+            'paid_from' => $data['paid_from'] ?? null, 'receipt_path' => $data['receipt_path'] ?? null,
         ]);
         if (! empty($data['supplier_id'])) {
             $name = Supplier::query()->where('outlet_id', $outletId)->whereKey($data['supplier_id'])->value('name');
@@ -318,7 +319,10 @@ class InventoryService
             ]);
         }
         $purchase->update(['status' => 'approved', 'reviewed_by' => $reviewer->id, 'reviewed_at' => now()]);
-        app(InventoryJournal::class)->purchase($purchase, $purchase->outlet_id, (int) $purchase->total, $purchase->purchased_on->toDateString(), $reviewer->id, 'Belanja bahan'.($purchase->supplier ? ": {$purchase->supplier}" : ''));
+        // paid from the drawer: the cash movement already booked this cost as an expense, so booking it again would count it twice
+        if ($purchase->paid_from !== 'drawer') {
+            app(InventoryJournal::class)->purchase($purchase, $purchase->outlet_id, (int) $purchase->total, $purchase->purchased_on->toDateString(), $reviewer->id, 'Belanja bahan'.($purchase->supplier ? ": {$purchase->supplier}" : ''));
+        }
         Audit::log('inventory.purchase', $purchase, ['total' => $purchase->total, 'items' => $purchase->items()->count()], $reviewer);
     }
 

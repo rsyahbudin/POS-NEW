@@ -4,6 +4,7 @@ import { PageHeader, ResponsiveTable } from '@/components/pos/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { dateId, rupiah } from '@/lib/format';
 import { StockShare } from '@/components/pos/stock-share';
 
 type Ingredient = {
@@ -13,6 +14,8 @@ type Ingredient = {
     stock: number;
     min_stock: number;
     low: boolean;
+    value: number | null;
+    counted_at: string | null;
 };
 
 const num = (n: number) =>
@@ -21,9 +24,13 @@ const num = (n: number) =>
 export default function StockList({
     ingredients,
     canCount,
+    canBuy,
+    showValue,
 }: {
     ingredients: Ingredient[];
     canCount: boolean;
+    canBuy: boolean;
+    showValue: boolean;
 }) {
     const [q, setQ] = useState('');
     const [onlyLow, setOnlyLow] = useState(false);
@@ -33,6 +40,7 @@ export default function StockList({
             (!onlyLow || i.low),
     );
     const lowCount = ingredients.filter((i) => i.low).length;
+    const totalValue = ingredients.reduce((a, i) => a + (i.value ?? 0), 0);
 
     return (
         <>
@@ -42,13 +50,26 @@ export default function StockList({
                     title="Daftar stok"
                     subtitle="Jumlah bahan yang tercatat saat ini."
                     actions={
-                        canCount && (
-                            <Button asChild className="h-11">
-                                <Link href="/stock/count">
-                                    Mulai stok opname
-                                </Link>
-                            </Button>
-                        )
+                        <>
+                            {canBuy && lowCount > 0 && (
+                                <Button
+                                    asChild
+                                    variant="outline"
+                                    className="h-11"
+                                >
+                                    <Link href="/stock/purchase?menipis=1">
+                                        Belanjakan yang menipis ({lowCount})
+                                    </Link>
+                                </Button>
+                            )}
+                            {canCount && (
+                                <Button asChild className="h-11">
+                                    <Link href="/stock/count">
+                                        Mulai stok opname
+                                    </Link>
+                                </Button>
+                            )}
+                        </>
                     }
                 />
                 <StockShare />
@@ -71,8 +92,27 @@ export default function StockList({
                 </div>
                 <ResponsiveTable
                     toolbar={false}
-                    headers={['Bahan', 'Stok', 'Batas minimum', 'Status']}
-                    numeric={[1, 2]}
+                    headers={[
+                        'Bahan',
+                        'Stok',
+                        'Batas minimum',
+                        ...(showValue ? ['Nilai'] : []),
+                        'Terakhir dihitung',
+                        'Status',
+                    ]}
+                    numeric={showValue ? [1, 2, 3] : [1, 2]}
+                    footer={
+                        showValue
+                            ? [
+                                  'Total nilai stok',
+                                  '',
+                                  '',
+                                  rupiah(totalValue),
+                                  '',
+                                  '',
+                              ]
+                            : undefined
+                    }
                     empty="Tidak ada bahan."
                     rows={shown.map((i) => [
                         <span key={i.id} className="font-medium">
@@ -88,6 +128,8 @@ export default function StockList({
                             {num(i.stock)} {i.unit}
                         </span>,
                         `${num(i.min_stock)} ${i.unit}`,
+                        ...(showValue ? [rupiah(i.value ?? 0)] : []),
+                        i.counted_at ? dateId(i.counted_at) : 'Belum pernah',
                         i.low ? (
                             <span
                                 key="l"

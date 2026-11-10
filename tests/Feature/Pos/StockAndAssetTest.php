@@ -10,6 +10,8 @@ use App\Domain\Inventory\StockCountService;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Settings\Models\Outlet;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -232,4 +234,56 @@ it('adds an ingredient from a purchase or recipe form and hands it straight back
     $this->actingAs(userWithRole('cashier'))->postJson('/admin/inventory/ingredients/quick', ['name' => 'Gula', 'unit' => 'g'])->assertForbidden();
 
     $this->actingAs($manager)->get('/stock/purchase')->assertInertia(fn ($p) => $p->where('canCreateIngredient', true));
+});
+
+it('shows shoppers the last price and the last purchase, and prefills the low ingredients', function () {
+    $beans = stockItem('Biji kopi', 5, 50);
+    $beans->update(['min_stock' => 100]);
+    $manager = userWithRole('manager');
+    $this->actingAs($manager)->post('/stock/purchase', ['purchased_on' => '2026-10-21', 'supplier' => 'Pasar', 'items' => [['ingredient_id' => $beans->id, 'qty' => 10, 'unit_cost' => 70]]])->assertSessionHasNoErrors();
+
+    $this->actingAs($manager)->get('/stock/purchase?menipis=1')->assertInertia(fn ($p) => $p->where('lastPrices.'.$beans->id, 70)->where('lastPurchase.items.0.ingredient_id', $beans->id)->where('lowIds', [$beans->id]));
+    $this->actingAs($manager)->get('/stock/purchase')->assertInertia(fn ($p) => $p->where('lowIds', []));
+});
+
+it('pays a purchase from the drawer: one cash-out in the open shift, no second journal, and only with the permission and a shift', function () {
+    $beans = stockItem('Biji kopi', 0, 50);
+    $shopper = shopper();
+    $body = ['purchased_on' => '2026-10-21', 'paid_from' => 'drawer', 'items' => [['ingredient_id' => $beans->id, 'qty' => 10, 'unit_cost' => 100]]];
+
+    $this->actingAs($shopper)->post('/stock/purchase', $body)->assertSessionHasErrors('paid_from');   // no permission yet
+    Role::findByName('cashier')->givePermissionTo('pay-purchase-from-drawer');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+    $this->actingAs($shopper)->post('/stock/purchase', $body)->assertSessionHasErrors('paid_from');   // no open shift
+    expect(Purchase::query()->count())->toBe(0);
+
+    $shift = openShiftFor($shopper);
+    $this->actingAs($shopper)->post('/stock/purchase', $body)->assertSessionHasNoErrors();
+    $purchase = Purchase::query()->firstOrFail();
+    $move = $shift->movements()->firstOrFail();
+    expect($purchase->paid_from)->toBe('drawer')->and($purchase->cash_movement_id)->toBe($move->id)->and($move->direction)->toBe('out')->and($move->amount)->toBe(1000)->and($purchase->status)->toBe('pending');
+
+    $this->actingAs(userWithRole('manager'))->post("/admin/inventory/purchases/{$purchase->id}/approve")->assertSessionHasNoErrors();
+    expect($beans->fresh()->stock)->toBe(10.0)->and($shift->movements()->count())->toBe(1);
+});
+
+it('keeps the receipt photo and the own-money note on a purchase, and autosaving a count stays quiet', function () {
+    Storage::fake('receipts');
+    $beans = stockItem('Biji kopi', 0, 50);
+    $shopper = shopper();
+    $this->actingAs($shopper)->post('/stock/purchase', [
+        'purchased_on' => '2026-10-21', 'paid_from' => 'own', 'receipt' => UploadedFile::fake()->image('nota.jpg', 600, 400),
+        'items' => [['ingredient_id' => $beans->id, 'qty' => 2, 'unit_cost' => 100]],
+    ])->assertSessionHasNoErrors();
+    $purchase = Purchase::query()->firstOrFail();
+    expect($purchase->paid_from)->toBe('own')->and($purchase->receipt_path)->not->toBeNull()->and($purchase->cash_movement_id)->toBeNull();
+
+    $this->actingAs($shopper)->post('/stock/count/save', ['lines' => [['ingredient_id' => $beans->id, 'counted' => 3]], 'auto' => true])->assertSessionMissing('success');
+    $this->actingAs($shopper)->post('/stock/count/save', ['lines' => [['ingredient_id' => $beans->id, 'counted' => 3]]])->assertSessionHas('success');
+});
+
+it('shows the stock value and last count date to managers only', function () {
+    $beans = stockItem('Biji kopi', 10, 50);
+    $this->actingAs(userWithRole('manager'))->get('/stock')->assertInertia(fn ($p) => $p->where('showValue', true)->where('ingredients.0.value', 500)->where('ingredients.0.counted_at', null));
+    $this->actingAs(userWithRole('cashier'))->get('/stock')->assertInertia(fn ($p) => $p->where('showValue', false)->where('ingredients.0.value', null));
 });

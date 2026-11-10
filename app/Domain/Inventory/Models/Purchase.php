@@ -16,6 +16,9 @@ use Illuminate\Support\Carbon;
  * @property int|null $user_id
  * @property int|null $supplier_id
  * @property string $status
+ * @property string|null $paid_from
+ * @property string|null $receipt_path
+ * @property int|null $cash_movement_id
  * @property int|null $reviewed_by
  * @property Carbon|null $reviewed_at
  * @property string|null $review_note

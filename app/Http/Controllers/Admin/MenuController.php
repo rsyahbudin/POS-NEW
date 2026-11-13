@@ -7,9 +7,13 @@ use App\Domain\Catalog\Models\Modifier;
 use App\Domain\Catalog\Models\ModifierGroup;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\Station;
+use App\Domain\Inventory\InventoryService;
+use App\Domain\Inventory\Models\Ingredient;
+use App\Domain\Inventory\Models\RecipeLine;
 use App\Domain\Ordering\Events\ProductAvailabilityChanged;
 use App\Domain\Printing\Models\Printer;
 use App\Domain\Settings\OutletContext;
+use App\Domain\Settings\SettingsRepository;
 use App\Http\Controllers\Controller;
 use App\Support\Audit;
 use App\Support\ImageOptimizer;
@@ -27,31 +31,52 @@ use Inertia\Response;
 
 class MenuController extends Controller
 {
-    public function __construct(private OutletContext $outlet) {}
+    public function __construct(
+        private OutletContext $outlet,
+        private InventoryService $inventory,
+        private SettingsRepository $settings,
+    ) {}
 
     public function index(): Response
     {
         $id = $this->outlet->id();
+        $user = request()->user();
+        $inventoryEnabled = $this->inventory->enabled();
+        $canRecipe = (bool) $user?->can('manage-inventory');
 
         return Inertia::render('admin/menu', [
             'categories' => Category::query()->where('outlet_id', $id)->with('printers:id')->orderBy('sort')->get()->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'sort' => $c->sort, 'station_id' => $c->station_id, 'printer_ids' => $c->printers->pluck('id')->all()]),
             'printers' => Printer::query()->where('outlet_id', $id)->forRole('ticket')->orderBy('id')->get(['id', 'name']),
             'stations' => Station::query()->where('outlet_id', $id)->orderBy('sort')->get(['id', 'name', 'is_active']),
-            'products' => Product::query()->where('outlet_id', $id)->with(['variants', 'modifierGroups:id', 'printers:id', 'bundleItems'])->orderBy('category_id')->orderBy('sort')->get()->map(fn ($p) => [
+            'products' => Product::query()->where('outlet_id', $id)->with(array_filter([
+                'variants', 'modifierGroups:id', 'printers:id', 'bundleItems',
+                $canRecipe ? 'recipeLines' : null,
+            ]))->orderBy('category_id')->orderBy('sort')->get()->map(fn ($p) => [
                 'id' => $p->id, 'name' => $p->name, 'sku' => $p->sku, 'description' => $p->description, 'category_id' => $p->category_id, 'station_id' => $p->station_id,
-                'base_price' => $p->base_price, 'is_available' => $p->is_available, 'is_active' => $p->is_active, 'stock_qty' => $p->stock_qty, 'sort' => $p->sort,
+                'base_price' => $p->base_price, 'is_available' => $p->is_available, 'is_active' => $p->is_active, 'is_favorite' => $p->is_favorite, 'stock_qty' => $p->stock_qty, 'sort' => $p->sort,
                 'image' => MediaUrl::public($p->image_path),
                 'variants' => $p->variants->map(fn ($v) => ['id' => $v->id, 'name' => $v->name, 'price' => $v->price])->all(),
                 'modifier_group_ids' => $p->modifierGroups->pluck('id')->all(),
                 'printer_ids' => $p->printers->pluck('id')->all(),
                 'is_bundle' => $p->is_bundle,
                 'components' => $p->bundleItems->map(fn ($b) => ['product_id' => $b->product_id, 'variant_id' => $b->variant_id, 'ask_modifiers' => $b->ask_modifiers, 'qty' => $b->qty])->all(),
+                'recipe_lines' => $canRecipe
+                    ? $p->recipeLines->map(fn (RecipeLine $l) => ['variant_id' => $l->variant_id, 'ingredient_id' => $l->ingredient_id, 'qty' => $l->qty])->values()->all()
+                    : [],
             ]),
-            'canBundles' => (bool) request()->user()?->can('manage-bundles'),
+            'canBundles' => (bool) $user?->can('manage-bundles'),
             'modifierGroups' => ModifierGroup::query()->where('outlet_id', $id)->with('modifiers')->get()->map(fn ($g) => [
                 'id' => $g->id, 'name' => $g->name, 'min_select' => $g->min_select, 'max_select' => $g->max_select, 'is_required' => $g->is_required,
-                'modifiers' => $g->modifiers->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'price_delta' => $m->price_delta])->all(),
+                'modifiers' => $g->modifiers->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'price_delta' => $m->price_delta, 'is_default' => $m->is_default])->all(),
             ]),
+            // Wizard "Siapkan menu": recipe + suggested price steps only when stock is on and the user can edit recipes.
+            'inventoryEnabled' => $inventoryEnabled,
+            'canRecipe' => $canRecipe,
+            'canSetPrice' => (bool) $user?->canAny(['manage-menu', 'manage-pricing']),
+            'targetFoodCost' => max(10, min(90, (int) $this->settings->get('pricing.target_food_cost', 35))),
+            'ingredients' => $inventoryEnabled && $canRecipe
+                ? Ingredient::query()->where('outlet_id', $id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'unit', 'avg_cost'])->all()
+                : [],
         ]);
     }
 
@@ -104,6 +129,7 @@ class MenuController extends Controller
             'base_price' => 'required|integer|min:0',
             'stock_qty' => 'nullable|integer|min:0',
             'is_available' => 'boolean',
+            'is_favorite' => 'boolean',
             'sort' => 'nullable|integer|min:0',
             'image' => 'nullable|image|max:8192',
             'variants' => 'nullable|array', 'variants.*.name' => 'required|string|max:40', 'variants.*.price' => 'required|integer|min:0',
@@ -126,7 +152,7 @@ class MenuController extends Controller
         $isEdit = $product !== null;
         $priced = (int) $data['base_price'] > 0 || $bundle || array_sum(array_map(fn (array $v): int => (int) $v['price'], $data['variants'] ?? [])) > 0;
 
-        DB::transaction(function () use ($request, $images, $product, $data, $outletId, $canBundle, $bundle, $parts, $priced) {
+        $saved = DB::transaction(function () use ($request, $images, $product, $data, $outletId, $canBundle, $bundle, $parts, $priced) {
             $fields = Arr::except($data, ['image', 'variants', 'modifier_group_ids', 'printer_ids', 'is_bundle', 'components']);
             if ($canBundle) {
                 $fields['is_bundle'] = $bundle;
@@ -153,9 +179,15 @@ class MenuController extends Controller
                     $product->bundleItems()->create($part + ['sort' => $i]);
                 }
             }
+
+            return $product;
         });
 
-        return back()->with('success', $priced || $isEdit ? 'Produk disimpan.' : 'Produk disimpan. Belum dijual karena belum ada harga: isi resepnya, lalu pakai harga yang disarankan di Resep & HPP.');
+        $message = $priced || $isEdit
+            ? 'Produk disimpan.'
+            : 'Produk disimpan. Belum dijual karena belum ada harga: isi resepnya, lalu pakai harga yang disarankan di Resep & HPP.';
+
+        return back()->with('success', $message)->with('product_id', $saved->id);
     }
 
     /**
@@ -213,6 +245,17 @@ class MenuController extends Controller
         return back()->with('success', $active ? "{$product->name} diaktifkan." : "{$product->name} dinonaktifkan.");
     }
 
+    /** Mark a menu item as an outlet favorite so it shows first on the QR menu and kasir. */
+    public function setFavorite(Request $request, Product $product): RedirectResponse
+    {
+        abort_unless($product->outlet_id === $this->outlet->id(), 404);
+        $favorite = (bool) $request->validate(['is_favorite' => 'required|boolean'])['is_favorite'];
+        $product->update(['is_favorite' => $favorite]);
+        Audit::log($favorite ? 'product.favorited' : 'product.unfavorited', $product, ['name' => $product->name]);
+
+        return back()->with('success', $favorite ? "{$product->name} jadi favorit." : "{$product->name} bukan favorit lagi.");
+    }
+
     public function deleteProduct(Product $product): RedirectResponse
     {
         $product->delete(); // soft delete: old orders keep their snapshots
@@ -236,7 +279,9 @@ class MenuController extends Controller
     {
         $data = $request->validate([
             'name' => 'required|string|max:60', 'min_select' => 'required|integer|min:0|max:20', 'max_select' => 'required|integer|min:1|max:20|gte:min_select',
-            'is_required' => 'boolean', 'modifiers' => 'required|array|min:1', 'modifiers.*.name' => 'required|string|max:60', 'modifiers.*.price_delta' => 'required|integer',
+            'is_required' => 'boolean', 'modifiers' => 'required|array|min:1',
+            'modifiers.*.name' => 'required|string|max:60', 'modifiers.*.price_delta' => 'required|integer',
+            'modifiers.*.is_default' => 'boolean',
         ]);
 
         DB::transaction(function () use ($group, $data) {
@@ -244,8 +289,18 @@ class MenuController extends Controller
             $group = $group ? tap($group)->update($fields) : ModifierGroup::create($fields + ['outlet_id' => $this->outlet->id()]);
             // Old orders keep their own snapshot, so rebuilding the options is safe.
             Modifier::query()->where('modifier_group_id', $group->id)->delete();
+            $defaultsLeft = (int) $data['max_select'];
             foreach ($data['modifiers'] as $i => $m) {
-                $group->modifiers()->create($m + ['sort' => $i]);
+                $default = ! empty($m['is_default']) && $defaultsLeft > 0;
+                if ($default) {
+                    $defaultsLeft--;
+                }
+                $group->modifiers()->create([
+                    'name' => $m['name'],
+                    'price_delta' => $m['price_delta'],
+                    'is_default' => $default,
+                    'sort' => $i,
+                ]);
             }
         });
 

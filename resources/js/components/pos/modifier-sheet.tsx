@@ -15,6 +15,7 @@ import {
 } from '@/lib/bundle';
 import type { BundlePicks } from '@/lib/bundle';
 import { rupiah, uuid } from '@/lib/format';
+import { initialModifierPicks } from '@/lib/modifiers';
 import type { CartLine, Product } from '@/types/pos';
 
 /** Variant + modifier picker. Rules are mirrored here for UX; the server enforces them again. */
@@ -59,7 +60,9 @@ function Body({
         (product.variants.find((v) => v.is_available) ?? product.variants[0])
             ?.id ?? null,
     );
-    const [picked, setPicked] = useState<Record<number, number[]>>({});
+    const [picked, setPicked] = useState<Record<number, number[]>>(() =>
+        initialModifierPicks(product.modifier_groups),
+    );
     const [picks, setPicks] = useState<BundlePicks>(() =>
         initialPicks(product),
     );

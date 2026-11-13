@@ -11,6 +11,8 @@ export type PIngredient = {
     name: string;
     unit: string;
     choices: { name: string; factor: number }[];
+    stock?: number;
+    min_stock?: number;
 };
 export type PLine = {
     ingredient_id: number | '';
@@ -26,10 +28,44 @@ export const blankLine = (): PLine => ({
     total: '',
 });
 
+/** Step 1: ingredient chosen (qty/price filled later). */
+export const pickedLines = (lines: PLine[]) =>
+    lines.filter((l) => l.ingredient_id !== '');
+
 export const readyLines = (lines: PLine[]) =>
     lines.filter(
         (l) => l.ingredient_id !== '' && Number(l.qty) > 0 && l.total !== '',
     );
+
+/** Suggested buy amount: enough to reach min_stock, preferred in pack units when possible. */
+export function suggestedBuy(
+    ing: PIngredient,
+): { qty: number; unit: string } | null {
+    const stock = Number(ing.stock ?? 0);
+    const min = Number(ing.min_stock ?? 0);
+    const need = Math.max(0, min - stock);
+
+    if (need <= 0) {
+        return null;
+    }
+
+    const packs = [...(ing.choices ?? [])]
+        .filter((c) => c.factor > 1)
+        .sort((a, b) => b.factor - a.factor);
+    const pack = packs[0];
+
+    if (pack) {
+        return {
+            qty: Math.ceil(need / pack.factor),
+            unit: pack.name,
+        };
+    }
+
+    return {
+        qty: Math.ceil(need * 1000) / 1000,
+        unit: ing.unit,
+    };
+}
 
 export const purchaseItems = (lines: PLine[]) =>
     readyLines(lines).map((l) => ({

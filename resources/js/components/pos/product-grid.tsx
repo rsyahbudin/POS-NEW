@@ -1,10 +1,12 @@
-import { Search } from 'lucide-react';
+import { Search, Star } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { ProductArt } from '@/components/pos/product-art';
 import { t } from '@/lang';
 import { rupiah } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { Category, Product } from '@/types/pos';
+
+type CatFilter = number | 'all' | 'favorites';
 
 /**
  * Menu for the cashier and the waiter: photo (or tinted monogram) tiles, a badge with how many of the item are already
@@ -21,29 +23,47 @@ export function ProductGrid({
     inCart: Record<number, number>;
     onPick: (p: Product) => void;
 }) {
-    const [cat, setCat] = useState<number | 'all'>('all');
+    const [cat, setCat] = useState<CatFilter>('all');
     const [q, setQ] = useState('');
     const tintOf = useMemo(
         () => new Map(menu.map((c, i) => [c.id, i] as const)),
         [menu],
     );
+    const hasFavorites = menu.some((c) =>
+        c.products.some((p) => p.is_favorite),
+    );
 
     const products = useMemo(() => {
         const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+        const seen = new Set<number>();
 
         return menu
-            .filter((c) => cat === 'all' || c.id === cat)
+            .filter((c) => cat === 'all' || cat === 'favorites' || c.id === cat)
             .flatMap((c) =>
                 c.products.map((p) => ({ p, tint: tintOf.get(c.id) ?? 0 })),
             )
-            .filter(({ p }) =>
-                words.every((w) =>
+            .filter(({ p }) => {
+                if (cat === 'favorites' && !p.is_favorite) {
+                    return false;
+                }
+                if (seen.has(p.id)) {
+                    return false;
+                }
+                seen.add(p.id);
+
+                return words.every((w) =>
                     `${p.name} ${p.sku ?? ''}`.toLowerCase().includes(w),
-                ),
-            );
+                );
+            });
     }, [menu, cat, q, tintOf]);
 
-    const cats = [{ id: 'all' as const, name: t('Semua') }, ...menu];
+    const cats: { id: CatFilter; name: string }[] = [
+        { id: 'all', name: t('Semua') },
+        ...(hasFavorites
+            ? [{ id: 'favorites' as const, name: t('Favorit') }]
+            : []),
+        ...menu,
+    ];
     // No photos at all: the monogram tiles only waste space, so show compact text tiles and fit more items per screen.
     const compact = !menu.some((c) => c.products.some((p) => p.image));
 
@@ -134,6 +154,12 @@ export function ProductGrid({
                                             compact && 'text-base',
                                         )}
                                     >
+                                        {p.is_favorite && (
+                                            <Star
+                                                className="mr-1 inline size-3.5 -translate-y-px fill-amber-400 text-amber-500"
+                                                aria-hidden
+                                            />
+                                        )}
                                         {p.name}
                                     </span>
                                     <span className="flex items-end justify-between gap-1">
@@ -157,6 +183,11 @@ export function ProductGrid({
                                 {out && (
                                     <span className="absolute top-2 left-2 rounded-md bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
                                         {t('HABIS')}
+                                    </span>
+                                )}
+                                {!out && p.is_favorite && n === 0 && (
+                                    <span className="absolute top-2 left-2 rounded-md bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                        {t('Favorit')}
                                     </span>
                                 )}
                             </button>

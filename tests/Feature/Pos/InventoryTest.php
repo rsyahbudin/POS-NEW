@@ -204,9 +204,19 @@ it('saves a new menu item without a price as not sold yet, and starts selling it
     $owner = userWithRole('owner');
     $category = product('Americano')->category_id;
 
-    $this->actingAs($owner)->post('/admin/products', ['name' => 'Ayam Bakar', 'category_id' => $category, 'base_price' => 0])->assertSessionHasNoErrors()->assertSessionHas('success');
+    $this->actingAs($owner)->post('/admin/products', ['name' => 'Ayam Bakar', 'category_id' => $category, 'base_price' => 0])
+        ->assertSessionHasNoErrors()
+        ->assertSessionHas('success')
+        ->assertSessionHas('product_id');
     $menu = Product::query()->where('name', 'Ayam Bakar')->firstOrFail();
-    expect($menu->base_price)->toBe(0)->and($menu->is_active)->toBeFalse();
+    expect($menu->base_price)->toBe(0)->and($menu->is_active)->toBeFalse()
+        ->and(session('product_id'))->toBe($menu->id);
+
+    // wizard sequence: create without price → recipe → suggested price
+    $ingredient = ingredient('Daging Ayam', 'g');
+    $this->actingAs($owner)->post("/admin/recipes/products/{$menu->id}", [
+        'lines' => [['ingredient_id' => $ingredient->id, 'qty' => 150]],
+    ])->assertSessionHasNoErrors();
 
     // a priced menu item is sold at once
     $this->actingAs($owner)->post('/admin/products', ['name' => 'Es Jeruk', 'category_id' => $category, 'base_price' => 8000])->assertSessionHasNoErrors();

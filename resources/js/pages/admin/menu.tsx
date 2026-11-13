@@ -1,8 +1,9 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
+import { FileSpreadsheet, Plus, Star, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { ImportDialog } from '@/components/pos/import-dialog';
+import { MenuSetupWizard } from '@/components/pos/menu-setup-wizard';
 import { Modal } from '@/components/pos/modal';
 import {
     Field,
@@ -26,6 +27,7 @@ import {
     StationsTab,
 } from '@/pages/admin/menu-setup';
 import { ImagePicker } from '@/components/pos/image-picker';
+import type { RecipeIngredient } from '@/components/pos/recipe-lines';
 
 type Variant = { id?: number; name: string; price: number };
 type Component = {
@@ -45,6 +47,7 @@ type Product = {
     base_price: number;
     is_available: boolean;
     is_active: boolean;
+    is_favorite: boolean;
     stock_qty: number | null;
     sort: number;
     image: string | null;
@@ -52,6 +55,11 @@ type Product = {
     modifier_group_ids: number[];
     is_bundle: boolean;
     components: Component[];
+    recipe_lines?: {
+        variant_id: number | null;
+        ingredient_id: number;
+        qty: number;
+    }[];
 };
 type Group = {
     id: number;
@@ -59,7 +67,12 @@ type Group = {
     min_select: number;
     max_select: number;
     is_required: boolean;
-    modifiers: { id?: number; name: string; price_delta: number }[];
+    modifiers: {
+        id?: number;
+        name: string;
+        price_delta: number;
+        is_default?: boolean;
+    }[];
 };
 type Props = {
     categories: {
@@ -74,6 +87,11 @@ type Props = {
     products: Product[];
     modifierGroups: Group[];
     canBundles: boolean;
+    inventoryEnabled?: boolean;
+    canRecipe?: boolean;
+    canSetPrice?: boolean;
+    targetFoodCost?: number;
+    ingredients?: RecipeIngredient[];
 };
 
 type Draft = {
@@ -87,6 +105,7 @@ type Draft = {
     base_price: number | '';
     stock_qty: number | '';
     is_available: boolean;
+    is_favorite: boolean;
     variants: Variant[];
     modifier_group_ids: number[];
     is_bundle: boolean;
@@ -104,6 +123,7 @@ const blank = (cat?: number): Draft => ({
     base_price: '',
     stock_qty: '',
     is_available: true,
+    is_favorite: false,
     variants: [],
     modifier_group_ids: [],
     is_bundle: false,
@@ -118,24 +138,50 @@ export default function MenuPage({
     products,
     modifierGroups,
     canBundles,
+    inventoryEnabled = false,
+    canRecipe = false,
+    canSetPrice = false,
+    targetFoodCost = 35,
+    ingredients = [],
 }: Props) {
     const features = useFeatures();
     const [tab, setTab] = useState<
         'products' | 'categories' | 'modifiers' | 'stations'
     >('products');
     const [draft, setDraft] = useState<Draft | null>(null);
+    const [wizard, setWizard] = useState<{
+        productId?: number;
+        name?: string;
+        categoryId?: number;
+        step?: 1 | 2 | 3;
+        lines?: {
+            variant_id: number | null;
+            ingredient_id: number;
+            qty: number;
+        }[];
+    } | null>(null);
     const [importing, setImporting] = useState(false);
     const [group, setGroup] = useState<Group | null>(null);
     const errors = usePage().props.errors as Record<string, string>;
     const [local, setLocal] = useState<Record<number, boolean>>({});
-    const [show, setShow] = useState<'all' | 'active' | 'inactive'>('all');
+    const [show, setShow] = useState<'all' | 'active' | 'inactive' | 'favorite'>(
+        'all',
+    );
     const [q, setQ] = useState('');
+    const useWizard = inventoryEnabled && canRecipe;
     const shown = products.filter(
         (p) =>
-            (show === 'all' || (show === 'active') === p.is_active) &&
+            (show === 'all' ||
+                (show === 'favorite'
+                    ? p.is_favorite
+                    : (show === 'active') === p.is_active)) &&
             (!q.trim() ||
                 p.name.toLowerCase().includes(q.trim().toLowerCase())),
     );
+    const waitingPrice = (p: Product) =>
+        !p.is_active &&
+        p.base_price === 0 &&
+        p.variants.every((v) => v.price === 0);
 
     const save = () => {
         if (!draft) return;
@@ -158,6 +204,7 @@ export default function MenuPage({
             base_price: draft.base_price === '' ? 0 : draft.base_price,
             stock_qty: draft.stock_qty === '' ? null : draft.stock_qty,
             is_available: draft.is_available ? 1 : 0,
+            is_favorite: draft.is_favorite ? 1 : 0,
             variants: draft.variants,
             modifier_group_ids: draft.modifier_group_ids,
             printer_ids: draft.printer_ids,
@@ -205,14 +252,36 @@ export default function MenuPage({
                                 >
                                     <FileSpreadsheet /> Impor Excel
                                 </Button>
-                                <Button
-                                    className="h-11"
-                                    onClick={() =>
-                                        setDraft(blank(categories[0]?.id))
-                                    }
-                                >
-                                    <Plus /> Produk
-                                </Button>
+                                {useWizard ? (
+                                    <>
+                                        <Button
+                                            variant="outline"
+                                            className="h-11"
+                                            onClick={() =>
+                                                setDraft(
+                                                    blank(categories[0]?.id),
+                                                )
+                                            }
+                                        >
+                                            <Plus /> Produk lengkap
+                                        </Button>
+                                        <Button
+                                            className="h-11"
+                                            onClick={() => setWizard({})}
+                                        >
+                                            <Plus /> Siapkan menu
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <Button
+                                        className="h-11"
+                                        onClick={() =>
+                                            setDraft(blank(categories[0]?.id))
+                                        }
+                                    >
+                                        <Plus /> Produk
+                                    </Button>
+                                )}
                             </>
                         ) : tab === 'modifiers' ? (
                             <Button
@@ -225,7 +294,11 @@ export default function MenuPage({
                                         max_select: 1,
                                         is_required: false,
                                         modifiers: [
-                                            { name: '', price_delta: 0 },
+                                            {
+                                                name: '',
+                                                price_delta: 0,
+                                                is_default: false,
+                                            },
                                         ],
                                     })
                                 }
@@ -274,6 +347,7 @@ export default function MenuPage({
                             <option value="all">Semua</option>
                             <option value="active">Aktif</option>
                             <option value="inactive">Nonaktif</option>
+                            <option value="favorite">Favorit</option>
                         </select>
                     </div>
                 )}
@@ -306,7 +380,13 @@ export default function MenuPage({
                                         />
                                     )}
                                     <span>
-                                        <span className="font-medium">
+                                        <span className="flex items-center gap-1.5 font-medium">
+                                            {p.is_favorite && (
+                                                <Star
+                                                    className="size-3.5 shrink-0 fill-amber-400 text-amber-500"
+                                                    aria-label="Favorit"
+                                                />
+                                            )}
                                             {p.name}
                                         </span>
                                         {p.variants.length > 0 && (
@@ -332,8 +412,7 @@ export default function MenuPage({
                                         key="n"
                                         className="font-semibold text-muted-foreground"
                                     >
-                                        {p.base_price === 0 &&
-                                        p.variants.every((v) => v.price === 0)
+                                        {waitingPrice(p)
                                             ? 'BELUM ADA HARGA'
                                             : 'NONAKTIF'}
                                     </span>
@@ -356,6 +435,55 @@ export default function MenuPage({
                                     key="a"
                                     className="flex flex-wrap justify-end gap-1.5"
                                 >
+                                    {useWizard && waitingPrice(p) && (
+                                        <Button
+                                            size="sm"
+                                            className="h-9"
+                                            onClick={() =>
+                                                setWizard({
+                                                    productId: p.id,
+                                                    name: p.name,
+                                                    categoryId: p.category_id,
+                                                    step:
+                                                        (p.recipe_lines
+                                                            ?.length ?? 0) > 0
+                                                            ? 3
+                                                            : 2,
+                                                    lines: p.recipe_lines,
+                                                })
+                                            }
+                                        >
+                                            Lanjutkan
+                                        </Button>
+                                    )}
+                                    <Button
+                                        size="icon"
+                                        variant="outline"
+                                        className="size-9"
+                                        aria-label={
+                                            p.is_favorite
+                                                ? `Hapus favorit ${p.name}`
+                                                : `Jadikan favorit ${p.name}`
+                                        }
+                                        aria-pressed={p.is_favorite}
+                                        onClick={() =>
+                                            router.post(
+                                                `/admin/products/${p.id}/favorite`,
+                                                {
+                                                    is_favorite: !p.is_favorite,
+                                                },
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        <Star
+                                            className={
+                                                p.is_favorite
+                                                    ? 'fill-amber-400 text-amber-500'
+                                                    : ''
+                                            }
+                                        />
+                                    </Button>
                                     <Button
                                         size="sm"
                                         variant={on ? 'outline' : 'destructive'}
@@ -399,6 +527,7 @@ export default function MenuPage({
                                                 base_price: p.base_price,
                                                 stock_qty: p.stock_qty ?? '',
                                                 is_available: p.is_available,
+                                                is_favorite: p.is_favorite,
                                                 variants: p.variants,
                                                 modifier_group_ids:
                                                     p.modifier_group_ids,
@@ -1032,20 +1161,37 @@ export default function MenuPage({
                             </Field>
                         )}
                     </FormSection>
-                    <label className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm">
-                        <input
-                            type="checkbox"
-                            className="size-5"
-                            checked={draft.is_available}
-                            onChange={(e) =>
-                                setDraft({
-                                    ...draft,
-                                    is_available: e.target.checked,
-                                })
-                            }
-                        />
-                        Tersedia
-                    </label>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                        <label className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm">
+                            <input
+                                type="checkbox"
+                                className="size-5"
+                                checked={draft.is_available}
+                                onChange={(e) =>
+                                    setDraft({
+                                        ...draft,
+                                        is_available: e.target.checked,
+                                    })
+                                }
+                            />
+                            Tersedia
+                        </label>
+                        <label className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm">
+                            <input
+                                type="checkbox"
+                                className="size-5"
+                                checked={draft.is_favorite}
+                                onChange={(e) =>
+                                    setDraft({
+                                        ...draft,
+                                        is_favorite: e.target.checked,
+                                    })
+                                }
+                            />
+                            <Star className="size-4 fill-amber-400 text-amber-500" />
+                            Favorit (tampil di QR)
+                        </label>
+                    </div>
                     <Button className="h-12" onClick={save}>
                         Simpan
                     </Button>
@@ -1113,10 +1259,17 @@ export default function MenuPage({
                         />
                         Wajib dipilih
                     </label>
+                    <p className="text-xs text-muted-foreground">
+                        Centang Bawaan agar opsi itu sudah terpilih saat kasir
+                        atau pelanggan menambah menu.
+                    </p>
                     {group.modifiers.map((m, i) => (
-                        <div key={i} className="flex gap-2">
+                        <div
+                            key={i}
+                            className="flex flex-wrap items-center gap-2"
+                        >
                             <Input
-                                className="h-11"
+                                className="h-11 min-w-0 flex-1"
                                 placeholder="Opsi"
                                 value={m.name}
                                 onChange={(e) =>
@@ -1135,7 +1288,7 @@ export default function MenuPage({
                                 }
                             />
                             <Input
-                                className="h-11 w-32 text-right"
+                                className="h-11 w-28 text-right"
                                 type="number"
                                 value={m.price_delta}
                                 onChange={(e) =>
@@ -1156,6 +1309,30 @@ export default function MenuPage({
                                 }
                                 aria-label="Tambahan harga"
                             />
+                            <label className="flex h-11 items-center gap-1.5 rounded-lg border px-2 text-xs whitespace-nowrap">
+                                <input
+                                    type="checkbox"
+                                    className="size-4"
+                                    checked={!!m.is_default}
+                                    onChange={(e) =>
+                                        setGroup({
+                                            ...group,
+                                            modifiers: group.modifiers.map(
+                                                (x, j) =>
+                                                    j === i
+                                                        ? {
+                                                              ...x,
+                                                              is_default:
+                                                                  e.target
+                                                                      .checked,
+                                                          }
+                                                        : x,
+                                            ),
+                                        })
+                                    }
+                                />
+                                Bawaan
+                            </label>
                             <Button
                                 type="button"
                                 variant="ghost"
@@ -1184,7 +1361,11 @@ export default function MenuPage({
                                 ...group,
                                 modifiers: [
                                     ...group.modifiers,
-                                    { name: '', price_delta: 0 },
+                                    {
+                                        name: '',
+                                        price_delta: 0,
+                                        is_default: false,
+                                    },
                                 ],
                             })
                         }
@@ -1202,6 +1383,7 @@ export default function MenuPage({
                                 modifiers: group.modifiers.map((m) => ({
                                     name: m.name,
                                     price_delta: m.price_delta,
+                                    is_default: !!m.is_default,
                                 })),
                             };
                             const opts = {
@@ -1232,6 +1414,17 @@ export default function MenuPage({
                     type="products"
                     onClose={() => setImporting(false)}
                     onDone={() => router.reload()}
+                />
+            )}
+            {wizard !== null && useWizard && (
+                <MenuSetupWizard
+                    open
+                    onClose={() => setWizard(null)}
+                    categories={categories}
+                    ingredients={ingredients}
+                    targetFoodCost={targetFoodCost}
+                    canSetPrice={canSetPrice}
+                    start={wizard}
                 />
             )}
         </>

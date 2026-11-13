@@ -2,6 +2,7 @@
 
 namespace App\Domain\Catalog\Models;
 
+use App\Domain\Inventory\Models\RecipeLine;
 use App\Domain\Printing\Models\Printer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property bool $is_available
  * @property bool $is_active
  * @property bool $is_bundle
+ * @property bool $is_favorite
  * @property int|null $stock_qty
  * @property int $sort
  * @property Carbon|null $deleted_at
@@ -38,7 +40,7 @@ class Product extends Model
 
     protected function casts(): array
     {
-        return ['is_available' => 'boolean', 'is_active' => 'boolean', 'is_bundle' => 'boolean', 'base_price' => 'integer', 'stock_qty' => 'integer'];
+        return ['is_available' => 'boolean', 'is_active' => 'boolean', 'is_bundle' => 'boolean', 'is_favorite' => 'boolean', 'base_price' => 'integer', 'stock_qty' => 'integer'];
     }
 
     /** @return BelongsTo<Category, $this> */
@@ -81,5 +83,11 @@ class Product extends Model
     public function modifierGroups(): BelongsToMany
     {
         return $this->belongsToMany(ModifierGroup::class, 'modifier_group_product');
+    }
+
+    /** @return HasMany<RecipeLine, $this> */
+    public function recipeLines(): HasMany
+    {
+        return $this->hasMany(RecipeLine::class);
     }
 }

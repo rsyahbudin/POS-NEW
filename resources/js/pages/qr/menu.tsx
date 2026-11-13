@@ -13,7 +13,10 @@ import {
     initialPicks,
 } from '@/lib/bundle';
 import type { BundlePayload, BundlePicks } from '@/lib/bundle';
+import { initialModifierPicks } from '@/lib/modifiers';
 import type { Category, Modifier, Product } from '@/types/pos';
+
+const FAV_SECTION = -1;
 
 /*
  * Public guest page. Kept dependency-light on purpose (no shadcn/Radix, no
@@ -247,19 +250,32 @@ export default function QrMenu({
     );
     const sections = useMemo(() => {
         const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-
-        return menu
+        const match = (p: Product) =>
+            words.every((w) =>
+                `${p.name} ${p.description ?? ''}`
+                    .toLowerCase()
+                    .includes(w),
+            );
+        const cats = menu
             .map((c) => ({
                 ...c,
-                products: c.products.filter((p) =>
-                    words.every((w) =>
-                        `${p.name} ${p.description ?? ''}`
-                            .toLowerCase()
-                            .includes(w),
-                    ),
-                ),
+                products: c.products.filter(match),
             }))
             .filter((c) => c.products.length > 0);
+        const favs: Product[] = [];
+        const seen = new Set<number>();
+        for (const c of cats) {
+            for (const p of c.products) {
+                if (p.is_favorite && !seen.has(p.id)) {
+                    seen.add(p.id);
+                    favs.push(p);
+                }
+            }
+        }
+
+        return favs.length > 0
+            ? [{ id: FAV_SECTION, name: 'Favorit', products: favs }, ...cats]
+            : cats;
     }, [menu, q]);
 
     // highlight the chip of the category being read
@@ -612,7 +628,7 @@ export default function QrMenu({
                             className="scroll-mt-28 px-5 pt-6"
                         >
                             <h2 className="flex items-baseline gap-2 text-xl font-bold tracking-tight">
-                                {c.name}
+                                {c.id === FAV_SECTION ? '★ Favorit' : c.name}
                                 <span className="text-sm font-medium text-muted-foreground">
                                     {c.products.length}
                                 </span>
@@ -707,6 +723,13 @@ export default function QrMenu({
                                                             0
                                                         }
                                                     />
+                                                    {p.is_favorite &&
+                                                        c.id !==
+                                                            FAV_SECTION && (
+                                                            <span className="absolute top-2 left-2 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white shadow">
+                                                                Favorit
+                                                            </span>
+                                                        )}
                                                 </div>
                                                 <div className="relative">
                                                     {control(
@@ -738,6 +761,13 @@ export default function QrMenu({
                                                 <h3
                                                     className={`text-base leading-snug font-semibold ${out ? 'text-muted-foreground' : ''}`}
                                                 >
+                                                    {p.is_favorite &&
+                                                        c.id !==
+                                                            FAV_SECTION && (
+                                                            <span className="mr-1.5 inline-block rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
+                                                                Favorit
+                                                            </span>
+                                                        )}
                                                     {p.name}
                                                 </h3>
                                                 {p.description && (
@@ -1849,7 +1879,9 @@ function Picker({
         (product.variants.find((v) => v.is_available) ?? product.variants[0])
             ?.id ?? null,
     );
-    const [picked, setPicked] = useState<Record<number, number[]>>({});
+    const [picked, setPicked] = useState<Record<number, number[]>>(() =>
+        initialModifierPicks(product.modifier_groups),
+    );
     const [picks, setPicks] = useState<BundlePicks>(() =>
         initialPicks(product),
     );

@@ -132,6 +132,7 @@ class StockController extends Controller
             'lowIds' => $request->boolean('menipis') ? $ingredients->filter(fn (Ingredient $i) => $i->stock <= $i->min_stock)->pluck('id')->values()->all() : [],
             'ingredients' => $ingredients->map(fn (Ingredient $i) => [
                 'id' => $i->id, 'name' => $i->name, 'unit' => $i->unit, 'choices' => Units::choices($i),
+                'stock' => $i->stock, 'min_stock' => $i->min_stock,
             ])->values()->all(),
             'history' => Purchase::query()->where('outlet_id', $id)->where('user_id', $user->id)->with('items')->latest('id')->limit(15)->get()->map(fn (Purchase $p) => [
                 'id' => $p->id, 'purchased_on' => $p->purchased_on->toDateString(), 'supplier' => $p->supplier, 'total' => $p->total, 'status' => $p->status,

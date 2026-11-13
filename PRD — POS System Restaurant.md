@@ -774,6 +774,17 @@ Halaman publik (tanpa login):
 - Station is hidden everywhere (menu tabs, category form, product form, ingredient and user forms, printers page) unless the kitchen display (`kitchen.enabled`) or stock per station (`stock.by_station`) is on. Ingredient/user station fields need `stock.by_station`.
 - One physical printer is registered once with several roles (receipt, bill, ticket) through `printers.roles` (jsonb). Older rows without roles fall back to `kind`. Ticket routing stays menu printers, then category printers, then station printers.
 
+### Favorit menu & modifier bawaan (Paket B)
+
+- Produk punya `is_favorite`: di Kelola › Menu (centang di form, bintang di daftar, filter Favorit). Muncul di QR sebagai section **Favorit** di atas kategori plus badge di kartu kategori biasa; di kasir ada chip **Favorit** dan badge di tile.
+- Modifier punya `is_default` (centang **Bawaan** di grup modifier, dibatasi `max_select`). Di sheet kasir dan QR, opsi bawaan sudah tercentang; bila tidak ada bawaan tapi grup wajib (`min` > 0), opsi tersedia pertama dipilih otomatis.
+
+### Siapkan menu (wizard) dan belanja 2 langkah
+
+- Bila stok/HPP aktif dan user punya izin Kelola stok: tombol **Siapkan menu** membuka wizard 3 langkah (nama/kategori/foto → resep → harga disarankan). Endpoint tetap sama: `POST /admin/products` (harga 0, flash `product_id`) → `POST /admin/recipes/products/{id}` → `POST /admin/recipes/products/{id}/price`. **Produk lengkap** tetap ada untuk varian/paket/printer. Badge BELUM ADA HARGA punya **Lanjutkan**.
+- Editor resep dipakai bersama (`RecipeLines` + `PriceCard`); fokus daftar bahan + qty, HPP/margin sebagai hasil di bawah.
+- Belanja bahan: langkah 1 centang bahan (menipis / ulangi terakhir / cari), qty saran dari selisih min_stock; langkah 2 isi harga + pemasok + bayar + nota. Draft di perangkat menyimpan `step`; bila `?menipis=1` bertabrakan dengan draft, user memilih Pakai draft atau Ganti dengan yang menipis.
+
 ### Stock, count and purchase flows closer to other POS
 
 - Purchase form: last price per chosen unit under each line and a warning when the typed price is at or above the price-alert percent; "repeat last purchase" (quantities only, prices typed again); unsent purchase kept on the device; "paid with" (not recorded, drawer, own money) and an optional receipt photo.

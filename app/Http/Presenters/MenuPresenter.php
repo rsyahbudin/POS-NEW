@@ -29,7 +29,7 @@ class MenuPresenter
                 'products' => $c->products->map(fn ($p) => [
                     'id' => $p->id, 'name' => $p->name, 'sku' => $p->sku, 'description' => $p->description,
                     'price' => $p->base_price, 'image' => MediaUrl::public($p->image_path),
-                    'is_available' => $p->is_available, 'stock_qty' => $p->stock_qty,
+                    'is_available' => $p->is_available, 'is_favorite' => (bool) $p->is_favorite, 'stock_qty' => $p->stock_qty,
                     'variants' => $p->variants->map(fn ($v) => ['id' => $v->id, 'name' => $v->name, 'price' => $v->price, 'is_available' => $v->is_available])->all(),
                     'modifier_groups' => $p->is_bundle ? [] : self::groups($p->modifierGroups),
                     'bundle' => $p->is_bundle ? $p->bundleItems->map(fn ($b) => [
@@ -53,7 +53,7 @@ class MenuPresenter
             $out[] = [
                 'id' => $g->id, 'name' => $g->name, 'min' => $g->is_required ? max(1, $g->min_select) : $g->min_select,
                 'max' => $g->max_select, 'required' => $g->is_required,
-                'modifiers' => $g->modifiers->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'price_delta' => $m->price_delta, 'is_available' => $m->is_available])->all(),
+                'modifiers' => $g->modifiers->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'price_delta' => $m->price_delta, 'is_default' => (bool) $m->is_default, 'is_available' => $m->is_available])->all(),
             ];
         }
 

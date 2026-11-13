@@ -11,6 +11,7 @@ use Illuminate\Support\Carbon;
  * @property int $modifier_group_id
  * @property string $name
  * @property int $price_delta
+ * @property bool $is_default
  * @property int $sort
  * @property bool $is_available
  * @property Carbon|null $created_at
@@ -22,7 +23,7 @@ class Modifier extends Model
 
     protected function casts(): array
     {
-        return ['is_available' => 'boolean'];
+        return ['is_available' => 'boolean', 'is_default' => 'boolean'];
     }
 
     /** @return BelongsTo<ModifierGroup, $this> */

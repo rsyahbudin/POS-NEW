@@ -110,6 +110,7 @@ export type Modifier = {
     id: number;
     name: string;
     price_delta: number;
+    is_default?: boolean;
     is_available: boolean;
 };
 export type ModifierGroup = {
@@ -135,6 +136,7 @@ export type Product = {
     price: number;
     image: string | null;
     is_available: boolean;
+    is_favorite?: boolean;
     stock_qty: number | null;
     variants: Variant[];
     modifier_groups: ModifierGroup[];

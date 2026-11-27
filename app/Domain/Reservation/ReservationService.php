@@ -4,6 +4,7 @@ namespace App\Domain\Reservation;
 
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Floor\Actions\SyncTableStatusAction;
+use App\Domain\Floor\Models\Area;
 use App\Domain\Floor\Models\Table;
 use App\Domain\Notification\Notifier;
 use App\Domain\Ordering\Actions\PlaceOrderAction;
@@ -201,22 +202,43 @@ class ReservationService
     }
 
     /**
-     * Tables for a party: one table that fits, else the fewest neighbouring tables of one area whose seats add up.
+     * Tables for a party in one area (or anywhere): first a table or a run of neighbouring tables that seat everybody
+     * normally, then, when nothing does, the same with each table's squeeze capacity (a group that packs in).
      *
-     * @return list<int>|null
+     * @param  list<int>  $extraBusy  tables to treat as taken as well
+     * @return array{ids: list<int>, tight: bool}|null
      */
-    public function allocate(int $outletId, int $pax, CarbonImmutable $start, CarbonImmutable $end, ?int $exceptReservation = null): ?array
+    public function pickTables(int $outletId, int $pax, CarbonImmutable $start, CarbonImmutable $end, ?int $areaId = null, ?int $exceptReservation = null, array $extraBusy = []): ?array
     {
         $busy = DB::table('reservation_tables')->join('reservations', 'reservations.id', '=', 'reservation_tables.reservation_id')
             ->where('reservations.outlet_id', $outletId)->whereIn('reservations.status', ['pending', 'booked', 'seated'])
             ->where('reservations.starts_at', '<', $end)->where('reservations.ends_at', '>', $start)
             ->when($exceptReservation !== null, fn ($q) => $q->where('reservations.id', '!=', $exceptReservation))
-            ->pluck('reservation_tables.table_id')->map(fn ($id) => (int) $id)->all();
+            ->pluck('reservation_tables.table_id')->map(fn ($id) => (int) $id)->merge($extraBusy)->values()->all();
 
-        $tables = Table::query()->where('outlet_id', $outletId)->orderBy('area_id')->orderBy('id')->get();
+        $tables = Table::query()->where('outlet_id', $outletId)->when($areaId !== null, fn ($q) => $q->where('area_id', $areaId))->orderBy('area_id')->orderBy('id')->get();
+        foreach ([false, true] as $squeeze) {
+            $ids = $this->fit($tables, $busy, $pax, $squeeze);
+            if ($ids !== null) {
+                $normal = (int) $tables->whereIn('id', $ids)->sum('capacity');
+
+                return ['ids' => $ids, 'tight' => $normal < $pax];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  Collection<int, Table>  $tables
+     * @param  list<int>  $busy
+     * @return list<int>|null
+     */
+    private function fit(Collection $tables, array $busy, int $pax, bool $squeeze): ?array
+    {
+        $seats = fn (Table $t): int => $squeeze ? $t->squeezeCapacity() : $t->capacity;
         $free = $tables->reject(fn (Table $t) => in_array($t->id, $busy, true));
-
-        $single = $free->filter(fn (Table $t) => $t->capacity >= $pax)->sortBy('capacity')->first();
+        $single = $free->filter(fn (Table $t) => $seats($t) >= $pax)->sortBy($seats)->first();
         if ($single !== null) {
             return [$single->id];
         }
@@ -224,32 +246,98 @@ class ReservationService
         $best = null;
         foreach ($tables->groupBy('area_id') as $area) {
             $run = [];
-            $seats = 0;
+            $total = 0;
             foreach ($area->values() as $t) {
                 if (in_array($t->id, $busy, true)) {
                     $run = [];
-                    $seats = 0;
+                    $total = 0;
 
                     continue;
                 }
-                $run[] = $t->id;
-                $seats += $t->capacity;
-                while ($seats - $this->capacityOf($tables, $run[0]) >= $pax && count($run) > 1) {
-                    $seats -= $this->capacityOf($tables, array_shift($run));
+                $run[] = $t;
+                $total += $seats($t);
+                while (count($run) > 1 && $total - $seats($run[0]) >= $pax) {
+                    $total -= $seats(array_shift($run));
                 }
-                if ($seats >= $pax && ($best === null || count($run) < count($best))) {
+                if ($total >= $pax && ($best === null || count($run) < count($best))) {
                     $best = $run;
                 }
+            }
+        }
+
+        return $best === null ? null : array_map(fn (Table $t) => $t->id, $best);
+    }
+
+    /** @return list<int>|null the tables for a party, or null when nothing fits */
+    public function allocate(int $outletId, int $pax, CarbonImmutable $start, CarbonImmutable $end, ?int $exceptReservation = null, ?int $areaId = null): ?array
+    {
+        return $this->pickTables($outletId, $pax, $start, $end, $areaId, $exceptReservation)['ids'] ?? null;
+    }
+
+    /** How many parties of this size still fit in an area, each on its own tables. */
+    public function unitsFor(int $outletId, int $areaId, int $pax, CarbonImmutable $start, CarbonImmutable $end): int
+    {
+        $taken = [];
+        $n = 0;
+        while ($n < 30 && ($pick = $this->pickTables($outletId, $pax, $start, $end, $areaId, null, $taken)) !== null) {
+            $taken = array_merge($taken, $pick['ids']);
+            $n++;
+        }
+
+        return $n;
+    }
+
+    /**
+     * The areas a guest can pick for a day and party size, with how many such parties each can still take.
+     *
+     * @return list<array{id: int, name: string, units: int}>
+     */
+    public function areaOptions(string $date, int $pax): array
+    {
+        [$start, $end] = $this->window($date);
+        $outletId = $this->outlet->id();
+        $out = [];
+        foreach (Area::query()->where('outlet_id', $outletId)->whereHas('tables')->orderBy('sort')->orderBy('id')->get() as $area) {
+            $out[] = ['id' => $area->id, 'name' => $area->name, 'units' => $this->unitsFor($outletId, $area->id, $pax, $start, $end)];
+        }
+
+        return $out;
+    }
+
+    /** The area with the most room left for this party, so quiet areas fill first; null when no area can take it. */
+    private function bestArea(int $outletId, int $pax, CarbonImmutable $start, CarbonImmutable $end): ?int
+    {
+        $best = null;
+        $most = 0;
+        foreach (Area::query()->where('outlet_id', $outletId)->whereHas('tables')->orderBy('sort')->orderBy('id')->get() as $area) {
+            $units = $this->unitsFor($outletId, $area->id, $pax, $start, $end);
+            if ($units > $most) {
+                $best = $area->id;
+                $most = $units;
             }
         }
 
         return $best;
     }
 
-    /** @param  Collection<int, Table>  $tables */
-    private function capacityOf($tables, int $id): int
+    /**
+     * Holds tables for a booking in its area (or the best one) and records whether the party is packed in.
+     *
+     * @return bool whether tables were found
+     */
+    private function assignTables(Reservation $r, ?int $areaId): bool
     {
-        return (int) ($tables->firstWhere('id', $id)->capacity ?? 0);
+        $start = CarbonImmutable::instance($r->starts_at);
+        $end = CarbonImmutable::instance($r->ends_at);
+        $areaId ??= $this->bestArea($r->outlet_id, $r->pax, $start, $end);
+        $pick = $areaId === null ? null : $this->pickTables($r->outlet_id, $r->pax, $start, $end, $areaId, $r->id);
+        if ($pick === null) {
+            return false;
+        }
+        $r->tables()->sync($pick['ids']);
+        $r->update(['area_id' => $areaId, 'tight' => $pick['tight']]);
+
+        return true;
     }
 
     /**
@@ -347,14 +435,31 @@ class ReservationService
                 }
             }
             [$start, $end] = $this->window($date);
+            $areaId = isset($data['area_id']) && (int) $data['area_id'] > 0 ? (int) $data['area_id'] : null;
+            if ($areaId !== null && ! Area::query()->where('outlet_id', $outletId)->whereKey($areaId)->exists()) {
+                throw new OrderException('Area itu tidak ada.');
+            }
+            $hasTables = Table::query()->where('outlet_id', $outletId)->exists();
+            $areaId ??= $hasTables ? $this->bestArea($outletId, $pax, CarbonImmutable::instance($start), CarbonImmutable::instance($end)) : null;
+            $pick = $areaId === null ? null : $this->pickTables($outletId, $pax, CarbonImmutable::instance($start), CarbonImmutable::instance($end), $areaId);
+            if ($pick === null && $by === null && $hasTables) {
+                $areaName = $areaId === null ? null : Area::query()->whereKey($areaId)->value('name');
+                throw new OrderException($areaName === null ? "Semua area sudah penuh untuk {$pax} orang." : "Area {$areaName} sudah penuh untuk {$pax} orang. Pilih area lain atau hubungi kami.");
+            }
 
-            return Reservation::create([
+            $booking = Reservation::create([
                 'outlet_id' => $outletId, 'public_id' => strtoupper(Str::random(8)), 'name' => $name, 'phone' => $phone, 'pax' => $pax,
                 'starts_at' => $start, 'ends_at' => $end, 'status' => 'pending', 'note' => isset($data['note']) ? mb_substr((string) $data['note'], 0, 200) : null,
                 'items' => array_values($data['items']), 'summary' => $made['summary'], 'items_total' => $made['total'],
                 'payment_type' => $type, 'amount_due' => $this->amountDue($type, $made['total']),
                 'package_short' => $this->packageShort($made['packages'], $pax, $outletId), 'full_menu' => (bool) ($data['full_menu'] ?? false) && $by !== null,
-            ])->refresh();
+                'area_id' => $areaId, 'tight' => $pick['tight'] ?? false,
+            ]);
+            if ($pick !== null) {
+                $booking->tables()->sync($pick['ids']);
+            }
+
+            return $booking->refresh();
         });
 
         if ($by !== null) {
@@ -411,7 +516,24 @@ class ReservationService
         }
         $made = $this->compose($lines, $r->outlet_id, $r->full_menu);
 
+        $moved = null;
+        if ($pax !== $r->pax) {
+            $current = $r->tables()->get();
+            if ($current->isNotEmpty() && (int) $current->sum('capacity') >= $pax) {
+                $moved = ['ids' => $current->pluck('id')->all(), 'tight' => false];
+            } elseif ($current->isNotEmpty() && (int) $current->sum(fn (Table $t) => $t->squeezeCapacity()) >= $pax) {
+                $moved = ['ids' => $current->pluck('id')->all(), 'tight' => true];
+            } else {
+                $moved = $this->pickTables($r->outlet_id, $pax, CarbonImmutable::instance($r->starts_at), CarbonImmutable::instance($r->ends_at), $r->area_id, $r->id);
+                if ($moved === null && $by === null) {
+                    throw new OrderException("Tempat untuk {$pax} orang di area itu sudah penuh. Hubungi kami untuk mengatur ulang.");
+                }
+            }
+            $r->tables()->sync($moved['ids'] ?? []);
+        }
+
         $r->update([
+            'tight' => $moved['tight'] ?? ($pax === $r->pax ? $r->tight : false),
             'pax' => $pax, 'name' => $name, 'phone' => $phone, 'note' => isset($data['note']) ? mb_substr((string) $data['note'], 0, 200) : $r->note,
             'items' => $lines, 'summary' => $made['summary'], 'items_total' => $made['total'], 'amount_due' => $this->amountDue($r->payment_type, $made['total']),
             'package_short' => $this->packageShort($made['packages'], $pax, $r->outlet_id), 'changed_at' => now(),
@@ -489,9 +611,7 @@ class ReservationService
         $pending = Reservation::query()->where('outlet_id', $this->outlet->id())->whereIn('status', ['pending', 'booked'])->whereDoesntHave('tables')
             ->whereBetween('starts_at', [$day->startOfDay()->setTimezone($db), $day->endOfDay()->setTimezone($db)])->orderBy('id')->get();
         foreach ($pending as $r) {
-            $ids = $this->allocate($r->outlet_id, $r->pax, CarbonImmutable::instance($r->starts_at), CarbonImmutable::instance($r->ends_at), $r->id);
-            if ($ids !== null) {
-                $r->tables()->sync($ids);
+            if ($this->assignTables($r, $r->area_id)) {
                 $done++;
             }
         }
@@ -512,11 +632,9 @@ class ReservationService
         $tables = $reservation->tables()->get();
         if ($tables->isEmpty()) {
             // nobody gave this party tables yet: the waiter at the door should not be stuck, so find free ones now
-            $ids = $this->allocate($reservation->outlet_id, $reservation->pax, CarbonImmutable::instance($reservation->starts_at), CarbonImmutable::instance($reservation->ends_at), $reservation->id);
-            if ($ids === null) {
+            if (! $this->assignTables($reservation, $reservation->area_id) && ! $this->assignTables($reservation, null)) {
                 throw new OrderException('Belum ada meja kosong yang cukup untuk '.$reservation->pax.' orang. Minta CS atau manager mengatur mejanya.');
             }
-            $reservation->tables()->sync($ids);
             $tables = $reservation->tables()->get();
             if ($tables->isEmpty()) {
                 throw new OrderException('Meja belum bisa dipilihkan. Minta CS atau manager mengatur mejanya.');
@@ -628,7 +746,7 @@ class ReservationService
             throw new OrderException('Reservasi ini sudah tidak aktif.');
         }
         $tables = Table::query()->where('outlet_id', $reservation->outlet_id)->whereIn('id', $tableIds)->get();
-        if ($tables->isEmpty() || $tables->count() !== count(array_unique($tableIds)) || $tables->sum('capacity') < $reservation->pax) {
+        if ($tables->isEmpty() || $tables->count() !== count(array_unique($tableIds)) || $tables->sum(fn (Table $t) => $t->squeezeCapacity()) < $reservation->pax) {
             throw new OrderException('Meja yang dipilih belum cukup untuk '.$reservation->pax.' orang.');
         }
         $taken = DB::table('reservation_tables')->join('reservations', 'reservations.id', '=', 'reservation_tables.reservation_id')
@@ -639,6 +757,7 @@ class ReservationService
             throw new OrderException('Salah satu meja itu sudah dipesan di jam yang sama.');
         }
         $reservation->tables()->sync($tables->pluck('id')->all());
+        $reservation->update(['area_id' => $tables->first()->area_id, 'tight' => $tables->sum('capacity') < $reservation->pax]);
         Audit::log('reservation.retabled', $reservation, ['tables' => $tables->pluck('name')->all()], $by);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Reservation;
 
+use App\Domain\Floor\Models\Area;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Reservation\Models\Reservation;
 use App\Domain\Reservation\ReservationService;
@@ -59,12 +60,12 @@ class ReservationBookingController extends Controller
         ] + $this->reservations->formRules());
     }
 
-    /** How many people still fit on a day, and whether it takes bookings. */
+    /** How many people still fit on a day, whether it takes bookings, and which areas can seat a party of this size. */
     public function slots(Request $request): JsonResponse
     {
-        $data = $request->validate(['date' => ['required', 'date_format:Y-m-d']]);
+        $data = $request->validate(['date' => ['required', 'date_format:Y-m-d'], 'pax' => ['nullable', 'integer', 'min:1', 'max:200']]);
 
-        return response()->json($this->reservations->availability($data['date']));
+        return response()->json($this->reservations->availability($data['date']) + ['areas' => $this->reservations->areaOptions($data['date'], (int) ($data['pax'] ?? 2))]);
     }
 
     /** @return array<string, mixed> */
@@ -84,7 +85,7 @@ class ReservationBookingController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:80'], 'phone' => ['required', 'string', 'max:30'], 'pax' => ['required', 'integer', 'min:1', 'max:200'],
-            'date' => ['required', 'date_format:Y-m-d'], 'payment_type' => ['required', 'in:dp,full'], 'note' => ['nullable', 'string', 'max:200'],
+            'date' => ['required', 'date_format:Y-m-d'], 'area_id' => ['nullable', 'integer'], 'payment_type' => ['required', 'in:dp,full'], 'note' => ['nullable', 'string', 'max:200'],
         ] + $this->itemRules());
         $data['items'] ??= [];
 
@@ -145,6 +146,7 @@ class ReservationBookingController extends Controller
             'reservation' => [
                 'code' => $r->public_id, 'name' => $r->name, 'pax' => $r->pax, 'status' => $r->status,
                 'starts_at' => $r->starts_at->setTimezone('Asia/Jakarta')->toIso8601String(), 'tables' => $r->tables->pluck('name')->all(),
+                'area' => $r->area_id === null ? null : Area::query()->whereKey($r->area_id)->value('name'), 'tight' => $r->tight,
                 'summary' => $r->summary, 'total' => $r->items_total, 'note' => $r->note,
                 'payment_type' => $r->payment_type, 'amount_due' => $r->amount_due, 'paid' => $r->paid_amount, 'package_short' => $r->package_short && ! $r->package_waived,
                 'can_change' => $this->reservations->guestCanChange($r), 'full_menu' => $r->full_menu,

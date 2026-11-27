@@ -38,6 +38,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $changed_at
  * @property Carbon|null $created_at
  * @property int|null $deposit_payment_id
+ * @property int|null $area_id
+ * @property bool $tight
  * @property int|null $order_id
  * @property Carbon|null $seated_at
  * @property-read Collection<int, Table> $tables
@@ -48,7 +50,7 @@ class Reservation extends Model
 
     protected function casts(): array
     {
-        return ['starts_at' => 'datetime', 'ends_at' => 'datetime', 'seated_at' => 'datetime', 'confirmed_at' => 'datetime', 'changed_at' => 'datetime', 'items' => 'array', 'summary' => 'array', 'package_short' => 'boolean', 'package_waived' => 'boolean', 'full_menu' => 'boolean'];
+        return ['starts_at' => 'datetime', 'ends_at' => 'datetime', 'seated_at' => 'datetime', 'confirmed_at' => 'datetime', 'changed_at' => 'datetime', 'items' => 'array', 'summary' => 'array', 'package_short' => 'boolean', 'package_waived' => 'boolean', 'full_menu' => 'boolean', 'tight' => 'boolean'];
     }
 
     /** @return BelongsToMany<Table, $this> */

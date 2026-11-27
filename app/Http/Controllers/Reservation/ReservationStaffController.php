@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Reservation;
 
+use App\Domain\Floor\Models\Area;
 use App\Domain\Floor\Models\Table;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Reservation\Models\Reservation;
@@ -43,11 +44,12 @@ class ReservationStaffController extends Controller
             'reservations' => Reservation::query()->where('outlet_id', $id)->whereBetween('starts_at', [$from, $to])->with(['tables', 'order:id,number'])->orderBy('id')->get()->map(fn (Reservation $r) => [
                 'id' => $r->id, 'code' => $r->public_id, 'name' => $r->name, 'phone' => $r->phone, 'pax' => $r->pax, 'status' => $r->status, 'note' => $r->note,
                 'starts_at' => $r->starts_at->setTimezone(self::ZONE)->toIso8601String(), 'tables' => $r->tables->map(fn (Table $t) => ['id' => $t->id, 'name' => $t->name, 'capacity' => $t->capacity])->all(),
+                'area' => $r->area_id === null ? null : Area::query()->whereKey($r->area_id)->value('name'), 'tight' => $r->tight,
                 'summary' => $r->summary, 'total' => $r->items_total, 'order' => $r->order?->number,
                 'payment_type' => $r->payment_type, 'amount_due' => $r->amount_due, 'paid' => $r->paid_amount, 'package_short' => $r->package_short, 'package_waived' => $r->package_waived,
                 'full_menu' => $r->full_menu, 'deposit_applied' => $r->deposit_payment_id !== null, 'changed_at' => $r->changed_at?->setTimezone(self::ZONE)->toIso8601String(), 'created_at' => $r->created_at?->setTimezone(self::ZONE)->toIso8601String(),
             ])->all(),
-            'tables' => Table::query()->where('outlet_id', $id)->with('area:id,name')->orderBy('area_id')->orderBy('id')->get()->map(fn (Table $t) => ['id' => $t->id, 'name' => $t->name, 'capacity' => $t->capacity, 'area' => $t->area->name])->all(),
+            'tables' => Table::query()->where('outlet_id', $id)->with('area:id,name')->orderBy('area_id')->orderBy('id')->get()->map(fn (Table $t) => ['id' => $t->id, 'name' => $t->name, 'capacity' => $t->capacity, 'max' => $t->squeezeCapacity(), 'area' => $t->area->name])->all(),
         ]);
     }
 
@@ -153,7 +155,7 @@ class ReservationStaffController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:80'], 'phone' => ['required', 'string', 'max:30'], 'pax' => ['required', 'integer', 'min:1', 'max:200'],
-            'date' => ['required', 'date_format:Y-m-d'], 'payment_type' => ['required', 'in:dp,full'], 'note' => ['nullable', 'string', 'max:200'],
+            'date' => ['required', 'date_format:Y-m-d'], 'area_id' => ['nullable', 'integer'], 'payment_type' => ['required', 'in:dp,full'], 'note' => ['nullable', 'string', 'max:200'],
             'paid' => ['nullable', 'integer', 'min:0'], 'waive_package' => ['nullable', 'boolean'], 'full_menu' => ['nullable', 'boolean'],
         ] + $this->lineRules('items'));
         $data['items'] ??= [];

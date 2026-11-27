@@ -18,6 +18,7 @@ use Illuminate\Support\Str;
  * @property int $area_id
  * @property string $name
  * @property int $capacity
+ * @property int|null $max_capacity
  * @property string $qr_token
  * @property bool $qr_enabled
  * @property TableStatus $status
@@ -40,6 +41,12 @@ class Table extends Model
             $t->public_id ??= (string) Str::ulid();
             $t->qr_token ??= Str::random(32);
         });
+    }
+
+    /** Seats when a group squeezes in: the maximum if one is set, otherwise the normal capacity. */
+    public function squeezeCapacity(): int
+    {
+        return max($this->capacity, (int) $this->max_capacity);
     }
 
     protected function casts(): array

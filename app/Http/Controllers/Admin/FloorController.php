@@ -29,7 +29,7 @@ class FloorController extends Controller
         return Inertia::render('admin/tables', [
             'areas' => Area::query()->where('outlet_id', $this->outlet->id())->orderBy('sort')->with('tables')->get()->map(fn ($a) => [
                 'id' => $a->id, 'name' => $a->name,
-                'tables' => $a->tables->map(fn ($t) => ['id' => $t->id, 'name' => $t->name, 'capacity' => $t->capacity, 'qr_enabled' => $t->qr_enabled, 'status' => $t->status->value, 'qr_url' => route('qr.show', $t->qr_token)])->all(),
+                'tables' => $a->tables->map(fn ($t) => ['id' => $t->id, 'name' => $t->name, 'capacity' => $t->capacity, 'max_capacity' => $t->max_capacity, 'qr_enabled' => $t->qr_enabled, 'status' => $t->status->value, 'qr_url' => route('qr.show', $t->qr_token)])->all(),
             ]),
         ]);
     }
@@ -54,7 +54,7 @@ class FloorController extends Controller
 
     public function saveTable(Request $request, ?Table $table = null): RedirectResponse
     {
-        $data = $request->validate(['name' => 'required|string|max:40', 'capacity' => 'required|integer|min:1|max:50', 'area_id' => 'required|exists:areas,id']);
+        $data = $request->validate(['name' => 'required|string|max:40', 'capacity' => 'required|integer|min:1|max:50', 'max_capacity' => 'nullable|integer|min:1|max:80|gte:capacity', 'area_id' => 'required|exists:areas,id']);
         $table ? $table->update($data) : Table::create($data + ['outlet_id' => $this->outlet->id()]);
 
         return back()->with('success', 'Meja disimpan.');

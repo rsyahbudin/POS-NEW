@@ -10,6 +10,9 @@ use App\Domain\Ordering\Actions\PlaceOrderAction;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Ordering\ItemBuilder;
 use App\Domain\Ordering\Models\Order;
+use App\Domain\Payment\Actions\RecordPaymentAction;
+use App\Domain\Payment\Enums\PaymentMethodType;
+use App\Domain\Payment\Models\PaymentMethod;
 use App\Domain\Reservation\Models\Reservation;
 use App\Domain\Settings\Models\Outlet;
 use App\Domain\Settings\OutletContext;
@@ -36,6 +39,7 @@ class ReservationService
         private PlaceOrderAction $place,
         private SyncTableStatusAction $sync,
         private OutletContext $outlet,
+        private RecordPaymentAction $payments,
     ) {}
 
     public function enabled(): bool
@@ -304,9 +308,9 @@ class ReservationService
     /**
      * @param  array<string, mixed>  $data  name, phone, pax, date (Y-m-d), payment_type (dp|full), note, items[]
      */
-    public function create(array $data): Reservation
+    public function create(array $data, ?User $by = null): Reservation
     {
-        if (! $this->enabled()) {
+        if ($by === null && ! $this->enabled()) {
             throw new OrderException('Reservasi belum dibuka.');
         }
         $date = (string) ($data['date'] ?? '');
@@ -320,21 +324,27 @@ class ReservationService
         if (! in_array($type, ['dp', 'full'], true)) {
             throw new OrderException('Pilih bayar DP atau lunas.');
         }
-        if ($pax < 1 || $pax > $this->maxPax()) {
-            throw new OrderException("Jumlah orang 1 sampai {$this->maxPax()}.");
+        // customer service books on behalf of a caller: closing time, quota and the per-booking limit do not stop them
+        if ($pax < 1 || $pax > ($by === null ? $this->maxPax() : 200)) {
+            throw new OrderException('Jumlah orang 1 sampai '.($by === null ? $this->maxPax() : 200).'.');
+        }
+        if ($by !== null && ($date === '' || $date < CarbonImmutable::now(self::ZONE)->toDateString())) {
+            throw new OrderException('Pilih tanggal hari ini atau sesudahnya.');
         }
         $outletId = $this->outlet->id();
-        $made = $this->compose(is_array($data['items'] ?? null) ? array_values($data['items']) : [], $outletId, false);
+        $made = $this->compose(is_array($data['items'] ?? null) ? array_values($data['items']) : [], $outletId, (bool) ($data['full_menu'] ?? false) && $by !== null);
 
-        $reservation = DB::transaction(function () use ($outletId, $name, $phone, $pax, $date, $type, $data, $made) {
+        $reservation = DB::transaction(function () use ($outletId, $name, $phone, $pax, $date, $type, $data, $made, $by) {
             // one booking at a time decides who gets the last places of the day
             Outlet::query()->whereKey($outletId)->lockForUpdate()->value('id');
-            $day = $this->availability($date);
-            if (! $day['open']) {
-                throw new OrderException((string) $day['reason']);
-            }
-            if ($pax > $day['remaining']) {
-                throw new OrderException("Sisa kuota hari itu {$day['remaining']} orang.");
+            if ($by === null) {
+                $day = $this->availability($date);
+                if (! $day['open']) {
+                    throw new OrderException((string) $day['reason']);
+                }
+                if ($pax > $day['remaining']) {
+                    throw new OrderException("Sisa kuota hari itu {$day['remaining']} orang.");
+                }
             }
             [$start, $end] = $this->window($date);
 
@@ -343,9 +353,18 @@ class ReservationService
                 'starts_at' => $start, 'ends_at' => $end, 'status' => 'pending', 'note' => isset($data['note']) ? mb_substr((string) $data['note'], 0, 200) : null,
                 'items' => array_values($data['items']), 'summary' => $made['summary'], 'items_total' => $made['total'],
                 'payment_type' => $type, 'amount_due' => $this->amountDue($type, $made['total']),
-                'package_short' => $this->packageShort($made['packages'], $pax, $outletId),
+                'package_short' => $this->packageShort($made['packages'], $pax, $outletId), 'full_menu' => (bool) ($data['full_menu'] ?? false) && $by !== null,
             ])->refresh();
         });
+
+        if ($by !== null) {
+            Audit::log('reservation.created_by_staff', $reservation, ['pax' => $pax, 'date' => $date], $by);
+            if (isset($data['paid']) && (int) $data['paid'] > 0) {
+                $this->confirm($reservation, (int) $data['paid'], (bool) ($data['waive_package'] ?? false), $by);
+            }
+
+            return $reservation->refresh();
+        }
 
         Notifier::later(fn (Notifier $n) => $n->notify(
             $outletId, 'reservation.new', "Reservasi baru: {$reservation->name}, {$pax} orang",
@@ -366,9 +385,10 @@ class ReservationService
     {
         $this->guardEditable($r, $by);
         $pax = (int) ($data['pax'] ?? $r->pax);
-        if ($pax < 1 || $pax > $this->maxPax()) {
-            throw new OrderException("Jumlah orang 1 sampai {$this->maxPax()}.");
+        if ($pax < 1 || $pax > ($by === null ? $this->maxPax() : 200)) {
+            throw new OrderException('Jumlah orang 1 sampai '.($by === null ? $this->maxPax() : 200).'.');
         }
+        $name = $by !== null && isset($data['name']) && trim((string) $data['name']) !== '' ? mb_substr(trim((string) $data['name']), 0, 80) : $r->name;
         $phone = preg_replace('/[^\d+]/', '', (string) ($data['phone'] ?? $r->phone)) ?? '';
         if (strlen($phone) < 8) {
             throw new OrderException('Isi nomor telepon yang bisa dihubungi.');
@@ -392,7 +412,7 @@ class ReservationService
         $made = $this->compose($lines, $r->outlet_id, $r->full_menu);
 
         $r->update([
-            'pax' => $pax, 'phone' => $phone, 'note' => isset($data['note']) ? mb_substr((string) $data['note'], 0, 200) : $r->note,
+            'pax' => $pax, 'name' => $name, 'phone' => $phone, 'note' => isset($data['note']) ? mb_substr((string) $data['note'], 0, 200) : $r->note,
             'items' => $lines, 'summary' => $made['summary'], 'items_total' => $made['total'], 'amount_due' => $this->amountDue($r->payment_type, $made['total']),
             'package_short' => $this->packageShort($made['packages'], $pax, $r->outlet_id), 'changed_at' => now(),
         ]);
@@ -511,6 +531,72 @@ class ReservationService
 
             return $order;
         });
+    }
+
+    /**
+     * The deposit (or whatever was paid ahead) becomes a payment on the party's bill, so the cashier finds it already
+     * taken off. Needs an open shift and a transfer or QRIS payment method; it never goes beyond what the bill still owes.
+     *
+     * @return int the amount taken off the bill
+     */
+    public function applyDeposit(Reservation $r, User $by): int
+    {
+        if ($r->status !== 'seated' || $r->order_id === null) {
+            throw new OrderException('DP dipotong setelah tamu didudukkan.');
+        }
+        if ($r->deposit_payment_id !== null) {
+            throw new OrderException('DP sudah dipotong dari bill.');
+        }
+        if ($r->paid_amount <= 0) {
+            throw new OrderException('Belum ada pembayaran yang dikonfirmasi.');
+        }
+        $order = Order::query()->findOrFail($r->order_id);
+        $bill = $order->bills()->where('is_unallocated', false)->first() ?? throw new OrderException('Bill pesanan belum ada.');
+        $method = PaymentMethod::query()->where('outlet_id', $r->outlet_id)->where('is_active', true)->whereIn('type', [PaymentMethodType::Transfer->value, PaymentMethodType::Qris->value])
+            ->orderByRaw("case type when 'transfer' then 0 else 1 end")->orderBy('sort')->first()
+            ?? throw new OrderException('Belum ada metode pembayaran transfer atau QRIS. Tambahkan di Pengaturan > Pembayaran.');
+        $amount = min($r->paid_amount, $bill->remaining());
+        if ($amount <= 0) {
+            throw new OrderException('Bill sudah tidak punya sisa untuk dipotong.');
+        }
+
+        $payment = $this->payments->handle($bill, $by, $method->id, $amount, "reservation-{$r->id}-deposit", "DP reservasi {$r->public_id}");
+        $r->update(['deposit_payment_id' => $payment->id]);
+        Audit::log('reservation.deposit_applied', $r, ['amount' => $amount, 'order' => $order->number], $by);
+
+        return $amount;
+    }
+
+    /**
+     * An existing booking as the change form shows it.
+     *
+     * @return array<string, mixed>
+     */
+    public function editingProps(Reservation $r): array
+    {
+        return [
+            'code' => $r->public_id, 'id' => $r->id, 'name' => $r->name, 'phone' => $r->phone, 'pax' => $r->pax, 'note' => $r->note, 'date' => $r->starts_at->setTimezone(self::ZONE)->toDateString(),
+            'payment_type' => $r->payment_type, 'paid' => $r->paid_amount, 'status' => $r->status,
+            // the lines already ordered, kept by their position so their quantity can change
+            'lines' => collect($r->items)->values()->map(fn ($line, $i) => ['index' => $i, 'qty' => (int) $line['qty']] + (array) ($r->summary[$i] ?? ['name' => '', 'total' => 0, 'options' => '']))->all(),
+        ];
+    }
+
+    /**
+     * What a booking form needs to know about the rules.
+     *
+     * @return array<string, mixed>
+     */
+    public function formRules(): array
+    {
+        $id = $this->outlet->id();
+
+        return [
+            'time' => $this->time(), 'maxPax' => $this->maxPax(), 'dpPercent' => $this->dpPercent(),
+            'cutoff' => $this->cutoffTime(), 'changeUntil' => $this->changeUntilTime(), 'packageRequired' => $this->packageRequired(),
+            'packageIds' => Product::query()->where('outlet_id', $id)->where('reservation_package', true)->pluck('id')->all(),
+            'paymentInfo' => (string) $this->settings->get('reservation.payment_info', ''),
+        ];
     }
 
     public function close(Reservation $reservation, string $status, User $by): void

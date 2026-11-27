@@ -210,7 +210,12 @@ Route::middleware(['auth', 'staff'])->group(function () {
     // Ramadan reservations: the staff side
     Route::prefix('reservations')->name('reservations.')->middleware('permission:manage-reservations')->group(function () {
         Route::get('/', [ReservationStaffController::class, 'index'])->name('index');
-        Route::post('{reservation}/seat', [ReservationStaffController::class, 'seat'])->name('seat');
+        Route::get('baru', [ReservationStaffController::class, 'create'])->name('create');
+        Route::post('/', [ReservationStaffController::class, 'store'])->name('store');
+        Route::get('{reservation}/ubah', [ReservationStaffController::class, 'edit'])->name('edit');
+        Route::post('{reservation}/ubah', [ReservationStaffController::class, 'update'])->name('update');
+        Route::post('{reservation}/seat', [ReservationStaffController::class, 'seat'])->middleware('permission:seat-reservations')->name('seat');
+        Route::post('{reservation}/deposit', [ReservationStaffController::class, 'deposit'])->middleware('permission:seat-reservations')->name('deposit');
         Route::post('{reservation}/close', [ReservationStaffController::class, 'close'])->name('close');
         Route::post('{reservation}/tables', [ReservationStaffController::class, 'retable'])->name('retable');
         Route::post('{reservation}/confirm', [ReservationStaffController::class, 'confirm'])->name('confirm');

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Reservation;
 
-use App\Domain\Catalog\Models\Product;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Reservation\Models\Reservation;
 use App\Domain\Reservation\ReservationService;
@@ -23,20 +22,6 @@ class ReservationBookingController extends Controller
 {
     public function __construct(private ReservationService $reservations, private OutletContext $outlet, private SettingsRepository $settings) {}
 
-    /** @return array<string, mixed> what the booking form needs besides the menu */
-    private function rules(): array
-    {
-        $id = $this->outlet->id();
-
-        return [
-            'time' => $this->reservations->time(), 'maxPax' => $this->reservations->maxPax(), 'dpPercent' => $this->reservations->dpPercent(),
-            'cutoff' => $this->reservations->cutoffTime(), 'changeUntil' => $this->reservations->changeUntilTime(),
-            'packageRequired' => $this->reservations->packageRequired(),
-            'packageIds' => Product::query()->where('outlet_id', $id)->where('reservation_package', true)->pluck('id')->all(),
-            'paymentInfo' => (string) $this->settings->get('reservation.payment_info', ''),
-        ];
-    }
-
     /** @return array<string, mixed> */
     private function outletProps(): array
     {
@@ -54,7 +39,7 @@ class ReservationBookingController extends Controller
             'period' => $this->reservations->period(),
             'menu' => $this->reservations->period() === null ? [] : MenuPresenter::categories($this->outlet->id(), reservationOnly: true),
             'editing' => null,
-        ] + $this->rules());
+        ] + $this->reservations->formRules());
     }
 
     /** The same form with an existing booking: change people, quantities and menu, or cancel. */
@@ -70,13 +55,8 @@ class ReservationBookingController extends Controller
             'outlet' => $this->outletProps(),
             'period' => $this->reservations->period() ?? ['from' => $r->starts_at->toDateString(), 'to' => $r->starts_at->toDateString()],
             'menu' => MenuPresenter::categories($this->outlet->id(), reservationOnly: ! $r->full_menu),
-            'editing' => [
-                'code' => $r->public_id, 'name' => $r->name, 'phone' => $r->phone, 'pax' => $r->pax, 'note' => $r->note, 'date' => $r->starts_at->setTimezone('Asia/Jakarta')->toDateString(),
-                'payment_type' => $r->payment_type, 'paid' => $r->paid_amount, 'status' => $r->status,
-                // the lines already ordered, kept by their position so the guest can change their quantity
-                'lines' => collect($r->items)->values()->map(fn ($line, $i) => ['index' => $i, 'qty' => (int) $line['qty']] + (array) ($r->summary[$i] ?? ['name' => '', 'total' => 0, 'options' => '']))->all(),
-            ],
-        ] + $this->rules());
+            'editing' => $this->reservations->editingProps($r),
+        ] + $this->reservations->formRules());
     }
 
     /** How many people still fit on a day, and whether it takes bookings. */

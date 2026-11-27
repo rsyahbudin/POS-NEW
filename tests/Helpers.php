@@ -19,7 +19,7 @@ function userWithRole(string $role): User
 {
     return User::query()->where('email', match ($role) {
         'owner' => 'owner@pos.test', 'manager' => 'manager@pos.test', 'cashier' => 'kasir@pos.test',
-        'waiter' => 'waiter@pos.test', 'kitchen' => 'dapur@pos.test', 'mod' => 'mod@pos.test',
+        'waiter' => 'waiter@pos.test', 'kitchen' => 'dapur@pos.test', 'mod' => 'mod@pos.test', 'cs' => 'cs@pos.test',
     })->firstOrFail();
 }
 

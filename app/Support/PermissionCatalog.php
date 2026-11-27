@@ -24,7 +24,8 @@ final class PermissionCatalog
                 'void' => ['label' => 'Batalkan item/order & komplimen', 'hint' => 'Membatalkan item atau order yang sudah masuk, dan menandai komplimen/staff meal. Peran tanpa izin ini butuh PIN dari pemegang izin.'],
                 'refund' => ['label' => 'Refund', 'hint' => 'Refund pembayaran yang sudah lunas (jurnal pembalik).'],
                 'cancel-order' => ['label' => 'Batalkan pesanan / item (belum dibayar)', 'hint' => 'Batalkan sendiri dengan alasan wajib (tercatat di laporan). Peran tanpa izin ini butuh PIN dari pemegang izin "Batalkan item/order & komplimen".'],
-                'manage-reservations' => ['label' => 'Kelola reservasi', 'hint' => 'Melihat reservasi, mendudukkan tamu yang datang (membuka pesanan dan menggabung meja), mengubah meja, dan membatalkan.'],
+                'manage-reservations' => ['label' => 'Kelola reservasi', 'hint' => 'Untuk tim CS dan manager: menerima dan membuat reservasi, mengonfirmasi DP atau pelunasan, mengubah, mengatur meja, dan membatalkan. Kasir, waiter, dan dapur tidak perlu izin ini.'],
+                'seat-reservations' => ['label' => 'Dudukkan tamu reservasi', 'hint' => 'Menekan Duduk saat tamu reservasi datang: pesanan dibuka, meja digabung, menu ke dapur, dan DP dipotong dari bill.'],
                 'reprint-receipt' => ['label' => 'Cetak ulang struk', 'hint' => 'Mencetak salinan struk yang sudah dibayar (berlabel SALINAN dan tercatat di log). Tidak perlu izin menerima pembayaran, jadi waiter bisa membantu tamu yang minta salinan.'],
                 'reprint-ticket' => ['label' => 'Cetak ulang tiket pesanan', 'hint' => 'Mengirim ulang tiket pesanan ke printer bar atau dapur (atau mencetaknya di perangkat ini), mis. saat kertas habis atau tiket tidak keluar.'],
                 'use-print-station' => ['label' => 'Pakai Stasiun Cetak', 'hint' => 'Membuka halaman Stasiun Cetak untuk mencetak antrean struk, bill, dan tiket.'],
@@ -124,9 +125,12 @@ final class PermissionCatalog
             return 'floor';
         }
 
-        return $user->hasRole('owner') || collect(self::OFFICE)->contains(fn (string $p) => $user->can($p)) ? 'office' : 'floor';
+        // customer service takes bookings and has no order screen, so it lives in the office shell like the other back-office roles
+        $service = $user->can('manage-reservations') && ! $user->can('create-order');
+
+        return $user->hasRole('owner') || $service || collect(self::OFFICE)->contains(fn (string $p) => $user->can($p)) ? 'office' : 'floor';
     }
 
     /** Roles shipped with the app: cannot be deleted; owner cannot be edited. */
-    public const BUILT_IN = ['owner' => 'Owner', 'manager' => 'Manager / Supervisor', 'cashier' => 'Kasir', 'waiter' => 'Waiter', 'kitchen' => 'Dapur / Bar', 'mod' => 'MOD (Manager on Duty)'];
+    public const BUILT_IN = ['owner' => 'Owner', 'manager' => 'Manager / Supervisor', 'cashier' => 'Kasir', 'waiter' => 'Waiter', 'kitchen' => 'Dapur / Bar', 'mod' => 'MOD (Manager on Duty)', 'cs' => 'CS (Customer Service)'];
 }

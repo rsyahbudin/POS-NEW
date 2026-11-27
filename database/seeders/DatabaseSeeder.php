@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
             ['waiter', 'Waiter', 'waiter@pos.test', '444444'],
             ['kitchen', 'Dapur', 'dapur@pos.test', '555555'],
             ['mod', 'MOD', 'mod@pos.test', '666666'],
+            ['cs', 'CS', 'cs@pos.test', '777777'],
         ] as [$role, $name, $email, $pin]) {
             $user = User::firstOrCreate(['email' => $email], [
                 'name' => $name, 'password' => Hash::make('password'), 'outlet_id' => $outlet->id,

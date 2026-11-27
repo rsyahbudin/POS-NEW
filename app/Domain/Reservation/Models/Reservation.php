@@ -37,6 +37,7 @@ use Illuminate\Support\Carbon;
  * @property bool $full_menu
  * @property Carbon|null $changed_at
  * @property Carbon|null $created_at
+ * @property int|null $deposit_payment_id
  * @property int|null $order_id
  * @property Carbon|null $seated_at
  * @property-read Collection<int, Table> $tables

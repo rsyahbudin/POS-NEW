@@ -5,6 +5,7 @@ import {
     ChevronRight,
     Copy,
     MessageCircle,
+    Plus,
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -34,6 +35,7 @@ type Row = {
     package_short: boolean;
     package_waived: boolean;
     full_menu: boolean;
+    deposit_applied: boolean;
     changed_at: string | null;
 };
 type Day = {
@@ -71,13 +73,23 @@ const shift = (date: string, days: number) => {
 };
 
 /** WhatsApp wants the number with the country code and no zero in front. */
-const wa = (phone: string) =>
-    `https://wa.me/${phone.replace(/\D/g, '').replace(/^0/, '62')}`;
+const wa = (phone: string, text = '') =>
+    `https://wa.me/${phone.replace(/\D/g, '').replace(/^0/, '62')}${text ? `?text=${encodeURIComponent(text)}` : ''}`;
+
+/** The message customer service sends: what is booked, what to pay or that it was received, and the page to come back to. */
+const message = (r: Row, outlet: string | null) =>
+    `Halo ${r.name}, reservasi buka puasa${outlet ? ` di ${outlet}` : ''} ${dateId(r.starts_at)} pukul ${timeId(r.starts_at)} untuk ${r.pax} orang (kode ${r.code}). ` +
+    (r.status === 'pending'
+        ? `Mohon ${r.payment_type === 'full' ? 'pelunasan' : 'DP'} ${rupiah(r.amount_due)}. Setelah transfer, kirim buktinya ke chat ini ya. `
+        : `Pembayaran ${rupiah(r.paid)} sudah kami terima, reservasi terkonfirmasi. `) +
+    `Detail dan perubahan: ${window.location.origin}/reservasi/${r.code}`;
 
 export default function Reservations({
     date,
     link,
     enabled,
+    canSeat,
+    outletName,
     day,
     reservations,
     tables,
@@ -85,6 +97,8 @@ export default function Reservations({
     date: string;
     link: string;
     enabled: boolean;
+    canSeat: boolean;
+    outletName: string | null;
     day: Day;
     reservations: Row[];
     tables: TableRow[];
@@ -116,21 +130,28 @@ export default function Reservations({
                     title="Reservasi"
                     subtitle="Tamu memesan sendiri lewat link reservasi, lalu membayar DP atau lunas. Konfirmasi pembayarannya, atur meja, dan tekan Duduk saat mereka datang: pesanan dibuka di meja pertama, meja lain bergabung ke satu bill, dan menu langsung ke dapur."
                     actions={
-                        <Button
-                            variant="outline"
-                            className="h-11"
-                            onClick={() => {
-                                void navigator.clipboard
-                                    .writeText(link)
-                                    .then(() =>
-                                        toast.success(
-                                            'Link reservasi disalin.',
-                                        ),
-                                    );
-                            }}
-                        >
-                            <Copy /> Salin link
-                        </Button>
+                        <>
+                            <Button asChild className="h-11">
+                                <a href="/reservations/baru">
+                                    <Plus /> Reservasi baru
+                                </a>
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="h-11"
+                                onClick={() => {
+                                    void navigator.clipboard
+                                        .writeText(link)
+                                        .then(() =>
+                                            toast.success(
+                                                'Link reservasi disalin.',
+                                            ),
+                                        );
+                                }}
+                            >
+                                <Copy /> Salin link
+                            </Button>
+                        </>
                     }
                 />
 
@@ -377,6 +398,36 @@ export default function Reservations({
                                 )}
                             </div>
 
+                            {r.status === 'seated' && r.paid > 0 && (
+                                <p className="flex flex-wrap items-center gap-2 text-sm">
+                                    {r.deposit_applied ? (
+                                        <span className="text-emerald-700 dark:text-emerald-400">
+                                            DP {rupiah(r.paid)} sudah dipotong
+                                            dari bill.
+                                        </span>
+                                    ) : (
+                                        <>
+                                            <span className="text-destructive">
+                                                DP belum dipotong dari bill.
+                                            </span>
+                                            {canSeat && (
+                                                <Button
+                                                    size="sm"
+                                                    className="h-9"
+                                                    onClick={() =>
+                                                        post(
+                                                            `/reservations/${r.id}/deposit`,
+                                                        )
+                                                    }
+                                                >
+                                                    Potong DP sekarang
+                                                </Button>
+                                            )}
+                                        </>
+                                    )}
+                                </p>
+                            )}
+
                             <footer className="flex flex-wrap items-center gap-2">
                                 {live(r) && (
                                     <>
@@ -401,7 +452,7 @@ export default function Reservations({
                                                 ? 'Konfirmasi bayar'
                                                 : 'Ubah nominal'}
                                         </Button>
-                                        {r.status === 'booked' && (
+                                        {r.status === 'booked' && canSeat && (
                                             <Button
                                                 className="h-11"
                                                 onClick={() =>
@@ -413,6 +464,17 @@ export default function Reservations({
                                                 <Check /> Duduk
                                             </Button>
                                         )}
+                                        <Button
+                                            asChild
+                                            variant="ghost"
+                                            className="h-11"
+                                        >
+                                            <a
+                                                href={`/reservations/${r.id}/ubah`}
+                                            >
+                                                Ubah
+                                            </a>
+                                        </Button>
                                         <Button
                                             variant="ghost"
                                             className="h-11"
@@ -469,7 +531,10 @@ export default function Reservations({
                                     className="ml-auto h-11"
                                 >
                                     <a
-                                        href={wa(r.phone)}
+                                        href={wa(
+                                            r.phone,
+                                            message(r, outletName),
+                                        )}
                                         target="_blank"
                                         rel="noreferrer"
                                     >

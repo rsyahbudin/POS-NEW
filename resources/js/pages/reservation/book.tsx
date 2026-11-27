@@ -14,6 +14,7 @@ import { uuid } from '@/lib/format';
 import type { CartLine, Category, Product } from '@/types/pos';
 
 type Editing = {
+    id?: number;
     code: string;
     name: string;
     phone: string;
@@ -55,6 +56,7 @@ type Props = {
     packageRequired: boolean;
     packageIds: number[];
     paymentInfo: string;
+    staff?: boolean;
 };
 
 const csrf = () =>
@@ -74,6 +76,7 @@ export default function Book({
     packageRequired,
     packageIds,
     paymentInfo,
+    staff = false,
 }: Props) {
     const [date, setDate] = useState(editing?.date ?? period?.from ?? '');
     const [pax, setPax] = useState(editing?.pax ?? 2);
@@ -91,10 +94,12 @@ export default function Book({
     const [note, setNote] = useState(editing?.note ?? '');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [paid, setPaid] = useState('');
+    const [waive, setWaive] = useState(false);
 
     // how many people still fit on the chosen day (a new booking only)
     useEffect(() => {
-        if (editing || !period || !date) {
+        if (editing || staff || !period || !date) {
             return;
         }
 
@@ -116,9 +121,11 @@ export default function Book({
         };
     }, [date, period, editing]);
 
-    const topPax = editing
-        ? maxPax
-        : Math.min(maxPax, day?.remaining || maxPax);
+    const topPax = staff
+        ? 200
+        : editing
+          ? maxPax
+          : Math.min(maxPax, day?.remaining || maxPax);
     const tintOf = useMemo(
         () => new Map(menu.map((c, i) => [c.id, i] as const)),
         [menu],
@@ -143,7 +150,7 @@ export default function Book({
     const ready = editing
         ? count > 0 && phone.replace(/\D/g, '').length >= 8
         : !!date &&
-          day?.open === true &&
+          (staff || day?.open === true) &&
           cart.length > 0 &&
           name.trim() !== '' &&
           phone.replace(/\D/g, '').length >= 8;
@@ -209,8 +216,15 @@ export default function Book({
             });
             const body = (await res.json()) as {
                 code?: string;
+                date?: string;
                 message?: string;
             };
+
+            if (res.ok && staff && body.date) {
+                router.visit(`/reservations?date=${body.date}`);
+
+                return;
+            }
 
             if (res.ok && body.code) {
                 router.visit(`/reservasi/${body.code}`);
@@ -235,17 +249,23 @@ export default function Book({
     }));
     const submit = () =>
         editing
-            ? send(`/reservasi/${editing.code}/ubah`, {
-                  pax,
-                  phone,
-                  note: note || null,
-                  keep: Object.entries(kept).map(([index, qty]) => ({
-                      index: Number(index),
-                      qty,
-                  })),
-                  add: lines,
-              })
-            : send('/reservasi', {
+            ? send(
+                  staff
+                      ? `/reservations/${editing.id}/ubah`
+                      : `/reservasi/${editing.code}/ubah`,
+                  {
+                      name,
+                      pax,
+                      phone,
+                      note: note || null,
+                      keep: Object.entries(kept).map(([index, qty]) => ({
+                          index: Number(index),
+                          qty,
+                      })),
+                      add: lines,
+                  },
+              )
+            : send(staff ? '/reservations' : '/reservasi', {
                   name,
                   phone,
                   pax,
@@ -253,6 +273,12 @@ export default function Book({
                   payment_type: payType,
                   note: note || null,
                   items: lines,
+                  ...(staff
+                      ? {
+                            paid: paid === '' ? null : Number(paid),
+                            waive_package: waive,
+                        }
+                      : {}),
               });
     const cancelBooking = () =>
         confirm('Batalkan reservasi ini?') &&
@@ -277,7 +303,9 @@ export default function Book({
                         <h1 className="text-2xl font-bold tracking-tight">
                             {editing
                                 ? `Ubah reservasi ${editing.code}`
-                                : 'Reservasi buka puasa'}
+                                : staff
+                                  ? 'Reservasi baru (CS)'
+                                  : 'Reservasi buka puasa'}
                         </h1>
                     </div>
                 </header>
@@ -356,7 +384,19 @@ export default function Book({
                                     </div>
                                 </div>
                             </div>
-                            {!editing && day && (
+                            {staff && (
+                                <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                                    Mode CS: tidak terhalang jam tutup, kuota,
+                                    atau batas orang per reservasi.{' '}
+                                    <a
+                                        className="underline"
+                                        href="/reservations"
+                                    >
+                                        Kembali ke daftar
+                                    </a>
+                                </p>
+                            )}
+                            {!staff && !editing && day && (
                                 <p
                                     className={cn(
                                         'text-sm',
@@ -370,7 +410,7 @@ export default function Book({
                                         : day.reason}
                                 </p>
                             )}
-                            {editing && (
+                            {editing && !staff && (
                                 <p className="text-sm text-muted-foreground">
                                     Bisa diubah atau dibatalkan sampai pukul{' '}
                                     {changeUntil} di hari-H.
@@ -643,7 +683,7 @@ export default function Book({
                                 <Input
                                     id="rs-name"
                                     className="h-12"
-                                    disabled={!!editing}
+                                    disabled={!!editing && !staff}
                                     value={name}
                                     maxLength={80}
                                     onChange={(e) => setName(e.target.value)}
@@ -728,14 +768,53 @@ export default function Book({
                                         </button>
                                     ))}
                                 </div>
-                                <p className="text-sm text-muted-foreground">
-                                    Reservasi sah setelah pembayaran
-                                    dikonfirmasi pengelola.
-                                    {paymentInfo && ` ${paymentInfo}`}
-                                </p>
+                                {staff ? (
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="rs-paid">
+                                            Sudah dibayar (opsional, langsung
+                                            terkonfirmasi)
+                                        </Label>
+                                        <Input
+                                            id="rs-paid"
+                                            className="h-12"
+                                            inputMode="numeric"
+                                            value={paid}
+                                            onChange={(e) =>
+                                                setPaid(
+                                                    e.target.value.replace(
+                                                        /\D/g,
+                                                        '',
+                                                    ),
+                                                )
+                                            }
+                                        />
+                                        {short && paid !== '' && (
+                                            <label className="flex items-start gap-2 text-sm">
+                                                <input
+                                                    type="checkbox"
+                                                    className="mt-0.5 size-5"
+                                                    checked={waive}
+                                                    onChange={(e) =>
+                                                        setWaive(
+                                                            e.target.checked,
+                                                        )
+                                                    }
+                                                />
+                                                Setujui paket kurang dari jumlah
+                                                orang
+                                            </label>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">
+                                        Reservasi sah setelah pembayaran
+                                        dikonfirmasi pengelola.
+                                        {paymentInfo && ` ${paymentInfo}`}
+                                    </p>
+                                )}
                             </section>
                         )}
-                        {editing && (
+                        {editing && !staff && (
                             <Button
                                 type="button"
                                 variant="ghost"

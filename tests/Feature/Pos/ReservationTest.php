@@ -159,7 +159,7 @@ it('seats a party: one order on the first table, the other tables joined, one bi
     $this->postJson("/m/{$joined->qr_token}/order", ['customer_name' => 'Budi', 'items' => [['product_id' => product('Americano')->id, 'qty' => 1]]])->assertCreated();
 
     // staff can open the normal menu for this party early, and then it joins the same bill
-    $this->actingAs($cashier)->post("/reservations/{$r->id}/full-menu", ['on' => true])->assertSessionHas('success');
+    $this->actingAs(userWithRole(\'cs\'))->post("/reservations/{$r->id}/full-menu", ['on' => true])->assertSessionHas('success');
     $this->postJson("/m/{$joined->qr_token}/order", $croissant)->assertCreated();
     expect(Order::query()->whereIn('status', ['open', 'partially_paid'])->count())->toBe(1)->and($order->fresh()->rounds()->count())->toBe(3);
 
@@ -248,17 +248,17 @@ it('takes a booking over HTTP, shows it to the guest, and lets staff with the pe
     $this->actingAs(userWithRole('kitchen'))->get('/reservations')->assertForbidden();
     $cashier = userWithRole('cashier');
     openShiftFor($cashier, 0);
-    $this->actingAs($cashier)->get("/reservations?date={$date}")->assertOk()->assertInertia(fn ($p) => $p->component('reservations/index')->has('reservations', 1)->where('day.booked', 4)->where('day.remaining', 196));
+    $this->actingAs(userWithRole(\'cs\'))->get("/reservations?date={$date}")->assertOk()->assertInertia(fn ($p) => $p->component('reservations/index')->has('reservations', 1)->where('day.booked', 4)->where('day.remaining', 196));
 
-    $this->actingAs($cashier)->post("/reservations/{$r->id}/seat")->assertSessionHas('error');                                     // not confirmed yet
+    $this->actingAs(userWithRole(\'cs\'))->post("/reservations/{$r->id}/seat")->assertSessionHas('error');                                     // not confirmed yet
     $this->actingAs($cashier)->post('/reservations/assign', ['date' => $date])->assertSessionHas('success');
-    $this->actingAs($cashier)->post("/reservations/{$r->id}/confirm", ['amount' => 30000])->assertSessionHas('success');
-    $this->actingAs($cashier)->post("/reservations/{$r->id}/seat")->assertSessionHas('success');
+    $this->actingAs(userWithRole(\'cs\'))->post("/reservations/{$r->id}/confirm", ['amount' => 30000])->assertSessionHas('success');
+    $this->actingAs(userWithRole(\'cs\'))->post("/reservations/{$r->id}/seat")->assertSessionHas('success');
     expect($r->fresh()->status)->toBe('seated')->and($r->fresh()->paid_amount)->toBe(30000);
-    $this->actingAs($cashier)->post("/reservations/{$r->id}/close", ['status' => 'cancelled'])->assertSessionHas('error');
+    $this->actingAs(userWithRole(\'cs\'))->post("/reservations/{$r->id}/close", ['status' => 'cancelled'])->assertSessionHas('error');
 
     $second = app(ReservationService::class)->create(booking($date, 2));
-    $this->actingAs($cashier)->post("/reservations/{$second->id}/close", ['status' => 'no_show'])->assertSessionHas('success');
+    $this->actingAs(userWithRole(\'cs\'))->post("/reservations/{$second->id}/close", ['status' => 'no_show'])->assertSessionHas('success');
     expect($second->fresh()->status)->toBe('no_show');
 });
 
@@ -296,4 +296,76 @@ it('moves a booking to other free tables only when they seat everybody', functio
     $service->retable($r, [$free->id], $cashier);
     expect($r->fresh()->tables->pluck('id')->all())->toBe([$free->id]);
     expect(fn () => $service->retable($r, [Table::query()->where('capacity', 2)->firstOrFail()->id], $cashier))->toThrow(OrderException::class, 'belum cukup');
+});
+
+it('keeps reservations to owner, manager and customer service, and seating to those allowed to seat', function () {
+    $date = openReservations();
+    $r = app(ReservationService::class)->create(booking($date, 2));
+
+    foreach (['cashier', 'waiter', 'kitchen'] as $role) {
+        $this->actingAs(userWithRole($role))->get('/reservations')->assertForbidden();
+        $this->actingAs(userWithRole($role))->post("/reservations/{$r->id}/confirm", ['amount' => 1000])->assertForbidden();
+    }
+    foreach (['owner', 'manager', 'cs'] as $role) {
+        $this->actingAs(userWithRole($role))->get('/reservations')->assertOk();
+    }
+
+    // someone who may manage but not seat cannot press Duduk
+    $viewer = userWithRole('cs');
+    \Spatie\Permission\Models\Role::findByName('cs')->revokePermissionTo('seat-reservations');
+    app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+    $this->actingAs($viewer)->post("/reservations/{$r->id}/seat")->assertForbidden();
+    $this->actingAs($viewer)->post("/reservations/{$r->id}/confirm", ['amount' => 1000])->assertSessionHasNoErrors();
+});
+
+it('takes the deposit off the bill when the party is seated', function () {
+    $date = openReservations();
+    $service = app(ReservationService::class);
+    $cs = userWithRole('cs');
+    openShiftFor(userWithRole('cashier'), 0);
+
+    $r = $service->create(booking($date, 4));            // 4 x 22.000, deposit 30% = 27.000
+    $service->autoAssign($date, $cs);
+    $this->actingAs($cs)->post("/reservations/{$r->id}/confirm", ['amount' => 27000])->assertSessionHas('success');
+    $this->actingAs($cs)->post("/reservations/{$r->id}/seat")->assertSessionHas('success');
+
+    $r->refresh();
+    $bill = $r->order->bills()->firstOrFail();
+    expect($r->deposit_payment_id)->not->toBeNull()->and($bill->paid_total)->toBe(27000)->and($bill->remaining())->toBe($bill->grand_total - 27000)
+        ->and($bill->payments()->firstOrFail()->reference)->toBe("DP reservasi {$r->public_id}");
+    $this->actingAs($cs)->post("/reservations/{$r->id}/deposit")->assertSessionHas('error');   // not twice
+});
+
+it('seats the party even when the deposit cannot be taken off yet, and lets staff do it afterwards', function () {
+    $date = openReservations();
+    $service = app(ReservationService::class);
+    $cs = userWithRole('cs');
+    $r = $service->create(booking($date, 2));
+    $service->autoAssign($date, $cs);
+    $service->confirm($r, 15000, false, $cs);
+
+    $this->actingAs($cs)->post("/reservations/{$r->id}/seat")->assertSessionHas('success', fn ($m) => str_contains($m, 'DP belum dipotong'));
+    expect($r->fresh()->status)->toBe('seated')->and($r->fresh()->deposit_payment_id)->toBeNull();
+
+    openShiftFor(userWithRole('cashier'), 0);
+    $this->actingAs($cs)->post("/reservations/{$r->id}/deposit")->assertSessionHas('success');
+    expect($r->fresh()->deposit_payment_id)->not->toBeNull();
+});
+
+it('lets customer service book for a caller past the closing time and the quota, and fix the booking later', function () {
+    $date = openReservations();
+    setting('reservation.capacity', 4);
+    $cs = userWithRole('cs');
+    $this->actingAs($cs)->get('/reservations/baru')->assertOk()->assertInertia(fn ($p) => $p->component('reservation/book')->where('staff', true));
+
+    $body = booking($date, 10, 10) + ['paid' => 100000];
+    $this->postJson('/reservasi', booking($date, 10))->assertStatus(422);                       // the public form is held back by the quota
+    $this->actingAs($cs)->postJson('/reservations', $body)->assertCreated()->assertJsonPath('date', $date);
+    $r = Reservation::query()->firstOrFail();
+    expect($r->status)->toBe('booked')->and($r->paid_amount)->toBe(100000)->and($r->pax)->toBe(10);
+
+    $this->actingAs($cs)->postJson("/reservations/{$r->id}/ubah", ['name' => 'Rani Putri', 'pax' => 12, 'phone' => '081234567890', 'keep' => [['index' => 0, 'qty' => 12]], 'add' => []])->assertOk();
+    expect($r->fresh()->name)->toBe('Rani Putri')->and($r->fresh()->pax)->toBe(12);
+    $this->actingAs($cs)->get("/reservations/{$r->id}/ubah")->assertOk()->assertInertia(fn ($p) => $p->where('editing.name', 'Rani Putri')->where('staff', true));
+    $this->actingAs(userWithRole('cashier'))->postJson('/reservations', $body)->assertForbidden();
 });

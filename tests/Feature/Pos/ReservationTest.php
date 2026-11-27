@@ -7,6 +7,8 @@ use App\Domain\Reservation\Models\Reservation;
 use App\Domain\Reservation\ReservationService;
 use Carbon\CarbonImmutable;
 use Illuminate\Routing\Middleware\ThrottleRequests;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 /** Opens reservations for tomorrow onwards; Americano is the package (one per person), Croissant a normal menu item. */
 function openReservations(): string
@@ -159,7 +161,7 @@ it('seats a party: one order on the first table, the other tables joined, one bi
     $this->postJson("/m/{$joined->qr_token}/order", ['customer_name' => 'Budi', 'items' => [['product_id' => product('Americano')->id, 'qty' => 1]]])->assertCreated();
 
     // staff can open the normal menu for this party early, and then it joins the same bill
-    $this->actingAs(userWithRole(\'cs\'))->post("/reservations/{$r->id}/full-menu", ['on' => true])->assertSessionHas('success');
+    $this->actingAs(userWithRole('cs'))->post("/reservations/{$r->id}/full-menu", ['on' => true])->assertSessionHas('success');
     $this->postJson("/m/{$joined->qr_token}/order", $croissant)->assertCreated();
     expect(Order::query()->whereIn('status', ['open', 'partially_paid'])->count())->toBe(1)->and($order->fresh()->rounds()->count())->toBe(3);
 
@@ -248,17 +250,17 @@ it('takes a booking over HTTP, shows it to the guest, and lets staff with the pe
     $this->actingAs(userWithRole('kitchen'))->get('/reservations')->assertForbidden();
     $cashier = userWithRole('cashier');
     openShiftFor($cashier, 0);
-    $this->actingAs(userWithRole(\'cs\'))->get("/reservations?date={$date}")->assertOk()->assertInertia(fn ($p) => $p->component('reservations/index')->has('reservations', 1)->where('day.booked', 4)->where('day.remaining', 196));
+    $this->actingAs(userWithRole('cs'))->get("/reservations?date={$date}")->assertOk()->assertInertia(fn ($p) => $p->component('reservations/index')->has('reservations', 1)->where('day.booked', 4)->where('day.remaining', 196));
 
-    $this->actingAs(userWithRole(\'cs\'))->post("/reservations/{$r->id}/seat")->assertSessionHas('error');                                     // not confirmed yet
-    $this->actingAs($cashier)->post('/reservations/assign', ['date' => $date])->assertSessionHas('success');
-    $this->actingAs(userWithRole(\'cs\'))->post("/reservations/{$r->id}/confirm", ['amount' => 30000])->assertSessionHas('success');
-    $this->actingAs(userWithRole(\'cs\'))->post("/reservations/{$r->id}/seat")->assertSessionHas('success');
+    $this->actingAs(userWithRole('cs'))->post("/reservations/{$r->id}/seat")->assertSessionHas('error');                                     // not confirmed yet
+    $this->actingAs(userWithRole('cs'))->post('/reservations/assign', ['date' => $date])->assertSessionHas('success');
+    $this->actingAs(userWithRole('cs'))->post("/reservations/{$r->id}/confirm", ['amount' => 30000])->assertSessionHas('success');
+    $this->actingAs(userWithRole('cs'))->post("/reservations/{$r->id}/seat")->assertSessionHas('success');
     expect($r->fresh()->status)->toBe('seated')->and($r->fresh()->paid_amount)->toBe(30000);
-    $this->actingAs(userWithRole(\'cs\'))->post("/reservations/{$r->id}/close", ['status' => 'cancelled'])->assertSessionHas('error');
+    $this->actingAs(userWithRole('cs'))->post("/reservations/{$r->id}/close", ['status' => 'cancelled'])->assertSessionHas('error');
 
     $second = app(ReservationService::class)->create(booking($date, 2));
-    $this->actingAs(userWithRole(\'cs\'))->post("/reservations/{$second->id}/close", ['status' => 'no_show'])->assertSessionHas('success');
+    $this->actingAs(userWithRole('cs'))->post("/reservations/{$second->id}/close", ['status' => 'no_show'])->assertSessionHas('success');
     expect($second->fresh()->status)->toBe('no_show');
 });
 
@@ -312,8 +314,8 @@ it('keeps reservations to owner, manager and customer service, and seating to th
 
     // someone who may manage but not seat cannot press Duduk
     $viewer = userWithRole('cs');
-    \Spatie\Permission\Models\Role::findByName('cs')->revokePermissionTo('seat-reservations');
-    app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+    Role::findByName('cs')->revokePermissionTo('seat-reservations');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
     $this->actingAs($viewer)->post("/reservations/{$r->id}/seat")->assertForbidden();
     $this->actingAs($viewer)->post("/reservations/{$r->id}/confirm", ['amount' => 1000])->assertSessionHasNoErrors();
 });

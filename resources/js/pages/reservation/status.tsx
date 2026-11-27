@@ -19,6 +19,8 @@ type Props = {
         status: string;
         starts_at: string;
         tables: string[];
+        area: string | null;
+        tight: boolean;
         summary: {
             name: string;
             qty: number;
@@ -119,11 +121,12 @@ export default function Status({
                                 : `DP ${rupiah(r.amount_due)}`
                         }
                     />
+                    {r.area && <Row label="Area" value={r.area} />}
                     <Row
-                        label="Meja"
+                        label="Tempat"
                         value={
                             r.tables.length > 0
-                                ? r.tables.join(' + ')
+                                ? `${r.tables.join(' + ')}${r.tight ? ' (agak padat)' : ''}`
                                 : 'Diatur kasir'
                         }
                     />

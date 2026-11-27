@@ -37,6 +37,7 @@ type Day = {
     reason: string | null;
     capacity: number;
     remaining: number;
+    areas: { id: number; name: string; units: number }[];
 };
 type Props = {
     outlet: {
@@ -94,24 +95,36 @@ export default function Book({
     const [note, setNote] = useState(editing?.note ?? '');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [area, setArea] = useState<number | 'any'>('any');
     const [paid, setPaid] = useState('');
     const [waive, setWaive] = useState(false);
 
     // how many people still fit on the chosen day (a new booking only)
     useEffect(() => {
-        if (editing || staff || !period || !date) {
+        if (editing || !period || !date) {
             return;
         }
 
         let live = true;
-        fetch(`/reservasi/slots?date=${encodeURIComponent(date)}`, {
+        fetch(`/reservasi/slots?date=${encodeURIComponent(date)}&pax=${pax}`, {
             headers: { Accept: 'application/json' },
         })
             .then((r) => (r.ok ? r.json() : null))
             .then((r: Day | null) => {
                 if (live && r) {
                     setDay(r);
-                    setPax((n) => Math.max(1, Math.min(n, r.remaining || 1)));
+
+                    if (!staff) {
+                        setPax((n) => Math.max(1, Math.min(n, r.remaining || 1)));
+                    }
+
+                    // a chosen area that cannot take this party any more goes back to "any"
+                    setArea((a) =>
+                        a !== 'any' &&
+                        (r.areas.find((x) => x.id === a)?.units ?? 0) === 0
+                            ? 'any'
+                            : a,
+                    );
                 }
             })
             .catch(() => undefined);
@@ -119,7 +132,7 @@ export default function Book({
         return () => {
             live = false;
         };
-    }, [date, period, editing]);
+    }, [date, pax, period, editing, staff]);
 
     const topPax = staff
         ? 200
@@ -270,6 +283,7 @@ export default function Book({
                   phone,
                   pax,
                   date,
+                  area_id: area === 'any' ? null : area,
                   payment_type: payType,
                   note: note || null,
                   items: lines,
@@ -409,6 +423,67 @@ export default function Book({
                                         ? `Sisa ${day.remaining} tempat dari ${day.capacity}. Reservasi hari itu ditutup pukul ${cutoff} atau saat penuh.`
                                         : day.reason}
                                 </p>
+                            )}
+                            {!editing && day && day.areas.length > 0 && (
+                                <div className="grid gap-1.5">
+                                    <Label>Area duduk</Label>
+                                    <div
+                                        role="group"
+                                        aria-label="Area duduk"
+                                        className="grid gap-2"
+                                    >
+                                        {[
+                                            {
+                                                id: 'any' as const,
+                                                name: 'Bebas, mana saja yang kosong',
+                                                units: day.areas.reduce(
+                                                    (n, a) => n + a.units,
+                                                    0,
+                                                ),
+                                            },
+                                            ...day.areas,
+                                        ].map((a) => {
+                                            const on = area === a.id;
+                                            const full = a.units === 0;
+
+                                            return (
+                                                <button
+                                                    key={a.id}
+                                                    type="button"
+                                                    disabled={full && !staff}
+                                                    aria-pressed={on}
+                                                    onClick={() => setArea(a.id)}
+                                                    className={cn(
+                                                        'flex min-h-12 items-center justify-between gap-3 rounded-xl border px-3 text-left text-sm',
+                                                        on
+                                                            ? 'border-primary bg-primary text-primary-foreground'
+                                                            : 'bg-card',
+                                                        full &&
+                                                            !staff &&
+                                                            'cursor-not-allowed opacity-50',
+                                                    )}
+                                                >
+                                                    <span className="font-semibold">
+                                                        {a.name}
+                                                    </span>
+                                                    <span className="text-xs opacity-90">
+                                                        {full
+                                                            ? 'Penuh untuk ' +
+                                                              pax +
+                                                              ' orang'
+                                                            : `${a.units} tempat`}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        Satu tempat dipakai satu grup. Kalau
+                                        grupmu lebih banyak dari kapasitas
+                                        normal, kami usahakan tempat yang bisa
+                                        dibuat lebih padat.
+                                    </p>
+                                </div>
                             )}
                             {editing && !staff && (
                                 <p className="text-sm text-muted-foreground">

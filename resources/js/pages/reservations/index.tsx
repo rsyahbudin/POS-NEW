@@ -25,6 +25,8 @@ type Row = {
     status: 'pending' | 'booked' | 'seated' | 'cancelled' | 'no_show';
     note: string | null;
     starts_at: string;
+    area: string | null;
+    tight: boolean;
     tables: { id: number; name: string; capacity: number }[];
     summary: { name: string; qty: number; total: number; options: string }[];
     total: number;
@@ -46,7 +48,13 @@ type Day = {
     booked: number;
     time: string;
 };
-type TableRow = { id: number; name: string; capacity: number; area: string };
+type TableRow = {
+    id: number;
+    name: string;
+    capacity: number;
+    max: number;
+    area: string;
+};
 
 const STATUS: Record<Row['status'], { label: string; cls: string }> = {
     pending: {
@@ -299,6 +307,16 @@ export default function Reservations({
                                 {r.tables.length > 1 && (
                                     <span className="text-xs text-muted-foreground">
                                         digabung, satu bill
+                                    </span>
+                                )}
+                                {r.area && (
+                                    <span className="text-sm font-medium">
+                                        {r.area}
+                                    </span>
+                                )}
+                                {r.tight && (
+                                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+                                        Agak padat
                                     </span>
                                 )}
                                 {r.tables.length === 0 && live(r) && (
@@ -649,7 +667,10 @@ export default function Reservations({
                                                     {t.name}
                                                 </span>
                                                 <span className="text-xs opacity-80">
-                                                    {t.area} · {t.capacity}{' '}
+                                                    {t.area} · {t.capacity}
+                                                    {t.max > t.capacity
+                                                        ? `–${t.max}`
+                                                        : ''}{' '}
                                                     kursi
                                                 </span>
                                             </button>

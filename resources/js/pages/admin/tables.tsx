@@ -16,6 +16,7 @@ type Table = {
     id: number;
     name: string;
     capacity: number;
+    max_capacity: number | null;
     qr_enabled: boolean;
     status: string;
     qr_url: string;
@@ -32,6 +33,7 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
         id?: number;
         name: string;
         capacity: number;
+        max_capacity: number | null;
         area_id: number;
     } | null>(null);
 
@@ -59,6 +61,7 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                                     setForm({
                                         name: '',
                                         capacity: 4,
+                                        max_capacity: null,
                                         area_id: areas[0]?.id ?? 0,
                                     })
                                 }
@@ -172,7 +175,11 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                                     <p className="font-medium">
                                         {t.name}{' '}
                                         <span className="text-xs text-muted-foreground">
-                                            · {t.capacity} kursi · {t.status}
+                                            · {t.capacity}
+                                            {t.max_capacity
+                                                ? `–${t.max_capacity}`
+                                                : ''}{' '}
+                                            kursi · {t.status}
                                         </span>
                                     </p>
                                     <p className="mt-1 truncate text-xs text-muted-foreground">
@@ -188,6 +195,8 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                                                     id: t.id,
                                                     name: t.name,
                                                     capacity: t.capacity,
+                                                    max_capacity:
+                                                        t.max_capacity,
                                                     area_id: a.id,
                                                 })
                                             }
@@ -365,6 +374,26 @@ export default function TablesPage({ areas }: { areas: Area[] }) {
                                 setForm({
                                     ...form,
                                     capacity: Number(e.target.value),
+                                })
+                            }
+                        />
+                    </Field>
+                    <Field
+                        label="Kapasitas maksimal (opsional)"
+                        hint="Untuk grup yang mau berdesakan, mis. gazebo 4 kursi yang muat sampai 6. Dipakai reservasi bila tidak ada tempat dengan kapasitas normal."
+                    >
+                        <Input
+                            className="h-11"
+                            type="number"
+                            min={form.capacity}
+                            placeholder="Sama dengan kapasitas normal"
+                            value={form.max_capacity ?? ''}
+                            onChange={(e) =>
+                                setForm({
+                                    ...form,
+                                    max_capacity: e.target.value
+                                        ? Number(e.target.value)
+                                        : null,
                                 })
                             }
                         />

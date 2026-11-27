@@ -210,11 +210,11 @@ class ReservationService
      */
     public function pickTables(int $outletId, int $pax, CarbonImmutable $start, CarbonImmutable $end, ?int $areaId = null, ?int $exceptReservation = null, array $extraBusy = []): ?array
     {
-        $busy = DB::table('reservation_tables')->join('reservations', 'reservations.id', '=', 'reservation_tables.reservation_id')
+        $busy = array_values(DB::table('reservation_tables')->join('reservations', 'reservations.id', '=', 'reservation_tables.reservation_id')
             ->where('reservations.outlet_id', $outletId)->whereIn('reservations.status', ['pending', 'booked', 'seated'])
             ->where('reservations.starts_at', '<', $end)->where('reservations.ends_at', '>', $start)
             ->when($exceptReservation !== null, fn ($q) => $q->where('reservations.id', '!=', $exceptReservation))
-            ->pluck('reservation_tables.table_id')->map(fn ($id) => (int) $id)->merge($extraBusy)->values()->all();
+            ->pluck('reservation_tables.table_id')->map(fn ($id) => (int) $id)->merge($extraBusy)->all());
 
         $tables = Table::query()->where('outlet_id', $outletId)->when($areaId !== null, fn ($q) => $q->where('area_id', $areaId))->orderBy('area_id')->orderBy('id')->get();
         foreach ([false, true] as $squeeze) {

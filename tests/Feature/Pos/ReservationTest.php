@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Floor\Models\Area;
 use App\Domain\Floor\Models\Table;
 use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Ordering\Models\Order;
@@ -124,7 +125,9 @@ it('gives tables to waiting bookings in order and joins neighbouring tables for 
 
     $small = $service->create(booking($date, 3));
     $big = $service->create(booking($date, 10));          // tables seat 4 each
-    expect($small->tables)->toHaveCount(0);
+    expect($small->tables)->toHaveCount(1);               // tables are held when the booking is made
+    $small->tables()->detach();
+    $big->tables()->detach();
     expect($service->autoAssign($date, $cashier))->toBe(2);
 
     $small->load('tables');
@@ -393,4 +396,89 @@ it('lets the waiter at the door mark a party as arrived, with no access to the b
     $r->refresh();
     expect($r->status)->toBe('seated')->and($r->tables)->not->toBeEmpty()->and($r->deposit_payment_id)->not->toBeNull();
     $this->actingAs($waiter)->get('/reservations/hari-ini')->assertInertia(fn ($p) => $p->where('reservations.0.status', 'seated'));
+});
+
+it('holds tables in the area the guest picked, and says how many parties each area can still take', function () {
+    $date = openReservations();
+    $service = app(ReservationService::class);
+    $indoor = Area::query()->where('name', 'Indoor')->firstOrFail();
+    $outdoor = Area::query()->where('name', 'Outdoor')->firstOrFail();
+
+    $this->getJson("/reservasi/slots?date={$date}&pax=4")->assertOk()->assertJsonPath('areas.0.name', 'Indoor')->assertJsonPath('areas.0.units', 6)->assertJsonPath('areas.1.units', 2);
+
+    $a = $service->create(booking($date, 4) + ['area_id' => $outdoor->id]);          // outdoor tables seat 2: two joined
+    expect($a->area_id)->toBe($outdoor->id)->and($a->tables)->toHaveCount(2)->and($a->tight)->toBeFalse();
+    $b = $service->create(booking($date, 4) + ['area_id' => $indoor->id]);
+    expect($b->tables->pluck('area_id')->unique()->all())->toBe([$indoor->id]);
+
+    // fill the indoor area: the guest who wants it is told it is full, the one who does not mind gets the area with room
+    foreach (range(1, 5) as $i) {
+        $service->create(booking($date, 4) + ['area_id' => $indoor->id]);
+    }
+    expect(fn () => $service->create(booking($date, 4) + ['area_id' => $indoor->id]))->toThrow(OrderException::class, 'Area Indoor sudah penuh');
+    $any = $service->create(booking($date, 4));
+    expect($any->area_id)->toBe($outdoor->id);
+    expect(fn () => $service->create(booking($date, 4)))->toThrow(OrderException::class, 'Semua area sudah penuh');
+});
+
+it('lets a group pack into a table beyond its normal capacity, up to its maximum, and marks it', function () {
+    $date = openReservations();
+    $service = app(ReservationService::class);
+    $indoor = Area::query()->where('name', 'Indoor')->firstOrFail();
+    $gazebo = Table::query()->where('area_id', $indoor->id)->orderBy('id')->firstOrFail();
+
+    // without a maximum six people take two joined tables
+    $roomy = $service->create(booking($date, 6) + ['area_id' => $indoor->id]);
+    expect($roomy->tables)->toHaveCount(2)->and($roomy->tight)->toBeFalse();
+    $service->close($roomy, 'cancelled', userWithRole('manager'));
+
+    // with a maximum of six one table does it, and it is marked as tight
+    Table::query()->where('area_id', $indoor->id)->update(['max_capacity' => 6]);
+    $packed = $service->create(booking($date, 6) + ['area_id' => $indoor->id]);
+    expect($packed->tables)->toHaveCount(1)->and($packed->tight)->toBeTrue()->and($packed->tables->first()->squeezeCapacity())->toBe(6);
+
+    // a normal party still gets a table that seats it normally before any squeezing
+    $normal = $service->create(booking($date, 4) + ['area_id' => $indoor->id]);
+    expect($normal->tight)->toBeFalse();
+
+    // more than the maximum is not squeezed in
+    expect($service->create(booking($date, 7) + ['area_id' => $indoor->id])->tables)->toHaveCount(2);
+    expect($gazebo->fresh()->max_capacity)->toBe(6);
+});
+
+it('keeps a changed party size on its tables when they can take it, and refuses a guest when they cannot', function () {
+    $this->withoutMiddleware(ThrottleRequests::class);
+    $date = openReservations();
+    $service = app(ReservationService::class);
+    $indoor = Area::query()->where('name', 'Indoor')->firstOrFail();
+    Table::query()->where('area_id', $indoor->id)->update(['max_capacity' => 6]);
+    $r = $service->create(booking($date, 4) + ['area_id' => $indoor->id]);
+    $table = $r->tables->first()->id;
+
+    $this->postJson("/reservasi/{$r->public_id}/ubah", ['pax' => 6, 'phone' => '081234567890', 'keep' => [['index' => 0, 'qty' => 6]], 'add' => []])->assertOk();
+    $r->refresh();
+    expect($r->tables->pluck('id')->all())->toBe([$table])->and($r->tight)->toBeTrue();
+
+    $this->postJson("/reservasi/{$r->public_id}/ubah", ['pax' => 5, 'phone' => '081234567890', 'keep' => [['index' => 0, 'qty' => 5]], 'add' => []])->assertOk();
+    expect($r->fresh()->tight)->toBeTrue();                         // five still packs into a table of four
+
+    // fill every other indoor table: moving to ten has nowhere to go
+    foreach (range(1, 5) as $i) {
+        $service->create(booking($date, 4) + ['area_id' => $indoor->id]);
+    }
+    $this->postJson("/reservasi/{$r->public_id}/ubah", ['pax' => 10, 'phone' => '081234567890', 'keep' => [['index' => 0, 'qty' => 10]], 'add' => []])->assertStatus(422);
+    expect($r->fresh()->pax)->toBe(5);
+});
+
+it('lets staff move a booking onto packed seats and tells the list so', function () {
+    $date = openReservations();
+    $service = app(ReservationService::class);
+    $cs = userWithRole('cs');
+    $r = $service->create(booking($date, 5) + ['area_id' => Area::query()->where('name', 'Indoor')->firstOrFail()->id]);
+    $table = Table::query()->where('area_id', Area::query()->where('name', 'Outdoor')->value('id'))->firstOrFail();
+    expect(fn () => $service->retable($r, [$table->id], $cs))->toThrow(OrderException::class, 'belum cukup');
+    $table->update(['capacity' => 4, 'max_capacity' => 5]);
+    $service->retable($r, [$table->id], $cs);
+    expect($r->fresh()->tight)->toBeTrue()->and($r->fresh()->area_id)->toBe($table->area_id);
+    $this->actingAs($cs)->get("/reservations?date={$date}")->assertInertia(fn ($p) => $p->where('reservations.0.tight', true)->where('reservations.0.area', 'Outdoor'));
 });

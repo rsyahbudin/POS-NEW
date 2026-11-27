@@ -202,8 +202,8 @@ class ReservationService
     }
 
     /**
-     * Tables for a party in one area (or anywhere): first a table or a run of neighbouring tables that seat everybody
-     * normally, then, when nothing does, the same with each table's squeeze capacity (a group that packs in).
+     * Tables for a party in one area (or anywhere): a table that seats them normally, else one they can pack into, else a
+     * run of neighbouring tables that seat them normally, else a run they can pack into.
      *
      * @param  list<int>  $extraBusy  tables to treat as taken as well
      * @return array{ids: list<int>, tight: bool}|null
@@ -217,8 +217,9 @@ class ReservationService
             ->pluck('reservation_tables.table_id')->map(fn ($id) => (int) $id)->merge($extraBusy)->all());
 
         $tables = Table::query()->where('outlet_id', $outletId)->when($areaId !== null, fn ($q) => $q->where('area_id', $areaId))->orderBy('area_id')->orderBy('id')->get();
-        foreach ([false, true] as $squeeze) {
-            $ids = $this->fit($tables, $busy, $pax, $squeeze);
+        // one table seating them normally, one table packed tight, then joined tables normally, then joined and packed
+        foreach ([[false, false], [true, false], [false, true], [true, true]] as [$squeeze, $join]) {
+            $ids = $this->fit($tables, $busy, $pax, $squeeze, $join);
             if ($ids !== null) {
                 $normal = (int) $tables->whereIn('id', $ids)->sum('capacity');
 
@@ -234,13 +235,13 @@ class ReservationService
      * @param  list<int>  $busy
      * @return list<int>|null
      */
-    private function fit(Collection $tables, array $busy, int $pax, bool $squeeze): ?array
+    private function fit(Collection $tables, array $busy, int $pax, bool $squeeze, bool $join): ?array
     {
         $seats = fn (Table $t): int => $squeeze ? $t->squeezeCapacity() : $t->capacity;
         $free = $tables->reject(fn (Table $t) => in_array($t->id, $busy, true));
         $single = $free->filter(fn (Table $t) => $seats($t) >= $pax)->sortBy($seats)->first();
-        if ($single !== null) {
-            return [$single->id];
+        if ($single !== null || ! $join) {
+            return $single === null ? null : [$single->id];
         }
 
         $best = null;

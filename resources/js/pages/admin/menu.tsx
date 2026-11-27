@@ -50,6 +50,7 @@ type Product = {
     modifier_group_ids: number[];
     is_bundle: boolean;
     reservation_menu: boolean;
+    reservation_package: boolean;
     components: Component[];
 };
 type Group = {
@@ -90,6 +91,7 @@ type Draft = {
     modifier_group_ids: number[];
     is_bundle: boolean;
     reservation_menu: boolean;
+    reservation_package: boolean;
     components: Component[];
     image: File | null;
 };
@@ -108,6 +110,7 @@ const blank = (cat?: number): Draft => ({
     modifier_group_ids: [],
     is_bundle: false,
     reservation_menu: false,
+    reservation_package: false,
     components: [],
     image: null,
 });
@@ -163,6 +166,7 @@ export default function MenuPage({
             printer_ids: draft.printer_ids,
             is_bundle: draft.is_bundle ? 1 : 0,
             reservation_menu: draft.reservation_menu ? 1 : 0,
+            reservation_package: draft.reservation_package ? 1 : 0,
             components: draft.is_bundle ? draft.components : [],
         };
         if (draft.image) body.image = draft.image;
@@ -401,6 +405,8 @@ export default function MenuPage({
                                                 is_bundle: p.is_bundle,
                                                 reservation_menu:
                                                     p.reservation_menu,
+                                                reservation_package:
+                                                    p.reservation_package,
                                                 components: p.components,
                                                 image: null,
                                             })
@@ -621,6 +627,29 @@ export default function MenuPage({
                             </span>
                         </span>
                     </label>
+                    {draft.reservation_menu && (
+                        <label className="flex min-h-11 items-center gap-2 text-sm">
+                            <input
+                                type="checkbox"
+                                className="size-5"
+                                checked={draft.reservation_package}
+                                onChange={(e) =>
+                                    setDraft({
+                                        ...draft,
+                                        reservation_package: e.target.checked,
+                                    })
+                                }
+                            />
+                            <span>
+                                Paket buka puasa (1 paket = 1 orang)
+                                <span className="block text-xs text-muted-foreground">
+                                    Dihitung terhadap jumlah orang pada
+                                    reservasi. Snack dan menu lain tidak
+                                    dihitung.
+                                </span>
+                            </span>
+                        </label>
+                    )}
 
                     {(canBundles || draft.is_bundle) && (
                         <fieldset className="grid gap-2 rounded-xl border p-3">

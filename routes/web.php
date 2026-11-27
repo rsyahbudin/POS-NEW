@@ -61,6 +61,9 @@ Route::prefix('reservasi')->middleware('throttle:reservation')->group(function (
     Route::get('slots', [ReservationBookingController::class, 'slots'])->name('reservation.slots');
     Route::post('/', [ReservationBookingController::class, 'store'])->middleware('throttle:reservation-submit')->name('reservation.store');
     Route::get('{code}', [ReservationBookingController::class, 'status'])->name('reservation.status');
+    Route::get('{code}/ubah', [ReservationBookingController::class, 'edit'])->name('reservation.edit');
+    Route::post('{code}/ubah', [ReservationBookingController::class, 'update'])->middleware('throttle:reservation-submit')->name('reservation.update');
+    Route::post('{code}/batal', [ReservationBookingController::class, 'cancel'])->middleware('throttle:reservation-submit')->name('reservation.cancel');
 });
 Route::prefix('m/{token}')->middleware('throttle:qr')->group(function () {
     Route::get('/', [QrMenuController::class, 'show'])->name('qr.show');
@@ -210,6 +213,9 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::post('{reservation}/seat', [ReservationStaffController::class, 'seat'])->name('seat');
         Route::post('{reservation}/close', [ReservationStaffController::class, 'close'])->name('close');
         Route::post('{reservation}/tables', [ReservationStaffController::class, 'retable'])->name('retable');
+        Route::post('{reservation}/confirm', [ReservationStaffController::class, 'confirm'])->name('confirm');
+        Route::post('{reservation}/full-menu', [ReservationStaffController::class, 'fullMenu'])->name('full-menu');
+        Route::post('assign', [ReservationStaffController::class, 'assign'])->name('assign');
     });
 
     // Print station: a device that serves the queued print jobs of its printers

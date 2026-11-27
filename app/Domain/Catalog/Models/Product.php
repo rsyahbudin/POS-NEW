@@ -24,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property bool $is_active
  * @property bool $is_bundle
  * @property bool $reservation_menu
+ * @property bool $reservation_package
  * @property int|null $stock_qty
  * @property int $sort
  * @property Carbon|null $deleted_at
@@ -39,7 +40,7 @@ class Product extends Model
 
     protected function casts(): array
     {
-        return ['is_available' => 'boolean', 'is_active' => 'boolean', 'is_bundle' => 'boolean', 'reservation_menu' => 'boolean', 'base_price' => 'integer', 'stock_qty' => 'integer'];
+        return ['is_available' => 'boolean', 'is_active' => 'boolean', 'is_bundle' => 'boolean', 'reservation_menu' => 'boolean', 'reservation_package' => 'boolean', 'base_price' => 'integer', 'stock_qty' => 'integer'];
     }
 
     /** @return BelongsTo<Category, $this> */

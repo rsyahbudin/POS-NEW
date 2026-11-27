@@ -21,19 +21,38 @@ type Row = {
     name: string;
     phone: string;
     pax: number;
-    status: 'booked' | 'seated' | 'cancelled' | 'no_show';
+    status: 'pending' | 'booked' | 'seated' | 'cancelled' | 'no_show';
     note: string | null;
     starts_at: string;
     tables: { id: number; name: string; capacity: number }[];
     summary: { name: string; qty: number; total: number; options: string }[];
     total: number;
     order: string | null;
+    payment_type: 'dp' | 'full';
+    amount_due: number;
+    paid: number;
+    package_short: boolean;
+    package_waived: boolean;
+    full_menu: boolean;
+    changed_at: string | null;
+};
+type Day = {
+    open: boolean;
+    reason: string | null;
+    capacity: number;
+    remaining: number;
+    booked: number;
+    time: string;
 };
 type TableRow = { id: number; name: string; capacity: number; area: string };
 
 const STATUS: Record<Row['status'], { label: string; cls: string }> = {
+    pending: {
+        label: 'Menunggu pembayaran',
+        cls: 'bg-red-100 text-red-900 dark:bg-red-950/50 dark:text-red-200',
+    },
     booked: {
-        label: 'Menunggu',
+        label: 'Terkonfirmasi',
         cls: 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200',
     },
     seated: {
@@ -59,24 +78,35 @@ export default function Reservations({
     date,
     link,
     enabled,
+    day,
     reservations,
     tables,
 }: {
     date: string;
     link: string;
     enabled: boolean;
+    day: Day;
     reservations: Row[];
     tables: TableRow[];
 }) {
     const [moving, setMoving] = useState<{ r: Row; ids: number[] } | null>(
         null,
     );
+    const [paying, setPaying] = useState<{
+        r: Row;
+        amount: string;
+        waive: boolean;
+    } | null>(null);
     const go = (d: string) =>
         router.get('/reservations', { date: d }, { preserveScroll: true });
     const post = (url: string, data: Record<string, unknown> = {}) =>
         router.post(url, data as never, { preserveScroll: true });
-    const waiting = reservations.filter((r) => r.status === 'booked');
-    const guests = waiting.reduce((n, r) => n + r.pax, 0);
+    const live = (r: Row) => r.status === 'pending' || r.status === 'booked';
+    const unpaid = reservations.filter((r) => r.status === 'pending').length;
+    const noTable = reservations.filter(
+        (r) => live(r) && r.tables.length === 0,
+    ).length;
+    const over = day.booked > day.capacity;
 
     return (
         <>
@@ -84,7 +114,7 @@ export default function Reservations({
             <div className="mx-auto grid w-full max-w-4xl gap-4 p-4 md:p-6">
                 <PageHeader
                     title="Reservasi"
-                    subtitle="Tamu memesan sendiri lewat link reservasi. Tekan Duduk saat mereka datang: pesanan dibuka di meja pertama, meja lain bergabung ke satu bill, dan menu pesanan langsung dikirim ke dapur."
+                    subtitle="Tamu memesan sendiri lewat link reservasi, lalu membayar DP atau lunas. Konfirmasi pembayarannya, atur meja, dan tekan Duduk saat mereka datang: pesanan dibuka di meja pertama, meja lain bergabung ke satu bill, dan menu langsung ke dapur."
                     actions={
                         <Button
                             variant="outline"
@@ -138,10 +168,63 @@ export default function Reservations({
                         <ChevronRight />
                     </Button>
                     <span className="ml-auto text-sm text-muted-foreground">
-                        {dateId(date)} · {waiting.length} menunggu · {guests}{' '}
-                        orang
+                        {dateId(date)} · jam {day.time}
                     </span>
                 </div>
+
+                <section
+                    className={cn(
+                        'grid gap-2 rounded-xl border p-3',
+                        over && 'border-destructive',
+                    )}
+                    aria-label="Kuota hari ini"
+                >
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <p className="text-lg font-semibold tabular-nums">
+                            {day.booked} dari {day.capacity} orang
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                            {over
+                                ? `Melebihi kuota ${day.booked - day.capacity} orang`
+                                : day.open
+                                  ? `Sisa ${day.remaining} · pemesanan baru masih dibuka`
+                                  : (day.reason ?? 'Ditutup')}
+                        </p>
+                    </div>
+                    <div
+                        className="h-2 overflow-hidden rounded-full bg-muted"
+                        role="progressbar"
+                        aria-valuenow={day.booked}
+                        aria-valuemax={day.capacity}
+                    >
+                        <div
+                            className={cn(
+                                'h-full',
+                                over ? 'bg-destructive' : 'bg-primary',
+                            )}
+                            style={{
+                                width: `${Math.min(100, (day.booked / day.capacity) * 100)}%`,
+                            }}
+                        />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                        <span>{unpaid} menunggu pembayaran</span>
+                        <span>·</span>
+                        <span>{noTable} belum punya meja</span>
+                        {noTable > 0 && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="ml-auto h-9"
+                                onClick={() =>
+                                    post('/reservations/assign', { date })
+                                }
+                            >
+                                Atur meja otomatis
+                            </Button>
+                        )}
+                    </div>
+                </section>
 
                 {reservations.length === 0 && (
                     <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
@@ -155,7 +238,9 @@ export default function Reservations({
                             key={r.id}
                             className={cn(
                                 'grid gap-3 rounded-xl border bg-card p-4',
-                                r.status !== 'booked' && 'opacity-75',
+                                !live(r) &&
+                                    r.status !== 'seated' &&
+                                    'opacity-75',
                             )}
                         >
                             <header className="flex flex-wrap items-start justify-between gap-2">
@@ -195,7 +280,12 @@ export default function Reservations({
                                         digabung, satu bill
                                     </span>
                                 )}
-                                {r.status === 'booked' && (
+                                {r.tables.length === 0 && live(r) && (
+                                    <span className="text-sm text-muted-foreground">
+                                        Belum ada meja
+                                    </span>
+                                )}
+                                {live(r) && (
                                     <Button
                                         variant="ghost"
                                         size="sm"
@@ -245,18 +335,97 @@ export default function Reservations({
                                 </p>
                             )}
 
+                            <div className="grid gap-1 rounded-lg bg-muted/60 p-2 text-sm">
+                                <p className="flex flex-wrap justify-between gap-2">
+                                    <span>
+                                        {r.payment_type === 'full'
+                                            ? 'Bayar lunas'
+                                            : 'Bayar DP'}
+                                        : diminta {rupiah(r.amount_due)}
+                                    </span>
+                                    <span
+                                        className={cn(
+                                            'font-semibold tabular-nums',
+                                            r.paid > 0
+                                                ? 'text-emerald-700 dark:text-emerald-400'
+                                                : 'text-destructive',
+                                        )}
+                                    >
+                                        {r.paid > 0
+                                            ? `Diterima ${rupiah(r.paid)}`
+                                            : 'Belum diterima'}
+                                    </span>
+                                </p>
+                                {r.package_short && (
+                                    <p
+                                        className={cn(
+                                            r.package_waived
+                                                ? 'text-muted-foreground'
+                                                : 'font-medium text-amber-800 dark:text-amber-300',
+                                        )}
+                                    >
+                                        {r.package_waived
+                                            ? 'Paket kurang dari jumlah orang: disetujui.'
+                                            : 'Paket kurang dari jumlah orang: perlu persetujuanmu.'}
+                                    </p>
+                                )}
+                                {r.changed_at && (
+                                    <p className="text-muted-foreground">
+                                        Diubah tamu {timeId(r.changed_at)}. Cek
+                                        selisih pembayaran.
+                                    </p>
+                                )}
+                            </div>
+
                             <footer className="flex flex-wrap items-center gap-2">
-                                {r.status === 'booked' && (
+                                {live(r) && (
                                     <>
                                         <Button
                                             className="h-11"
+                                            variant={
+                                                r.status === 'pending'
+                                                    ? 'default'
+                                                    : 'outline'
+                                            }
+                                            onClick={() =>
+                                                setPaying({
+                                                    r,
+                                                    amount: String(
+                                                        r.paid || r.amount_due,
+                                                    ),
+                                                    waive: r.package_waived,
+                                                })
+                                            }
+                                        >
+                                            {r.status === 'pending'
+                                                ? 'Konfirmasi bayar'
+                                                : 'Ubah nominal'}
+                                        </Button>
+                                        {r.status === 'booked' && (
+                                            <Button
+                                                className="h-11"
+                                                onClick={() =>
+                                                    post(
+                                                        `/reservations/${r.id}/seat`,
+                                                    )
+                                                }
+                                            >
+                                                <Check /> Duduk
+                                            </Button>
+                                        )}
+                                        <Button
+                                            variant="ghost"
+                                            className="h-11"
                                             onClick={() =>
                                                 post(
-                                                    `/reservations/${r.id}/seat`,
+                                                    `/reservations/${r.id}/full-menu`,
+                                                    { on: !r.full_menu },
                                                 )
                                             }
                                         >
-                                            <Check /> Duduk
+                                            {r.full_menu
+                                                ? 'Menu biasa: dibuka'
+                                                : 'Buka menu biasa'}
                                         </Button>
                                         <Button
                                             variant="outline"
@@ -312,6 +481,59 @@ export default function Reservations({
                     ))}
                 </div>
             </div>
+
+            {paying && (
+                <Modal
+                    open
+                    onClose={() => setPaying(null)}
+                    title={`Pembayaran ${paying.r.name}`}
+                    description={`Diminta ${rupiah(paying.r.amount_due)} (${paying.r.payment_type === 'full' ? 'lunas' : 'DP'}). Isi yang benar-benar masuk, lihat bukti transfer atau QRIS.`}
+                >
+                    <label className="grid gap-1.5 text-sm font-medium">
+                        Nominal diterima
+                        <Input
+                            className="h-12"
+                            inputMode="numeric"
+                            value={paying.amount}
+                            onChange={(e) =>
+                                setPaying({
+                                    ...paying,
+                                    amount: e.target.value.replace(/\D/g, ''),
+                                })
+                            }
+                        />
+                    </label>
+                    {paying.r.package_short && !paying.r.package_waived && (
+                        <label className="flex items-start gap-2 text-sm">
+                            <input
+                                type="checkbox"
+                                className="mt-0.5 size-5"
+                                checked={paying.waive}
+                                onChange={(e) =>
+                                    setPaying({
+                                        ...paying,
+                                        waive: e.target.checked,
+                                    })
+                                }
+                            />
+                            Setujui paket kurang dari jumlah orang
+                        </label>
+                    )}
+                    <Button
+                        className="h-12"
+                        disabled={paying.amount === ''}
+                        onClick={() => {
+                            post(`/reservations/${paying.r.id}/confirm`, {
+                                amount: Number(paying.amount),
+                                waive_package: paying.waive,
+                            });
+                            setPaying(null);
+                        }}
+                    >
+                        Konfirmasi pembayaran
+                    </Button>
+                </Modal>
+            )}
 
             {moving && (
                 <Modal

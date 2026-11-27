@@ -22,11 +22,21 @@ use Illuminate\Support\Carbon;
  * @property int $pax
  * @property Carbon $starts_at
  * @property Carbon $ends_at
- * @property string $status
+ * @property string $status pending | booked | seated | cancelled | no_show
  * @property string|null $note
  * @property list<array<string, mixed>> $items
  * @property list<array{name: string, qty: int, total: int, options: string}> $summary
  * @property int $items_total
+ * @property string $payment_type
+ * @property int $amount_due
+ * @property int $paid_amount
+ * @property Carbon|null $confirmed_at
+ * @property int|null $confirmed_by
+ * @property bool $package_short
+ * @property bool $package_waived
+ * @property bool $full_menu
+ * @property Carbon|null $changed_at
+ * @property Carbon|null $created_at
  * @property int|null $order_id
  * @property Carbon|null $seated_at
  * @property-read Collection<int, Table> $tables
@@ -37,7 +47,7 @@ class Reservation extends Model
 
     protected function casts(): array
     {
-        return ['starts_at' => 'datetime', 'ends_at' => 'datetime', 'seated_at' => 'datetime', 'items' => 'array', 'summary' => 'array'];
+        return ['starts_at' => 'datetime', 'ends_at' => 'datetime', 'seated_at' => 'datetime', 'confirmed_at' => 'datetime', 'changed_at' => 'datetime', 'items' => 'array', 'summary' => 'array', 'package_short' => 'boolean', 'package_waived' => 'boolean', 'full_menu' => 'boolean'];
     }
 
     /** @return BelongsToMany<Table, $this> */

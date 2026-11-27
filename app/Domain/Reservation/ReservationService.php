@@ -11,6 +11,7 @@ use App\Domain\Ordering\Exceptions\OrderException;
 use App\Domain\Ordering\ItemBuilder;
 use App\Domain\Ordering\Models\Order;
 use App\Domain\Reservation\Models\Reservation;
+use App\Domain\Settings\Models\Outlet;
 use App\Domain\Settings\OutletContext;
 use App\Domain\Settings\SettingsRepository;
 use App\Models\User;
@@ -42,17 +43,53 @@ class ReservationService
         return (bool) $this->settings->get('reservation.enabled', false);
     }
 
-    /** @return list<string> the booking times, "17:30" */
-    public function slots(): array
-    {
-        $raw = preg_split('/\s*,\s*/', trim((string) $this->settings->get('reservation.slots', ''))) ?: [];
-
-        return array_values(array_filter($raw, fn ($s) => preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', (string) $s) === 1));
-    }
-
     public function maxPax(): int
     {
-        return max(1, (int) $this->settings->get('reservation.max_pax', 20));
+        return max(1, (int) $this->settings->get('reservation.max_pax', 30));
+    }
+
+    public function capacity(): int
+    {
+        return max(1, (int) $this->settings->get('reservation.capacity', 200));
+    }
+
+    /** @return string a setting holding a time of day, "18:00", with the fallback when it is not one */
+    private function clock(string $key, string $default): string
+    {
+        $v = (string) $this->settings->get($key, $default);
+
+        return preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $v) === 1 ? $v : $default;
+    }
+
+    /** The one time every reservation shares: when the fast is broken. */
+    public function time(): string
+    {
+        return $this->clock('reservation.time', '18:00');
+    }
+
+    public function cutoffTime(): string
+    {
+        return $this->clock('reservation.cutoff_time', '15:00');
+    }
+
+    public function changeUntilTime(): string
+    {
+        return $this->clock('reservation.change_until', '17:00');
+    }
+
+    public function fullMenuFromTime(): string
+    {
+        return $this->clock('reservation.full_menu_from', '19:00');
+    }
+
+    public function packageRequired(): bool
+    {
+        return (bool) $this->settings->get('reservation.package_required', true);
+    }
+
+    public function dpPercent(): int
+    {
+        return min(100, max(1, (int) $this->settings->get('reservation.dp_percent', 30)));
     }
 
     /** @return array{from: string, to: string}|null the first and last bookable day, or null when reservations are closed */
@@ -76,30 +113,87 @@ class ReservationService
     }
 
     /** @return array{0: CarbonImmutable, 1: CarbonImmutable} start and end of the table hold, in the database timezone */
-    public function window(string $date, string $slot): array
+    public function window(string $date): array
     {
-        $start = CarbonImmutable::parse("{$date} {$slot}", self::ZONE);
+        $start = CarbonImmutable::parse("{$date} {$this->time()}", self::ZONE);
         $end = $start->addMinutes(max(30, (int) $this->settings->get('reservation.duration_minutes', 120)));
         $db = (string) config('app.timezone');
 
         return [$start->setTimezone($db), $end->setTimezone($db)];
     }
 
-    /**
-     * Which booking times of a day still have room for this many people.
-     *
-     * @return array<string, bool>
-     */
-    public function availability(string $date, int $pax): array
+    /** People already booked for a day (waiting for payment, confirmed or seated). */
+    public function booked(string $date, ?int $exceptReservation = null): int
     {
-        $out = [];
+        $day = CarbonImmutable::parse($date, self::ZONE);
+        $db = (string) config('app.timezone');
+
+        return (int) Reservation::query()->where('outlet_id', $this->outlet->id())->whereIn('status', ['pending', 'booked', 'seated'])
+            ->whereBetween('starts_at', [$day->startOfDay()->setTimezone($db), $day->endOfDay()->setTimezone($db)])
+            ->when($exceptReservation !== null, fn ($q) => $q->where('id', '!=', $exceptReservation))->sum('pax');
+    }
+
+    /**
+     * Whether a day takes new bookings, and how many people still fit.
+     *
+     * @return array{open: bool, reason: string|null, capacity: int, remaining: int}
+     */
+    public function availability(string $date): array
+    {
+        $capacity = $this->capacity();
+        $remaining = max(0, $capacity - $this->booked($date));
         $now = CarbonImmutable::now(self::ZONE);
-        foreach ($this->slots() as $slot) {
-            [$start, $end] = $this->window($date, $slot);
-            $out[$slot] = $start->gt($now) && $this->allocate($this->outlet->id(), $pax, $start, $end) !== null;
+        $reason = null;
+        if (! $this->isBookableDate($date)) {
+            $reason = 'Tanggal itu belum bisa dipesan.';
+        } elseif ($date === $now->toDateString() && $now->format('H:i') >= $this->cutoffTime()) {
+            $reason = "Reservasi hari ini ditutup pukul {$this->cutoffTime()}.";
+        } elseif ($remaining <= 0) {
+            $reason = 'Kuota hari itu sudah penuh.';
         }
 
-        return $out;
+        return ['open' => $reason === null, 'reason' => $reason, 'capacity' => $capacity, 'remaining' => $remaining];
+    }
+
+    /** The last moment the guest may change or cancel on their own: today's "change until" time on the reservation day. */
+    public function changeDeadline(Reservation $r): CarbonImmutable
+    {
+        $day = $r->starts_at->setTimezone(self::ZONE)->toDateString();
+
+        return CarbonImmutable::parse("{$day} {$this->changeUntilTime()}", self::ZONE);
+    }
+
+    public function guestCanChange(Reservation $r): bool
+    {
+        return in_array($r->status, ['pending', 'booked'], true) && CarbonImmutable::now(self::ZONE)->lt($this->changeDeadline($r));
+    }
+
+    /** From when a seated party may order the normal menu from its table. */
+    public function fullMenuOpensAt(Reservation $r): CarbonImmutable
+    {
+        $day = $r->starts_at->setTimezone(self::ZONE)->toDateString();
+
+        return CarbonImmutable::parse("{$day} {$this->fullMenuFromTime()}", self::ZONE);
+    }
+
+    /**
+     * A table QR order on a table where a reservation party sits: before the normal menu opens (and unless staff opened it
+     * early) only the reservation menu can be added. Staff orders are never held back.
+     *
+     * @param  list<array<string, mixed>>  $rows  item rows built for the order
+     */
+    public function guardQr(Order $order, array $rows): void
+    {
+        $r = Reservation::query()->where('order_id', $order->id)->first();
+        if ($r === null || $r->full_menu || CarbonImmutable::now(self::ZONE)->gte($this->fullMenuOpensAt($r))) {
+            return;
+        }
+        $allowed = Product::query()->where('outlet_id', $order->outlet_id)->where('reservation_menu', true)->pluck('id')->all();
+        foreach ($rows as $row) {
+            if (! in_array((int) ($row['product_id'] ?? 0), $allowed, true)) {
+                throw new OrderException("Menu biasa bisa dipesan mulai pukul {$this->fullMenuFromTime()}. Panggil staf kalau perlu lebih awal.");
+            }
+        }
     }
 
     /**
@@ -110,7 +204,7 @@ class ReservationService
     public function allocate(int $outletId, int $pax, CarbonImmutable $start, CarbonImmutable $end, ?int $exceptReservation = null): ?array
     {
         $busy = DB::table('reservation_tables')->join('reservations', 'reservations.id', '=', 'reservation_tables.reservation_id')
-            ->where('reservations.outlet_id', $outletId)->whereIn('reservations.status', ['booked', 'seated'])
+            ->where('reservations.outlet_id', $outletId)->whereIn('reservations.status', ['pending', 'booked', 'seated'])
             ->where('reservations.starts_at', '<', $end)->where('reservations.ends_at', '>', $start)
             ->when($exceptReservation !== null, fn ($q) => $q->where('reservations.id', '!=', $exceptReservation))
             ->pluck('reservation_tables.table_id')->map(fn ($id) => (int) $id)->all();
@@ -155,7 +249,60 @@ class ReservationService
     }
 
     /**
-     * @param  array<string, mixed>  $data  name, phone, pax, date (Y-m-d), slot (HH:MM), note, items[]
+     * Prices the lines against the menu and says how many packages they hold.
+     *
+     * @param  list<array<string, mixed>>  $lines
+     * @return array{rows: list<array<string, mixed>>, summary: list<array<string, mixed>>, total: int, packages: int}
+     */
+    private function compose(array $lines, int $outletId, bool $fullMenu): array
+    {
+        if ($lines === []) {
+            throw new OrderException('Pilih menu untuk dipesan.');
+        }
+        $ids = array_values(array_unique(array_map(fn ($l) => (int) ($l['product_id'] ?? 0), $lines)));
+        $products = Product::query()->where('outlet_id', $outletId)->whereIn('id', $ids)->get()->keyBy('id');
+        foreach ($ids as $id) {
+            $product = $products->get($id);
+            if ($product === null || (! $fullMenu && ! $product->reservation_menu)) {
+                throw new OrderException('Ada menu yang tidak termasuk menu reservasi.');
+            }
+        }
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $this->items->build($lines, $outletId);
+        $packages = 0;
+        foreach ($rows as $row) {
+            if ($products->get((int) ($row['product_id'] ?? 0))?->reservation_package === true) {
+                $packages += (int) $row['qty'];
+            }
+        }
+
+        return [
+            'rows' => $rows, 'packages' => $packages, 'total' => (int) array_sum(array_column($rows, 'line_total')),
+            'summary' => array_map(fn (array $row) => [
+                'name' => $row['name_snapshot'], 'qty' => $row['qty'], 'total' => $row['line_total'],
+                'options' => implode(', ', array_filter(array_column((array) ($row['modifiers_snapshot'] ?? []), 'name'))),
+            ], $rows),
+        ];
+    }
+
+    /** One package per person: fewer packages than people needs staff approval (when the rule is on and the menu has packages). */
+    private function packageShort(int $packages, int $pax, int $outletId): bool
+    {
+        if (! $this->packageRequired() || ! Product::query()->where('outlet_id', $outletId)->where('reservation_package', true)->exists()) {
+            return false;
+        }
+
+        return $packages < $pax;
+    }
+
+    /** What the guest is asked to pay now. */
+    public function amountDue(string $type, int $total): int
+    {
+        return $type === 'full' ? $total : (int) (ceil($total * $this->dpPercent() / 100 / 1000) * 1000);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data  name, phone, pax, date (Y-m-d), payment_type (dp|full), note, items[]
      */
     public function create(array $data): Reservation
     {
@@ -163,81 +310,188 @@ class ReservationService
             throw new OrderException('Reservasi belum dibuka.');
         }
         $date = (string) ($data['date'] ?? '');
-        $slot = (string) ($data['slot'] ?? '');
         $pax = (int) ($data['pax'] ?? 0);
         $name = trim((string) ($data['name'] ?? ''));
         $phone = preg_replace('/[^\d+]/', '', (string) ($data['phone'] ?? '')) ?? '';
+        $type = (string) ($data['payment_type'] ?? 'dp');
         if ($name === '' || strlen($phone) < 8) {
             throw new OrderException('Isi nama dan nomor telepon yang bisa dihubungi.');
         }
-        if (! $this->isBookableDate($date)) {
-            throw new OrderException('Tanggal itu belum bisa dipesan.');
-        }
-        if (! in_array($slot, $this->slots(), true)) {
-            throw new OrderException('Pilih jam yang tersedia.');
+        if (! in_array($type, ['dp', 'full'], true)) {
+            throw new OrderException('Pilih bayar DP atau lunas.');
         }
         if ($pax < 1 || $pax > $this->maxPax()) {
             throw new OrderException("Jumlah orang 1 sampai {$this->maxPax()}.");
         }
-
-        $lines = is_array($data['items'] ?? null) ? array_values($data['items']) : [];
-        if ($lines === []) {
-            throw new OrderException('Pilih menu untuk dipesan.');
-        }
         $outletId = $this->outlet->id();
-        $ids = array_values(array_unique(array_map(fn ($l) => (int) ($l['product_id'] ?? 0), $lines)));
-        if (Product::query()->where('outlet_id', $outletId)->where('reservation_menu', true)->whereIn('id', $ids)->count() !== count($ids)) {
-            throw new OrderException('Ada menu yang tidak termasuk menu reservasi.');
-        }
-        $rows = $this->items->build($lines, $outletId);
+        $made = $this->compose(is_array($data['items'] ?? null) ? array_values($data['items']) : [], $outletId, false);
 
-        [$start, $end] = $this->window($date, $slot);
-        if ($start->lte(CarbonImmutable::now())) {
-            throw new OrderException('Jam itu sudah lewat.');
-        }
-
-        $reservation = DB::transaction(function () use ($outletId, $name, $phone, $pax, $start, $end, $data, $lines, $rows) {
-            // one booking at a time decides who gets the last tables of a slot
-            Table::query()->where('outlet_id', $outletId)->lockForUpdate()->pluck('id');
-            $tables = $this->allocate($outletId, $pax, $start, $end);
-            if ($tables === null) {
-                throw new OrderException('Jam itu sudah penuh. Coba jam atau tanggal lain.');
+        $reservation = DB::transaction(function () use ($outletId, $name, $phone, $pax, $date, $type, $data, $made) {
+            // one booking at a time decides who gets the last places of the day
+            Outlet::query()->whereKey($outletId)->lockForUpdate()->value('id');
+            $day = $this->availability($date);
+            if (! $day['open']) {
+                throw new OrderException((string) $day['reason']);
             }
+            if ($pax > $day['remaining']) {
+                throw new OrderException("Sisa kuota hari itu {$day['remaining']} orang.");
+            }
+            [$start, $end] = $this->window($date);
 
-            $r = Reservation::create([
+            return Reservation::create([
                 'outlet_id' => $outletId, 'public_id' => strtoupper(Str::random(8)), 'name' => $name, 'phone' => $phone, 'pax' => $pax,
-                'starts_at' => $start, 'ends_at' => $end, 'status' => 'booked', 'note' => isset($data['note']) ? mb_substr((string) $data['note'], 0, 200) : null,
-                'items' => $lines,
-                'summary' => array_map(fn (array $row) => [
-                    'name' => $row['name_snapshot'], 'qty' => $row['qty'], 'total' => $row['line_total'],
-                    'options' => implode(', ', array_filter(array_column((array) ($row['modifiers_snapshot'] ?? []), 'name'))),
-                ], $rows),
-                'items_total' => (int) array_sum(array_column($rows, 'line_total')),
-            ]);
-            $r->tables()->sync($tables);
-
-            return $r;
+                'starts_at' => $start, 'ends_at' => $end, 'status' => 'pending', 'note' => isset($data['note']) ? mb_substr((string) $data['note'], 0, 200) : null,
+                'items' => array_values($data['items']), 'summary' => $made['summary'], 'items_total' => $made['total'],
+                'payment_type' => $type, 'amount_due' => $this->amountDue($type, $made['total']),
+                'package_short' => $this->packageShort($made['packages'], $pax, $outletId),
+            ])->refresh();
         });
 
-        $reservation->load('tables');
         Notifier::later(fn (Notifier $n) => $n->notify(
             $outletId, 'reservation.new', "Reservasi baru: {$reservation->name}, {$pax} orang",
-            $reservation->starts_at->setTimezone(self::ZONE)->translatedFormat('d M H:i').' · meja '.$reservation->tables->pluck('name')->implode(', '),
+            $reservation->starts_at->setTimezone(self::ZONE)->translatedFormat('d M').' · menunggu konfirmasi pembayaran'.($reservation->package_short ? ' · paket kurang dari jumlah orang' : ''),
             '/reservations', 'info', ['manage-reservations'],
         ));
 
         return $reservation;
     }
 
+    /**
+     * The guest (or staff) changes a booking: people, phone, note, quantities of the lines already ordered, and more menu.
+     * The guest can do it until the change deadline of the day; staff any time before seating.
+     *
+     * @param  array<string, mixed>  $data  pax, phone, note, keep (list of {index, qty}), add (list of new order lines)
+     */
+    public function update(Reservation $r, array $data, ?User $by = null): Reservation
+    {
+        $this->guardEditable($r, $by);
+        $pax = (int) ($data['pax'] ?? $r->pax);
+        if ($pax < 1 || $pax > $this->maxPax()) {
+            throw new OrderException("Jumlah orang 1 sampai {$this->maxPax()}.");
+        }
+        $phone = preg_replace('/[^\d+]/', '', (string) ($data['phone'] ?? $r->phone)) ?? '';
+        if (strlen($phone) < 8) {
+            throw new OrderException('Isi nomor telepon yang bisa dihubungi.');
+        }
+
+        $lines = [];
+        $keep = is_array($data['keep'] ?? null) ? $data['keep'] : null;
+        foreach ($r->items as $i => $line) {
+            $qty = (int) $line['qty'];
+            if ($keep !== null) {
+                $hit = collect($keep)->first(fn ($k) => (int) ($k['index'] ?? -1) === $i);
+                $qty = $hit === null ? 0 : (int) ($hit['qty'] ?? 0);
+            }
+            if ($qty > 0) {
+                $lines[] = ['qty' => min(50, $qty)] + $line;
+            }
+        }
+        foreach (is_array($data['add'] ?? null) ? $data['add'] : [] as $add) {
+            $lines[] = $add;
+        }
+        $made = $this->compose($lines, $r->outlet_id, $r->full_menu);
+
+        $r->update([
+            'pax' => $pax, 'phone' => $phone, 'note' => isset($data['note']) ? mb_substr((string) $data['note'], 0, 200) : $r->note,
+            'items' => $lines, 'summary' => $made['summary'], 'items_total' => $made['total'], 'amount_due' => $this->amountDue($r->payment_type, $made['total']),
+            'package_short' => $this->packageShort($made['packages'], $pax, $r->outlet_id), 'changed_at' => now(),
+        ]);
+        Audit::log('reservation.changed', $r, ['pax' => $pax, 'total' => $made['total']], $by);
+        if ($by === null) {
+            Notifier::later(fn (Notifier $n) => $n->notify(
+                $r->outlet_id, 'reservation.changed', "Reservasi diubah: {$r->name}, {$pax} orang", 'Pesanan atau jumlah orang berubah. Cek selisih pembayarannya.', '/reservations', 'warning', ['manage-reservations'],
+            ));
+        }
+
+        return $r->refresh();
+    }
+
+    /** The guest cancels their own booking, within the same deadline. */
+    public function cancelByGuest(Reservation $r): void
+    {
+        $this->guardEditable($r, null);
+        $r->update(['status' => 'cancelled', 'changed_at' => now()]);
+        Audit::log('reservation.cancelled_by_guest', $r, ['name' => $r->name, 'paid' => $r->paid_amount]);
+        Notifier::later(fn (Notifier $n) => $n->notify(
+            $r->outlet_id, 'reservation.cancelled', "Reservasi dibatalkan: {$r->name}", $r->paid_amount > 0 ? 'Sudah membayar Rp '.number_format($r->paid_amount, 0, ',', '.').'. Atur pengembalian atau DP-nya.' : 'Belum ada pembayaran.', '/reservations', 'warning', ['manage-reservations'],
+        ));
+    }
+
+    private function guardEditable(Reservation $r, ?User $by): void
+    {
+        if (! in_array($r->status, ['pending', 'booked'], true)) {
+            throw new OrderException('Reservasi ini sudah tidak bisa diubah.');
+        }
+        if ($by === null && ! $this->guestCanChange($r)) {
+            throw new OrderException("Perubahan setelah pukul {$this->changeUntilTime()} lewat pengelola. Hubungi kami.");
+        }
+    }
+
+    /**
+     * Staff confirm that money arrived (a deposit or the full amount): the booking now counts as confirmed. A booking with
+     * fewer packages than people needs the explicit say-so of staff.
+     */
+    public function confirm(Reservation $r, int $amount, bool $waivePackage, User $by): void
+    {
+        if (! in_array($r->status, ['pending', 'booked'], true)) {
+            throw new OrderException('Reservasi ini sudah tidak aktif.');
+        }
+        if ($amount < 0) {
+            throw new OrderException('Nominal tidak boleh minus.');
+        }
+        if ($r->package_short && ! $r->package_waived && ! $waivePackage) {
+            throw new OrderException('Paket kurang dari jumlah orang. Centang "setujui paket kurang" kalau tetap diterima.');
+        }
+        $r->update([
+            'status' => 'booked', 'paid_amount' => $amount, 'confirmed_at' => $r->confirmed_at ?? now(), 'confirmed_by' => $r->confirmed_by ?? $by->id,
+            'package_waived' => $r->package_waived || ($r->package_short && $waivePackage),
+        ]);
+        Audit::log('reservation.confirmed', $r, ['paid' => $amount, 'type' => $r->payment_type], $by);
+    }
+
+    /** Lets one party order the normal menu (the guest sees the full menu when changing the booking, and the QR hold is lifted). */
+    public function setFullMenu(Reservation $r, bool $on, User $by): void
+    {
+        $r->update(['full_menu' => $on]);
+        Audit::log('reservation.full_menu', $r, ['on' => $on], $by);
+    }
+
+    /**
+     * Gives tables to the day's bookings that have none yet, earliest booking first.
+     *
+     * @return int how many bookings got tables
+     */
+    public function autoAssign(string $date, User $by): int
+    {
+        $day = CarbonImmutable::parse($date, self::ZONE);
+        $db = (string) config('app.timezone');
+        $done = 0;
+        $pending = Reservation::query()->where('outlet_id', $this->outlet->id())->whereIn('status', ['pending', 'booked'])->whereDoesntHave('tables')
+            ->whereBetween('starts_at', [$day->startOfDay()->setTimezone($db), $day->endOfDay()->setTimezone($db)])->orderBy('id')->get();
+        foreach ($pending as $r) {
+            $ids = $this->allocate($r->outlet_id, $r->pax, CarbonImmutable::instance($r->starts_at), CarbonImmutable::instance($r->ends_at), $r->id);
+            if ($ids !== null) {
+                $r->tables()->sync($ids);
+                $done++;
+            }
+        }
+        Audit::log('reservation.auto_assigned', null, ['date' => $date, 'count' => $done], $by);
+
+        return $done;
+    }
+
     /** The party arrived: open the order on the first table, join the others to it, and send the pre-order to the kitchen. */
     public function seat(Reservation $reservation, User $by): Order
     {
+        if ($reservation->status === 'pending') {
+            throw new OrderException('Konfirmasi pembayarannya dulu sebelum mendudukkan tamu.');
+        }
         if ($reservation->status !== 'booked') {
             throw new OrderException('Reservasi ini sudah tidak aktif.');
         }
         $tables = $reservation->tables()->get();
         if ($tables->isEmpty()) {
-            throw new OrderException('Reservasi belum punya meja.');
+            throw new OrderException('Pilih meja untuk reservasi ini dulu.');
         }
         foreach ($tables as $t) {
             if (Order::query()->openOnTable($t->id)->exists()) {
@@ -253,7 +507,7 @@ class ReservationService
             $order->joinedTables()->sync($tables->skip(1)->pluck('id')->all());
             $reservation->update(['status' => 'seated', 'order_id' => $order->id, 'seated_at' => now()]);
             $this->sync->handle($main->id);
-            Audit::log('reservation.seated', $reservation, ['order' => $order->number, 'tables' => $tables->pluck('name')->all()], $by);
+            Audit::log('reservation.seated', $reservation, ['order' => $order->number, 'tables' => $tables->pluck('name')->all(), 'paid' => $reservation->paid_amount], $by);
 
             return $order;
         });
@@ -261,11 +515,11 @@ class ReservationService
 
     public function close(Reservation $reservation, string $status, User $by): void
     {
-        if ($reservation->status !== 'booked' || ! in_array($status, ['cancelled', 'no_show'], true)) {
+        if (! in_array($reservation->status, ['pending', 'booked'], true) || ! in_array($status, ['cancelled', 'no_show'], true)) {
             throw new OrderException('Reservasi ini sudah tidak aktif.');
         }
         $reservation->update(['status' => $status]);
-        Audit::log("reservation.{$status}", $reservation, ['name' => $reservation->name], $by);
+        Audit::log("reservation.{$status}", $reservation, ['name' => $reservation->name, 'paid' => $reservation->paid_amount], $by);
     }
 
     /**
@@ -275,7 +529,7 @@ class ReservationService
      */
     public function retable(Reservation $reservation, array $tableIds, User $by): void
     {
-        if ($reservation->status !== 'booked') {
+        if (! in_array($reservation->status, ['pending', 'booked'], true)) {
             throw new OrderException('Reservasi ini sudah tidak aktif.');
         }
         $tables = Table::query()->where('outlet_id', $reservation->outlet_id)->whereIn('id', $tableIds)->get();
@@ -283,7 +537,7 @@ class ReservationService
             throw new OrderException('Meja yang dipilih belum cukup untuk '.$reservation->pax.' orang.');
         }
         $taken = DB::table('reservation_tables')->join('reservations', 'reservations.id', '=', 'reservation_tables.reservation_id')
-            ->where('reservations.outlet_id', $reservation->outlet_id)->whereIn('reservations.status', ['booked', 'seated'])->where('reservations.id', '!=', $reservation->id)
+            ->where('reservations.outlet_id', $reservation->outlet_id)->whereIn('reservations.status', ['pending', 'booked', 'seated'])->where('reservations.id', '!=', $reservation->id)
             ->where('reservations.starts_at', '<', $reservation->ends_at)->where('reservations.ends_at', '>', $reservation->starts_at)
             ->whereIn('reservation_tables.table_id', $tables->pluck('id'))->exists();
         if ($taken) {

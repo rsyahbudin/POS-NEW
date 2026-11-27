@@ -13,6 +13,30 @@ import { bundleNeedsChoice } from '@/lib/bundle';
 import { uuid } from '@/lib/format';
 import type { CartLine, Category, Product } from '@/types/pos';
 
+type Editing = {
+    code: string;
+    name: string;
+    phone: string;
+    pax: number;
+    note: string | null;
+    date: string;
+    payment_type: 'dp' | 'full';
+    paid: number;
+    status: string;
+    lines: {
+        index: number;
+        qty: number;
+        name: string;
+        total: number;
+        options: string;
+    }[];
+};
+type Day = {
+    open: boolean;
+    reason: string | null;
+    capacity: number;
+    remaining: number;
+};
 type Props = {
     outlet: {
         name: string | null;
@@ -21,40 +45,68 @@ type Props = {
         whatsapp: string | null;
     };
     period: { from: string; to: string } | null;
-    slots: string[];
-    maxPax: number;
     menu: Category[];
+    editing: Editing | null;
+    time: string;
+    maxPax: number;
+    dpPercent: number;
+    cutoff: string;
+    changeUntil: string;
+    packageRequired: boolean;
+    packageIds: number[];
+    paymentInfo: string;
 };
 
-/** Public booking page: a day, a time and a party size, then a pre-order from the reservation menu only. */
-export default function Book({ outlet, period, slots, maxPax, menu }: Props) {
-    const [date, setDate] = useState(period?.from ?? '');
-    const [pax, setPax] = useState(2);
-    const [slot, setSlot] = useState('');
-    const [free, setFree] = useState<Record<string, boolean>>({});
+const csrf = () =>
+    decodeURIComponent(document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] ?? '');
+
+/** The booking form. One time a day (buka puasa), a quota of people, one package per person; the same form changes an existing booking. */
+export default function Book({
+    outlet,
+    period,
+    menu,
+    editing,
+    time,
+    maxPax,
+    dpPercent,
+    cutoff,
+    changeUntil,
+    packageRequired,
+    packageIds,
+    paymentInfo,
+}: Props) {
+    const [date, setDate] = useState(editing?.date ?? period?.from ?? '');
+    const [pax, setPax] = useState(editing?.pax ?? 2);
+    const [day, setDay] = useState<Day | null>(null);
     const [cart, setCart] = useState<CartLine[]>([]);
+    const [kept, setKept] = useState<Record<number, number>>(
+        Object.fromEntries((editing?.lines ?? []).map((l) => [l.index, l.qty])),
+    );
+    const [payType, setPayType] = useState<'dp' | 'full'>(
+        editing?.payment_type ?? 'dp',
+    );
     const [picking, setPicking] = useState<Product | null>(null);
-    const [name, setName] = useState('');
-    const [phone, setPhone] = useState('');
-    const [note, setNote] = useState('');
+    const [name, setName] = useState(editing?.name ?? '');
+    const [phone, setPhone] = useState(editing?.phone ?? '');
+    const [note, setNote] = useState(editing?.note ?? '');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // which times still have room for this day and party size
+    // how many people still fit on the chosen day (a new booking only)
     useEffect(() => {
-        if (!period || !date) {
+        if (editing || !period || !date) {
             return;
         }
 
         let live = true;
-        fetch(`/reservasi/slots?date=${encodeURIComponent(date)}&pax=${pax}`, {
+        fetch(`/reservasi/slots?date=${encodeURIComponent(date)}`, {
             headers: { Accept: 'application/json' },
         })
-            .then((r) => (r.ok ? r.json() : { slots: {} }))
-            .then((r: { slots: Record<string, boolean> }) => {
-                if (live) {
-                    setFree(r.slots);
-                    setSlot((s) => (r.slots[s] ? s : ''));
+            .then((r) => (r.ok ? r.json() : null))
+            .then((r: Day | null) => {
+                if (live && r) {
+                    setDay(r);
+                    setPax((n) => Math.max(1, Math.min(n, r.remaining || 1)));
                 }
             })
             .catch(() => undefined);
@@ -62,20 +114,41 @@ export default function Book({ outlet, period, slots, maxPax, menu }: Props) {
         return () => {
             live = false;
         };
-    }, [date, pax, period]);
+    }, [date, period, editing]);
 
+    const topPax = editing
+        ? maxPax
+        : Math.min(maxPax, day?.remaining || maxPax);
     const tintOf = useMemo(
         () => new Map(menu.map((c, i) => [c.id, i] as const)),
         [menu],
     );
-    const total = cart.reduce((s, l) => s + l.unitPrice * l.qty, 0);
-    const count = cart.reduce((s, l) => s + l.qty, 0);
-    const ready =
-        !!date &&
-        !!slot &&
-        cart.length > 0 &&
-        name.trim() !== '' &&
-        phone.replace(/\D/g, '').length >= 8;
+    const keptTotal = (editing?.lines ?? []).reduce(
+        (n, l) => n + (l.total / l.qty) * (kept[l.index] ?? 0),
+        0,
+    );
+    const total = Math.round(
+        keptTotal + cart.reduce((s, l) => s + l.unitPrice * l.qty, 0),
+    );
+    const count =
+        cart.reduce((s, l) => s + l.qty, 0) +
+        Object.values(kept).reduce((n, q) => n + q, 0);
+    const packages = cart
+        .filter((l) => packageIds.includes(l.product.id))
+        .reduce((n, l) => n + l.qty, 0);
+    const due =
+        payType === 'full'
+            ? total
+            : Math.ceil((total * dpPercent) / 100 / 1000) * 1000;
+    const ready = editing
+        ? count > 0 && phone.replace(/\D/g, '').length >= 8
+        : !!date &&
+          day?.open === true &&
+          cart.length > 0 &&
+          name.trim() !== '' &&
+          phone.replace(/\D/g, '').length >= 8;
+    const short =
+        packageRequired && packageIds.length > 0 && !editing && packages < pax;
 
     const addSimple = (p: Product) => {
         setCart((c) => {
@@ -120,36 +193,19 @@ export default function Book({ outlet, period, slots, maxPax, menu }: Props) {
         }
     };
 
-    const submit = async () => {
+    const send = async (url: string, payload: Record<string, unknown>) => {
         setBusy(true);
         setError(null);
 
         try {
-            const res = await fetch('/reservasi', {
+            const res = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     Accept: 'application/json',
-                    'X-XSRF-TOKEN': decodeURIComponent(
-                        document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] ?? '',
-                    ),
+                    'X-XSRF-TOKEN': csrf(),
                 },
-                body: JSON.stringify({
-                    name,
-                    phone,
-                    pax,
-                    date,
-                    slot,
-                    note: note || null,
-                    items: cart.map((l) => ({
-                        product_id: l.product.id,
-                        variant_id: l.variantId,
-                        modifier_ids: l.modifierIds,
-                        parts: l.parts,
-                        qty: l.qty,
-                        note: l.note || null,
-                    })),
-                }),
+                body: JSON.stringify(payload),
             });
             const body = (await res.json()) as {
                 code?: string;
@@ -162,13 +218,45 @@ export default function Book({ outlet, period, slots, maxPax, menu }: Props) {
                 return;
             }
 
-            setError(body.message ?? 'Reservasi gagal. Coba lagi.');
+            setError(body.message ?? 'Gagal. Coba lagi.');
         } catch {
             toast.error('Koneksi bermasalah. Coba lagi.');
         } finally {
             setBusy(false);
         }
     };
+    const lines = cart.map((l) => ({
+        product_id: l.product.id,
+        variant_id: l.variantId,
+        modifier_ids: l.modifierIds,
+        parts: l.parts,
+        qty: l.qty,
+        note: l.note || null,
+    }));
+    const submit = () =>
+        editing
+            ? send(`/reservasi/${editing.code}/ubah`, {
+                  pax,
+                  phone,
+                  note: note || null,
+                  keep: Object.entries(kept).map(([index, qty]) => ({
+                      index: Number(index),
+                      qty,
+                  })),
+                  add: lines,
+              })
+            : send('/reservasi', {
+                  name,
+                  phone,
+                  pax,
+                  date,
+                  payment_type: payType,
+                  note: note || null,
+                  items: lines,
+              });
+    const cancelBooking = () =>
+        confirm('Batalkan reservasi ini?') &&
+        send(`/reservasi/${editing?.code}/batal`, {});
 
     return (
         <>
@@ -187,7 +275,9 @@ export default function Book({ outlet, period, slots, maxPax, menu }: Props) {
                             {outlet.name}
                         </p>
                         <h1 className="text-2xl font-bold tracking-tight">
-                            Reservasi buka puasa
+                            {editing
+                                ? `Ubah reservasi ${editing.code}`
+                                : 'Reservasi buka puasa'}
                         </h1>
                     </div>
                 </header>
@@ -203,6 +293,13 @@ export default function Book({ outlet, period, slots, maxPax, menu }: Props) {
                 ) : (
                     <>
                         <section className="grid gap-4 rounded-2xl border bg-card p-4">
+                            <p className="text-sm text-muted-foreground">
+                                Buka puasa pukul{' '}
+                                <span className="font-semibold text-foreground">
+                                    {time}
+                                </span>
+                                . Satu paket untuk satu orang.
+                            </p>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="grid gap-1.5">
                                     <Label htmlFor="rs-date">Tanggal</Label>
@@ -213,6 +310,7 @@ export default function Book({ outlet, period, slots, maxPax, menu }: Props) {
                                         min={period.from}
                                         max={period.to}
                                         value={date}
+                                        disabled={!!editing}
                                         onChange={(e) =>
                                             setDate(e.target.value)
                                         }
@@ -249,7 +347,7 @@ export default function Book({ outlet, period, slots, maxPax, menu }: Props) {
                                             aria-label="Tambah"
                                             onClick={() =>
                                                 setPax((n) =>
-                                                    Math.min(maxPax, n + 1),
+                                                    Math.min(topPax, n + 1),
                                                 )
                                             }
                                         >
@@ -258,48 +356,104 @@ export default function Book({ outlet, period, slots, maxPax, menu }: Props) {
                                     </div>
                                 </div>
                             </div>
-                            <div className="grid gap-1.5">
-                                <Label>Jam</Label>
-                                <div
-                                    role="group"
-                                    aria-label="Jam reservasi"
-                                    className="flex flex-wrap gap-2"
-                                >
-                                    {slots.map((s) => {
-                                        const ok = free[s] === true;
-
-                                        return (
-                                            <button
-                                                key={s}
-                                                type="button"
-                                                disabled={!ok}
-                                                aria-pressed={slot === s}
-                                                onClick={() => setSlot(s)}
-                                                className={cn(
-                                                    'h-11 min-w-20 rounded-full border px-4 text-sm font-semibold tabular-nums transition-colors',
-                                                    slot === s
-                                                        ? 'border-primary bg-primary text-primary-foreground'
-                                                        : 'bg-card',
-                                                    !ok &&
-                                                        'cursor-not-allowed text-muted-foreground line-through opacity-50',
-                                                )}
-                                            >
-                                                {s}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                                {date &&
-                                    Object.keys(free).length > 0 &&
-                                    !Object.values(free).some(Boolean) && (
-                                        <p className="text-sm text-muted-foreground">
-                                            Semua jam pada {dateId(date)} sudah
-                                            penuh untuk {pax} orang. Coba
-                                            tanggal lain.
-                                        </p>
+                            {!editing && day && (
+                                <p
+                                    className={cn(
+                                        'text-sm',
+                                        day.open
+                                            ? 'text-muted-foreground'
+                                            : 'font-medium text-destructive',
                                     )}
-                            </div>
+                                >
+                                    {day.open
+                                        ? `Sisa ${day.remaining} tempat dari ${day.capacity}. Reservasi hari itu ditutup pukul ${cutoff} atau saat penuh.`
+                                        : day.reason}
+                                </p>
+                            )}
+                            {editing && (
+                                <p className="text-sm text-muted-foreground">
+                                    Bisa diubah atau dibatalkan sampai pukul{' '}
+                                    {changeUntil} di hari-H.
+                                </p>
+                            )}
                         </section>
+
+                        {editing && editing.lines.length > 0 && (
+                            <section className="grid gap-2 rounded-2xl border bg-card p-4">
+                                <h2 className="font-semibold">
+                                    Pesanan sekarang
+                                </h2>
+                                <ul className="grid gap-2">
+                                    {editing.lines.map((l) => (
+                                        <li
+                                            key={l.index}
+                                            className="flex items-center justify-between gap-2 text-sm"
+                                        >
+                                            <span className="min-w-0 flex-1">
+                                                {l.name}
+                                                {l.options && (
+                                                    <span className="block text-xs text-muted-foreground">
+                                                        {l.options}
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="icon"
+                                                    className="size-9"
+                                                    aria-label="Kurangi"
+                                                    onClick={() =>
+                                                        setKept((k) => ({
+                                                            ...k,
+                                                            [l.index]: Math.max(
+                                                                0,
+                                                                (k[l.index] ??
+                                                                    0) - 1,
+                                                            ),
+                                                        }))
+                                                    }
+                                                >
+                                                    <Minus />
+                                                </Button>
+                                                <span className="w-6 text-center tabular-nums">
+                                                    {kept[l.index] ?? 0}
+                                                </span>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="icon"
+                                                    className="size-9"
+                                                    aria-label="Tambah"
+                                                    onClick={() =>
+                                                        setKept((k) => ({
+                                                            ...k,
+                                                            [l.index]: Math.min(
+                                                                50,
+                                                                (k[l.index] ??
+                                                                    0) + 1,
+                                                            ),
+                                                        }))
+                                                    }
+                                                >
+                                                    <Plus />
+                                                </Button>
+                                            </span>
+                                            <span className="w-24 text-right tabular-nums">
+                                                {rupiah(
+                                                    Math.round(
+                                                        (l.total / l.qty) *
+                                                            (kept[l.index] ??
+                                                                0),
+                                                    ),
+                                                )}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </section>
+                        )}
 
                         <section className="grid gap-3">
                             <h2 className="text-lg font-semibold">
@@ -463,6 +617,25 @@ export default function Book({ outlet, period, slots, maxPax, menu }: Props) {
                             </section>
                         )}
 
+                        {packageRequired &&
+                            packageIds.length > 0 &&
+                            !editing && (
+                                <p
+                                    role="status"
+                                    className={cn(
+                                        'rounded-xl p-3 text-sm',
+                                        short
+                                            ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200'
+                                            : 'bg-muted text-muted-foreground',
+                                    )}
+                                >
+                                    Paket {packages} dari {pax} orang.{' '}
+                                    {short
+                                        ? 'Satu orang satu paket. Kalau kurang, reservasi perlu persetujuan pengelola sebelum dikonfirmasi.'
+                                        : 'Sudah sesuai.'}
+                                </p>
+                            )}
+
                         <section className="grid gap-3 rounded-2xl border bg-card p-4">
                             <h2 className="font-semibold">Data pemesan</h2>
                             <div className="grid gap-1.5">
@@ -470,6 +643,7 @@ export default function Book({ outlet, period, slots, maxPax, menu }: Props) {
                                 <Input
                                     id="rs-name"
                                     className="h-12"
+                                    disabled={!!editing}
                                     value={name}
                                     maxLength={80}
                                     onChange={(e) => setName(e.target.value)}
@@ -509,6 +683,69 @@ export default function Book({ outlet, period, slots, maxPax, menu }: Props) {
                                 </p>
                             )}
                         </section>
+
+                        {!editing && (
+                            <section className="grid gap-3 rounded-2xl border bg-card p-4">
+                                <h2 className="font-semibold">Pembayaran</h2>
+                                <div
+                                    role="group"
+                                    aria-label="Jenis pembayaran"
+                                    className="grid gap-2 sm:grid-cols-2"
+                                >
+                                    {(
+                                        [
+                                            ['dp', `Bayar DP ${dpPercent}%`],
+                                            ['full', 'Bayar lunas'],
+                                        ] as const
+                                    ).map(([k, label]) => (
+                                        <button
+                                            key={k}
+                                            type="button"
+                                            aria-pressed={payType === k}
+                                            onClick={() => setPayType(k)}
+                                            className={cn(
+                                                'grid gap-0.5 rounded-xl border p-3 text-left',
+                                                payType === k
+                                                    ? 'border-primary bg-primary text-primary-foreground'
+                                                    : 'bg-card',
+                                            )}
+                                        >
+                                            <span className="font-semibold">
+                                                {label}
+                                            </span>
+                                            <span className="text-sm tabular-nums opacity-90">
+                                                {rupiah(
+                                                    k === 'full'
+                                                        ? total
+                                                        : Math.ceil(
+                                                              (total *
+                                                                  dpPercent) /
+                                                                  100 /
+                                                                  1000,
+                                                          ) * 1000,
+                                                )}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                    Reservasi sah setelah pembayaran
+                                    dikonfirmasi pengelola.
+                                    {paymentInfo && ` ${paymentInfo}`}
+                                </p>
+                            </section>
+                        )}
+                        {editing && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                className="h-11 text-destructive"
+                                disabled={busy}
+                                onClick={() => void cancelBooking()}
+                            >
+                                Batalkan reservasi
+                            </Button>
+                        )}
                     </>
                 )}
             </div>
@@ -521,9 +758,9 @@ export default function Book({ outlet, period, slots, maxPax, menu }: Props) {
                                 {count} item · {rupiah(total)}
                             </p>
                             <p className="truncate text-xs text-muted-foreground">
-                                {date && slot
-                                    ? `${dateId(date)} · ${slot} · ${pax} orang`
-                                    : 'Pilih tanggal dan jam'}
+                                {date
+                                    ? `${dateId(date)} · ${time} · ${pax} orang${editing ? '' : ` · bayar ${rupiah(due)}`}`
+                                    : 'Pilih tanggal'}
                             </p>
                         </div>
                         <Button
@@ -531,7 +768,11 @@ export default function Book({ outlet, period, slots, maxPax, menu }: Props) {
                             disabled={!ready || busy}
                             onClick={() => void submit()}
                         >
-                            {busy ? 'Memesan…' : 'Pesan sekarang'}
+                            {busy
+                                ? 'Memproses…'
+                                : editing
+                                  ? 'Simpan perubahan'
+                                  : 'Pesan sekarang'}
                         </Button>
                     </div>
                 </div>

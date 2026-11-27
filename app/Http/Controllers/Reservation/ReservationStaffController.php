@@ -33,10 +33,13 @@ class ReservationStaffController extends Controller
             'date' => $day->toDateString(),
             'link' => url('/reservasi'),
             'enabled' => $this->reservations->enabled(),
-            'reservations' => Reservation::query()->where('outlet_id', $id)->whereBetween('starts_at', [$from, $to])->with(['tables', 'order:id,number'])->orderBy('starts_at')->get()->map(fn (Reservation $r) => [
+            'day' => $this->reservations->availability($day->toDateString()) + ['booked' => $this->reservations->booked($day->toDateString()), 'time' => $this->reservations->time()],
+            'reservations' => Reservation::query()->where('outlet_id', $id)->whereBetween('starts_at', [$from, $to])->with(['tables', 'order:id,number'])->orderBy('id')->get()->map(fn (Reservation $r) => [
                 'id' => $r->id, 'code' => $r->public_id, 'name' => $r->name, 'phone' => $r->phone, 'pax' => $r->pax, 'status' => $r->status, 'note' => $r->note,
                 'starts_at' => $r->starts_at->setTimezone(self::ZONE)->toIso8601String(), 'tables' => $r->tables->map(fn (Table $t) => ['id' => $t->id, 'name' => $t->name, 'capacity' => $t->capacity])->all(),
                 'summary' => $r->summary, 'total' => $r->items_total, 'order' => $r->order?->number,
+                'payment_type' => $r->payment_type, 'amount_due' => $r->amount_due, 'paid' => $r->paid_amount, 'package_short' => $r->package_short, 'package_waived' => $r->package_waived,
+                'full_menu' => $r->full_menu, 'changed_at' => $r->changed_at?->setTimezone(self::ZONE)->toIso8601String(), 'created_at' => $r->created_at?->setTimezone(self::ZONE)->toIso8601String(),
             ])->all(),
             'tables' => Table::query()->where('outlet_id', $id)->with('area:id,name')->orderBy('area_id')->orderBy('id')->get()->map(fn (Table $t) => ['id' => $t->id, 'name' => $t->name, 'capacity' => $t->capacity, 'area' => $t->area->name])->all(),
         ]);
@@ -52,7 +55,9 @@ class ReservationStaffController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', "Tamu didudukkan. Pesanan {$order->number} dibuka dan dikirim ke dapur.");
+        $dp = $reservation->paid_amount > 0 ? ' DP/pembayaran Rp '.number_format($reservation->paid_amount, 0, ',', '.').' sudah diterima: kurangi saat tamu membayar.' : '';
+
+        return back()->with('success', "Tamu didudukkan. Pesanan {$order->number} dibuka dan dikirim ke dapur.{$dp}");
     }
 
     public function close(Request $request, Reservation $reservation): RedirectResponse
@@ -81,5 +86,37 @@ class ReservationStaffController extends Controller
         }
 
         return back()->with('success', 'Meja reservasi diubah.');
+    }
+
+    public function confirm(Request $request, Reservation $reservation): RedirectResponse
+    {
+        abort_unless($reservation->outlet_id === $this->outlet->id(), 404);
+        $data = $request->validate(['amount' => ['required', 'integer', 'min:0'], 'waive_package' => ['nullable', 'boolean']]);
+
+        try {
+            $this->reservations->confirm($reservation, (int) $data['amount'], (bool) ($data['waive_package'] ?? false), $this->actor($request));
+        } catch (OrderException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Pembayaran dikonfirmasi. Reservasi sah.');
+    }
+
+    public function fullMenu(Request $request, Reservation $reservation): RedirectResponse
+    {
+        abort_unless($reservation->outlet_id === $this->outlet->id(), 404);
+        $on = (bool) $request->validate(['on' => ['required', 'boolean']])['on'];
+        $this->reservations->setFullMenu($reservation, $on, $this->actor($request));
+
+        return back()->with('success', $on ? 'Tamu ini boleh memesan menu biasa.' : 'Tamu ini kembali ke menu reservasi.');
+    }
+
+    /** Gives tables to the day's bookings that have none. */
+    public function assign(Request $request): RedirectResponse
+    {
+        $date = $request->validate(['date' => ['required', 'date_format:Y-m-d']])['date'];
+        $n = $this->reservations->autoAssign($date, $this->actor($request));
+
+        return back()->with('success', $n > 0 ? "{$n} reservasi diberi meja." : 'Tidak ada reservasi yang perlu meja, atau mejanya belum cukup.');
     }
 }

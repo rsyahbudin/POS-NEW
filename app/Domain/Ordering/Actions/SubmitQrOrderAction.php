@@ -14,6 +14,7 @@ use App\Domain\Ordering\ItemBuilder;
 use App\Domain\Ordering\Models\Order;
 use App\Domain\Ordering\Models\OrderRound;
 use App\Domain\Payment\Online\OnlinePaymentService;
+use App\Domain\Reservation\ReservationService;
 use App\Domain\Settings\SettingsRepository;
 use App\Support\Audit;
 use App\Support\BusinessDate;
@@ -68,6 +69,10 @@ class SubmitQrOrderAction
             $rows = $this->items->build(is_array($data['items'] ?? null) ? array_values($data['items']) : [], $table->outlet_id);
 
             $order = Order::query()->openOnTable($table->id)->lockForUpdate()->latest('id')->first();
+            if ($order !== null) {
+                // a reservation party orders only the reservation menu until the normal menu opens
+                app(ReservationService::class)->guardQr($order, $rows);
+            }
 
             if (! $order) {
                 $date = BusinessDate::for();

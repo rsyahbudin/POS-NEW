@@ -75,6 +75,25 @@ class ReservationStaffController extends Controller
         return back()->with('success', "Tamu didudukkan. Pesanan {$order->number} dibuka dan dikirim ke dapur.{$dp}");
     }
 
+    /** The door list: today's confirmed parties and who is already seated. Names, numbers and tables only: no money. */
+    public function arrivals(): Response
+    {
+        $day = CarbonImmutable::now(self::ZONE);
+        $db = (string) config('app.timezone');
+
+        return Inertia::render('reservations/arrivals', [
+            'date' => $day->toDateString(),
+            'time' => $this->reservations->time(),
+            'reservations' => Reservation::query()->where('outlet_id', $this->outlet->id())->whereIn('status', ['booked', 'seated'])
+                ->whereBetween('starts_at', [$day->startOfDay()->setTimezone($db), $day->endOfDay()->setTimezone($db)])->with(['tables', 'order:id,number'])->orderByRaw("case status when 'booked' then 0 else 1 end")->orderBy('name')->get()
+                ->map(fn (Reservation $r) => [
+                    'id' => $r->id, 'code' => $r->public_id, 'name' => $r->name, 'pax' => $r->pax, 'status' => $r->status, 'note' => $r->note,
+                    'tables' => $r->tables->pluck('name')->all(), 'order' => $r->order?->number,
+                    'summary' => collect($r->summary)->map(fn ($l) => ['name' => $l['name'], 'qty' => $l['qty']])->all(),
+                ])->all(),
+        ]);
+    }
+
     /** Takes the deposit off the bill after all, when seating could not (no open shift, no transfer method yet). */
     public function deposit(Request $request, Reservation $reservation): RedirectResponse
     {

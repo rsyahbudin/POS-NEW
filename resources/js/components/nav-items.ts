@@ -70,6 +70,13 @@ export const top: Item[] = [
         feature: 'reservation',
     },
     {
+        title: 'Tamu reservasi',
+        href: '/reservations/hari-ini',
+        icon: CalendarCheck,
+        permission: 'seat-reservations',
+        feature: 'reservation',
+    },
+    {
         title: 'Shift & Kas',
         href: '/shift',
         icon: Coins,

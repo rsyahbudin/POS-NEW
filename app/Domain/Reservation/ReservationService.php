@@ -511,7 +511,13 @@ class ReservationService
         }
         $tables = $reservation->tables()->get();
         if ($tables->isEmpty()) {
-            throw new OrderException('Pilih meja untuk reservasi ini dulu.');
+            // nobody gave this party tables yet: the waiter at the door should not be stuck, so find free ones now
+            $ids = $this->allocate($reservation->outlet_id, $reservation->pax, CarbonImmutable::instance($reservation->starts_at), CarbonImmutable::instance($reservation->ends_at), $reservation->id);
+            if ($ids === null) {
+                throw new OrderException('Belum ada meja kosong yang cukup untuk '.$reservation->pax.' orang. Minta CS atau manager mengatur mejanya.');
+            }
+            $reservation->tables()->sync($ids);
+            $tables = $reservation->tables()->get();
         }
         foreach ($tables as $t) {
             if (Order::query()->openOnTable($t->id)->exists()) {

@@ -214,13 +214,18 @@ Route::middleware(['auth', 'staff'])->group(function () {
         Route::post('/', [ReservationStaffController::class, 'store'])->name('store');
         Route::get('{reservation}/ubah', [ReservationStaffController::class, 'edit'])->name('edit');
         Route::post('{reservation}/ubah', [ReservationStaffController::class, 'update'])->name('update');
-        Route::post('{reservation}/seat', [ReservationStaffController::class, 'seat'])->middleware('permission:seat-reservations')->name('seat');
-        Route::post('{reservation}/deposit', [ReservationStaffController::class, 'deposit'])->middleware('permission:seat-reservations')->name('deposit');
         Route::post('{reservation}/close', [ReservationStaffController::class, 'close'])->name('close');
         Route::post('{reservation}/tables', [ReservationStaffController::class, 'retable'])->name('retable');
         Route::post('{reservation}/confirm', [ReservationStaffController::class, 'confirm'])->name('confirm');
         Route::post('{reservation}/full-menu', [ReservationStaffController::class, 'fullMenu'])->name('full-menu');
         Route::post('assign', [ReservationStaffController::class, 'assign'])->name('assign');
+    });
+
+    // The door: whoever greets the guests (a waiter) marks a reservation as arrived. No amounts, no editing.
+    Route::prefix('reservations')->name('reservations.')->middleware('permission:seat-reservations')->group(function () {
+        Route::get('hari-ini', [ReservationStaffController::class, 'arrivals'])->name('arrivals');
+        Route::post('{reservation}/seat', [ReservationStaffController::class, 'seat'])->name('seat');
+        Route::post('{reservation}/deposit', [ReservationStaffController::class, 'deposit'])->name('deposit');
     });
 
     // Print station: a device that serves the queued print jobs of its printers

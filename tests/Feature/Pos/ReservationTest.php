@@ -371,3 +371,26 @@ it('lets customer service book for a caller past the closing time and the quota,
     $this->actingAs($cs)->get("/reservations/{$r->id}/ubah")->assertOk()->assertInertia(fn ($p) => $p->where('editing.name', 'Rani Putri')->where('staff', true));
     $this->actingAs(userWithRole('cashier'))->postJson('/reservations', $body)->assertForbidden();
 });
+
+it('lets the waiter at the door mark a party as arrived, with no access to the booking screens or the money', function () {
+    openReservations();
+    $today = CarbonImmutable::now('Asia/Jakarta')->toDateString();
+    $cs = userWithRole('cs');
+    $waiter = userWithRole('waiter');
+    openShiftFor(userWithRole('cashier'), 0);
+    $r = app(ReservationService::class)->create(booking($today, 4) + ['paid' => 27000], $cs);   // no tables yet
+    $later = app(ReservationService::class)->create(booking($today, 2), $cs);                    // not paid: not on the door list
+
+    $this->actingAs($waiter)->get('/reservations')->assertForbidden();
+    $this->actingAs($waiter)->post("/reservations/{$r->id}/confirm", ['amount' => 1000])->assertForbidden();
+    $this->actingAs(userWithRole('cashier'))->get('/reservations/hari-ini')->assertForbidden();
+
+    $this->actingAs($waiter)->get('/reservations/hari-ini')->assertOk()->assertInertia(fn ($p) => $p->component('reservations/arrivals')->has('reservations', 1)
+        ->where('reservations.0.name', 'Rani')->missing('reservations.0.paid')->missing('reservations.0.total')->missing('reservations.0.phone'));
+
+    $this->actingAs($waiter)->post("/reservations/{$later->id}/seat")->assertSessionHas('error');   // payment not confirmed
+    $this->actingAs($waiter)->post("/reservations/{$r->id}/seat")->assertSessionHas('success');
+    $r->refresh();
+    expect($r->status)->toBe('seated')->and($r->tables)->not->toBeEmpty()->and($r->deposit_payment_id)->not->toBeNull();
+    $this->actingAs($waiter)->get('/reservations/hari-ini')->assertInertia(fn ($p) => $p->where('reservations.0.status', 'seated'));
+});

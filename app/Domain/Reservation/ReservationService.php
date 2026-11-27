@@ -518,6 +518,9 @@ class ReservationService
             }
             $reservation->tables()->sync($ids);
             $tables = $reservation->tables()->get();
+            if ($tables->isEmpty()) {
+                throw new OrderException('Meja belum bisa dipilihkan. Minta CS atau manager mengatur mejanya.');
+            }
         }
         foreach ($tables as $t) {
             if (Order::query()->openOnTable($t->id)->exists()) {

@@ -115,7 +115,9 @@ export default function Book({
                     setDay(r);
 
                     if (!staff) {
-                        setPax((n) => Math.max(1, Math.min(n, r.remaining || 1)));
+                        setPax((n) =>
+                            Math.max(1, Math.min(n, r.remaining || 1)),
+                        );
                     }
 
                     // a chosen area that cannot take this party any more goes back to "any"
@@ -452,7 +454,9 @@ export default function Book({
                                                     type="button"
                                                     disabled={full && !staff}
                                                     aria-pressed={on}
-                                                    onClick={() => setArea(a.id)}
+                                                    onClick={() =>
+                                                        setArea(a.id)
+                                                    }
                                                     className={cn(
                                                         'flex min-h-12 items-center justify-between gap-3 rounded-xl border px-3 text-left text-sm',
                                                         on
